@@ -1,0 +1,7 @@
+[project]
+name = "modeltrees"
+version = "0.1.0"
+description = "modeltrees"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
