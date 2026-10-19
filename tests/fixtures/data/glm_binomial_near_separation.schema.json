@@ -1,0 +1,24 @@
+{
+  "dataset": "glm_binomial_near_separation",
+  "description": "Near-separation: y = 1(x1 > 0) with the two points closest to 0 flipped, so the MLE is finite but the slope is large and fitted probabilities reach 0 and 1.",
+  "source": "simulated",
+  "seed": 20261016,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 100,
+  "csv": "glm_binomial_near_separation.csv",
+  "columns": [
+    {
+      "name": "x0",
+      "type": "double"
+    },
+    {
+      "name": "x1",
+      "type": "double"
+    },
+    {
+      "name": "y",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "{\n    n <- 100L\n    d <- data.frame(x0 = 1, x1 = rnorm(n))\n    d$y <- as.integer(d$x1 > 0)\n    d$y[which(d$x1 == min(d$x1[d$x1 > 0]))] <- 0L\n    d$y[which(d$x1 == max(d$x1[d$x1 < 0]))] <- 1L\n    d\n}"
+}

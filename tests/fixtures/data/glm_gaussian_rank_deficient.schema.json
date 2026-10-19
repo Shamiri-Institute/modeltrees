@@ -1,0 +1,32 @@
+{
+  "dataset": "glm_gaussian_rank_deficient",
+  "description": "Gaussian with x3 = x1 + x2, so one coefficient is aliased (NA).",
+  "source": "simulated",
+  "seed": 20261013,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 100,
+  "csv": "glm_gaussian_rank_deficient.csv",
+  "columns": [
+    {
+      "name": "x0",
+      "type": "double"
+    },
+    {
+      "name": "x1",
+      "type": "double"
+    },
+    {
+      "name": "x2",
+      "type": "double"
+    },
+    {
+      "name": "x3",
+      "type": "double"
+    },
+    {
+      "name": "y",
+      "type": "double"
+    }
+  ],
+  "generator_code": "{\n    n <- 100L\n    d <- data.frame(x0 = 1, x1 = rnorm(n), x2 = rnorm(n))\n    d$x3 <- d$x1 + d$x2\n    d$y <- 0.5 + d$x1 - d$x2 + rnorm(n)\n    d\n}"
+}

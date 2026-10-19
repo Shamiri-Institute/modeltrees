@@ -1,0 +1,50 @@
+{
+  "dataset": "sim_poisson",
+  "description": "Simulated count data with an exposure offset and planted splits.",
+  "source": "simulated",
+  "seed": 20261003,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 800,
+  "csv": "sim_poisson.csv",
+  "columns": [
+    {
+      "name": "x",
+      "type": "double"
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "z2",
+      "type": "factor",
+      "levels": ["g1", "g2", "g3", "g4"]
+    },
+    {
+      "name": "z3",
+      "type": "ordered",
+      "levels": ["s1", "s2", "s3", "s4", "s5"]
+    },
+    {
+      "name": "z4",
+      "type": "double"
+    },
+    {
+      "name": "exposure",
+      "type": "double"
+    },
+    {
+      "name": "y_null",
+      "type": "integer"
+    },
+    {
+      "name": "y_multi",
+      "type": "integer"
+    },
+    {
+      "name": "w",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "{\n    n <- 800L\n    d <- data.frame(x = runif(n), z1 = runif(n, 0, 1), z2 = factor(sample(c(\"g1\", \"g2\", \"g3\", \"g4\"), \n        n, replace = TRUE)), z3 = factor(sample(c(\"s1\", \"s2\", \"s3\", \"s4\", \"s5\"), n, replace = TRUE), \n        levels = c(\"s1\", \"s2\", \"s3\", \"s4\", \"s5\"), ordered = TRUE), z4 = rnorm(n), exposure = runif(n, \n        0.5, 2))\n    d$y_null <- rpois(n, d$exposure * exp(0.2 + 0.8 * d$x))\n    high3 <- as.integer(d$z3) >= 4L\n    eta <- ifelse(high3, 1.2 - 0.5 * d$x, ifelse(d$z1 <= 0.5, -0.5 + 1.5 * d$x, 0.3 + 0.3 * d$x))\n    d$y_multi <- rpois(n, d$exposure * exp(eta))\n    d$w <- sample(1:3, n, replace = TRUE)\n    d\n}"
+}

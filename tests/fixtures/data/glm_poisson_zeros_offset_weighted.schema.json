@@ -1,0 +1,36 @@
+{
+  "dataset": "glm_poisson_zeros_offset_weighted",
+  "description": "Counts with many zeros, an exposure offset and integer prior weights.",
+  "source": "simulated",
+  "seed": 20261020,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 200,
+  "csv": "glm_poisson_zeros_offset_weighted.csv",
+  "columns": [
+    {
+      "name": "x0",
+      "type": "double"
+    },
+    {
+      "name": "x1",
+      "type": "double"
+    },
+    {
+      "name": "exposure",
+      "type": "double"
+    },
+    {
+      "name": "w",
+      "type": "integer"
+    },
+    {
+      "name": "offset",
+      "type": "double"
+    },
+    {
+      "name": "y",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "{\n    n <- 200L\n    d <- data.frame(x0 = 1, x1 = rnorm(n), exposure = runif(n, 0.2, 1.5), w = sample(1:3, n, replace = TRUE))\n    d$offset <- log(d$exposure)\n    d$y <- rpois(n, d$exposure * exp(-1 + 0.5 * d$x1))\n    d\n}"
+}

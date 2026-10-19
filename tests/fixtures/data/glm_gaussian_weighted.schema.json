@@ -1,0 +1,32 @@
+{
+  "dataset": "glm_gaussian_weighted",
+  "description": "Gaussian with non-integer prior weights.",
+  "source": "simulated",
+  "seed": 20261012,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 150,
+  "csv": "glm_gaussian_weighted.csv",
+  "columns": [
+    {
+      "name": "x0",
+      "type": "double"
+    },
+    {
+      "name": "x1",
+      "type": "double"
+    },
+    {
+      "name": "x2",
+      "type": "double"
+    },
+    {
+      "name": "w",
+      "type": "double"
+    },
+    {
+      "name": "y",
+      "type": "double"
+    }
+  ],
+  "generator_code": "{\n    n <- 150L\n    d <- data.frame(x0 = 1, x1 = rnorm(n), x2 = runif(n), w = runif(n, 0.5, 2))\n    d$y <- 1 + 2 * d$x1 - 1.5 * d$x2 + rnorm(n)/sqrt(d$w)\n    d\n}"
+}

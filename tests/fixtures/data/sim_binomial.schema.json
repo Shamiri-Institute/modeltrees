@@ -1,0 +1,46 @@
+{
+  "dataset": "sim_binomial",
+  "description": "Simulated binary data with no, one and several planted splits.",
+  "source": "simulated",
+  "seed": 20261002,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 800,
+  "csv": "sim_binomial.csv",
+  "columns": [
+    {
+      "name": "x",
+      "type": "double"
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "z2",
+      "type": "factor",
+      "levels": ["p", "q", "r"]
+    },
+    {
+      "name": "z3",
+      "type": "ordered",
+      "levels": ["lo", "mid", "high", "top"]
+    },
+    {
+      "name": "z4",
+      "type": "double"
+    },
+    {
+      "name": "y_null",
+      "type": "integer"
+    },
+    {
+      "name": "y_one",
+      "type": "integer"
+    },
+    {
+      "name": "y_multi",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "{\n    n <- 800L\n    d <- data.frame(x = rnorm(n), z1 = runif(n, -1, 1), z2 = factor(sample(c(\"p\", \"q\", \"r\"), n, replace = TRUE)), \n        z3 = factor(sample(c(\"lo\", \"mid\", \"high\", \"top\"), n, replace = TRUE), levels = c(\"lo\", \"mid\", \n            \"high\", \"top\"), ordered = TRUE), z4 = rnorm(n))\n    u <- runif(n)\n    d$y_null <- as.integer(u < plogis(-0.3 + 1 * d$x))\n    d$y_one <- as.integer(u < plogis(ifelse(d$z1 <= 0, -1 + 1.5 * d$x, 1 - 1.5 * d$x)))\n    eta <- ifelse(d$z2 == \"r\", -1 + 1.5 * d$x, ifelse(d$z1 <= 0.3, 0.8 - 1 * d$x, -0.8 + 0.5 * d$x))\n    d$y_multi <- as.integer(u < plogis(eta))\n    d\n}"
+}

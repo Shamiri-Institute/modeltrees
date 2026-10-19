@@ -1,0 +1,28 @@
+{
+  "dataset": "glm_gaussian_identity",
+  "description": "Gaussian, identity link, two regressors.",
+  "source": "simulated",
+  "seed": 20261011,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 150,
+  "csv": "glm_gaussian_identity.csv",
+  "columns": [
+    {
+      "name": "x0",
+      "type": "double"
+    },
+    {
+      "name": "x1",
+      "type": "double"
+    },
+    {
+      "name": "x2",
+      "type": "double"
+    },
+    {
+      "name": "y",
+      "type": "double"
+    }
+  ],
+  "generator_code": "{\n    n <- 150L\n    d <- data.frame(x0 = 1, x1 = rnorm(n), x2 = runif(n))\n    d$y <- 1 + 2 * d$x1 - 1.5 * d$x2 + rnorm(n)\n    d\n}"
+}

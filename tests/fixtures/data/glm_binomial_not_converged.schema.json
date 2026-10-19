@@ -1,0 +1,24 @@
+{
+  "dataset": "glm_binomial_not_converged",
+  "description": "Moderate separation with maxit = 3, so glm.fit stops without converging.",
+  "source": "simulated",
+  "seed": 20261017,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 100,
+  "csv": "glm_binomial_not_converged.csv",
+  "columns": [
+    {
+      "name": "x0",
+      "type": "double"
+    },
+    {
+      "name": "x1",
+      "type": "double"
+    },
+    {
+      "name": "y",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "{\n    n <- 100L\n    d <- data.frame(x0 = 1, x1 = rnorm(n))\n    d$y <- as.integer(d$x1 + rnorm(n, sd = 0.15) > 0)\n    d\n}"
+}

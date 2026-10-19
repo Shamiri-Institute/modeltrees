@@ -1,0 +1,28 @@
+{
+  "dataset": "glm_binomial_logit",
+  "description": "Binary response, logit link.",
+  "source": "simulated",
+  "seed": 20261014,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 300,
+  "csv": "glm_binomial_logit.csv",
+  "columns": [
+    {
+      "name": "x0",
+      "type": "double"
+    },
+    {
+      "name": "x1",
+      "type": "double"
+    },
+    {
+      "name": "x2",
+      "type": "double"
+    },
+    {
+      "name": "y",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "{\n    n <- 300L\n    d <- data.frame(x0 = 1, x1 = rnorm(n), x2 = rnorm(n))\n    d$y <- as.integer(runif(n) < plogis(-0.5 + 1.2 * d$x1 - 0.7 * d$x2))\n    d\n}"
+}

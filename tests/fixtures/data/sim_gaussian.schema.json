@@ -1,0 +1,59 @@
+{
+  "dataset": "sim_gaussian",
+  "description": "Simulated gaussian data with no, one and several planted splits.",
+  "source": "simulated",
+  "seed": 20261001,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 600,
+  "csv": "sim_gaussian.csv",
+  "columns": [
+    {
+      "name": "x",
+      "type": "double"
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "z2",
+      "type": "factor",
+      "levels": ["a", "b", "c", "d"]
+    },
+    {
+      "name": "z3",
+      "type": "ordered",
+      "levels": ["L1", "L2", "L3", "L4", "L5"]
+    },
+    {
+      "name": "z4",
+      "type": "double"
+    },
+    {
+      "name": "z5",
+      "type": "factor",
+      "levels": ["u", "v", "w"]
+    },
+    {
+      "name": "y_null",
+      "type": "double"
+    },
+    {
+      "name": "y_one",
+      "type": "double"
+    },
+    {
+      "name": "y_multi",
+      "type": "double"
+    },
+    {
+      "name": "w",
+      "type": "integer"
+    },
+    {
+      "name": "w0",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "{\n    n <- 600L\n    d <- data.frame(x = rnorm(n), z1 = runif(n, 0, 10), z2 = factor(sample(c(\"a\", \"b\", \"c\", \"d\"), n, \n        replace = TRUE)), z3 = factor(sample(paste0(\"L\", 1:5), n, replace = TRUE), levels = paste0(\"L\", \n        1:5), ordered = TRUE), z4 = as.numeric(sample(1:20, n, replace = TRUE)), z5 = factor(sample(c(\"u\", \n        \"v\", \"w\"), n, replace = TRUE)))\n    e <- rnorm(n)\n    d$y_null <- 1 + 2 * d$x + e\n    left <- d$z1 <= 5\n    d$y_one <- ifelse(left, 1 + 2 * d$x, -1 + 0.5 * d$x) + e\n    low3 <- as.integer(d$z3) <= 2L\n    ac <- d$z2 %in% c(\"a\", \"c\")\n    b0 <- ifelse(d$z1 <= 4, ifelse(low3, 1, -1.5), ifelse(ac, 2, 2))\n    b1 <- ifelse(d$z1 <= 4, ifelse(low3, 1, 1), ifelse(ac, -1, 1.5))\n    d$y_multi <- b0 + b1 * d$x + e\n    d$w <- sample(1:3, n, replace = TRUE)\n    d$w0 <- d$w * as.integer(runif(n) > 0.1)\n    d\n}"
+}

@@ -1,0 +1,28 @@
+{
+  "dataset": "glm_binomial_proportions_weighted",
+  "description": "Proportions with the number of trials as prior weights.",
+  "source": "simulated",
+  "seed": 20261015,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 120,
+  "csv": "glm_binomial_proportions_weighted.csv",
+  "columns": [
+    {
+      "name": "x0",
+      "type": "double"
+    },
+    {
+      "name": "x1",
+      "type": "double"
+    },
+    {
+      "name": "w",
+      "type": "integer"
+    },
+    {
+      "name": "y",
+      "type": "double"
+    }
+  ],
+  "generator_code": "{\n    n <- 120L\n    d <- data.frame(x0 = 1, x1 = rnorm(n), w = sample(1:20, n, replace = TRUE))\n    d$y <- rbinom(n, d$w, plogis(0.3 - 0.8 * d$x1))/d$w\n    d\n}"
+}

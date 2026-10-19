@@ -1,0 +1,24 @@
+{
+  "dataset": "glm_poisson_start",
+  "description": "Counts with many zeros fitted from a poor user-supplied start (2, -4). Same data as poisson_zeros.",
+  "source": "simulated",
+  "seed": 20261019,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 200,
+  "csv": "glm_poisson_start.csv",
+  "columns": [
+    {
+      "name": "x0",
+      "type": "double"
+    },
+    {
+      "name": "x1",
+      "type": "double"
+    },
+    {
+      "name": "y",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "{\n    n <- 200L\n    d <- data.frame(x0 = 1, x1 = rnorm(n))\n    d$y <- rpois(n, exp(-1.2 + 0.5 * d$x1))\n    d\n}"
+}

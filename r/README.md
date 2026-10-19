@@ -62,13 +62,14 @@ renv uses its normal shared cache at:
 ~/.cache/R/renv
 ```
 
-The project uses explicit snapshots. `DESCRIPTION` declares the six direct
+The project uses explicit snapshots. `DESCRIPTION` declares the seven direct
 dependencies so that `renv::status()` recognizes all of them as intentional:
 
 - `partykit`
 - `strucchange`
 - `sandwich`
 - `MASS`
+- `mlbench`
 - `nnet`
 - `jsonlite`
 
@@ -117,6 +118,24 @@ The script locates and activates the `r/` renv project itself, so this command
 works even though the current directory is the repository root. The generated
 `r/smoke.json` is optional: commit it only if it will serve as a golden fixture
 for the Python implementation.
+
+## Fixture generators
+
+`generate_all.R` regenerates every fixture in `tests/fixtures/`, including its
+README, which lists each fixture with the exact R call. Run it from the
+repository root:
+
+```bash
+Rscript r/generate_all.R
+```
+
+The pieces live in `fixtures/`: `common.R` (output helpers and the
+instrumented copy of `partykit:::mob_partynode`), `datasets.R`, `trees.R`,
+`glm.R` and `pvalues.R`. Output is deterministic; two consecutive runs produce
+byte-identical files.
+
+`mlbench` provides `SynthDiabetes`, the data set used by the partykit 1.3-0
+mob vignette. mlbench 2.1-11 no longer ships `PimaIndiansDiabetes`.
 
 ## Restore on a clean machine or in CI
 
