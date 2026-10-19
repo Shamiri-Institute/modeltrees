@@ -1,0 +1,14 @@
+Package: modeltrees.oracle
+Type: Project
+Title: R Reference Oracle for Model-Based Recursive Partitioning
+Version: 0.0.1
+Description: Reproducible R environment used to validate the Python port.
+License: MIT
+Encoding: UTF-8
+Imports:
+    jsonlite,
+    MASS,
+    nnet,
+    partykit,
+    sandwich,
+    strucchange

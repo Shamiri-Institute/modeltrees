@@ -1,0 +1,39 @@
+{
+  "family": "binomial",
+  "formula": "y ~ x | z",
+  "splits": [
+    {
+      "node": 1,
+      "variable": "z",
+      "split_points": -0.010441277641803
+    },
+    {
+      "node": 3,
+      "variable": "z",
+      "split_points": 0.32949435710907
+    }
+  ],
+  "node_coefficients": [
+    {
+      "node": 2,
+      "coefficients": {
+        "(Intercept)": -1.34256630376611,
+        "x": 0.768675292231624
+      }
+    },
+    {
+      "node": 4,
+      "coefficients": {
+        "(Intercept)": 0.575117507827135,
+        "x": -0.737519033797283
+      }
+    },
+    {
+      "node": 5,
+      "coefficients": {
+        "(Intercept)": 1.55200565836916,
+        "x": -0.487893305216641
+      }
+    }
+  ]
+}

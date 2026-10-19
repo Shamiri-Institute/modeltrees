@@ -1,7 +1,14 @@
 [project]
 name = "modeltrees"
 version = "0.1.0"
-description = "modeltrees"
+description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+authors = [
+    { name = "nm", email = "55702585+bnmoch3@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
 dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
