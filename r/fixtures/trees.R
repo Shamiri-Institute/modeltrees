@@ -18,19 +18,20 @@ GLM_CONTROL_DEFAULTS <- list(epsilon = 1e-8, maxit = 25)
 
 tree_spec <- function(name, dataset, fun, formula, description, expect,
                       family = NULL, weights = NULL, offset = NULL,
-                      control = list()) {
+                      cluster = NULL, control = list()) {
   unknown <- setdiff(names(control), names(MOB_CONTROL_DEFAULTS))
   if (length(unknown)) stop("Unknown control settings: ", paste(unknown, collapse = ", "))
   ctrl <- MOB_CONTROL_DEFAULTS
   ctrl[names(control)] <- control
   list(name = name, dataset = dataset, fun = fun, formula = formula,
     description = description, expect = expect, family = family,
-    weights = weights, offset = offset, control = ctrl)
+    weights = weights, offset = offset, cluster = cluster, control = ctrl)
 }
 
 all_tree_specs <- function() {
   zg <- "z1 + z2 + z3 + z4 + z5"
   zb <- "z1 + z2 + z3 + z4"
+  zc <- "zs + zt + z1 + z2 + z3"
   sd <- "diabetes ~ glucose | pressure + triceps + insulin + mass + age"
   list(
     tree_spec("synth_diabetes_glmtree_binomial", "synth_diabetes", "glmtree", sd,
@@ -116,7 +117,30 @@ all_tree_specs <- function() {
     tree_spec("sim_poisson_glmtree_weights", "sim_poisson", "glmtree",
       paste("y_multi ~ x |", zb), "Positive integer case weights and an offset.",
       "several", family = "poisson(link = \"log\")", offset = "log(exposure)",
-      weights = "w", control = list(minsize = 40L))
+      weights = "w", control = list(minsize = 40L)),
+    # Cluster fixtures. zs and zt are school-level (constant within a school),
+    # z1, z2 and z3 are observation-level.
+    tree_spec("sim_cluster_lmtree_cluster", "sim_cluster", "lmtree",
+      paste("y_gauss ~ x |", zc),
+      "Gaussian responses with a school-level random intercept; cluster = school. The instability tests sum the scores within schools.",
+      "one", cluster = "school", control = list(minsize = 30L)),
+    tree_spec("sim_cluster_lmtree_nocluster", "sim_cluster", "lmtree",
+      paste("y_gauss ~ x |", zc),
+      "As sim_cluster_lmtree_cluster without cluster. The school-level variables zs and zt now look unstable because the random intercept is ignored.",
+      "several", control = list(minsize = 30L)),
+    tree_spec("sim_cluster_glmtree_binomial_cluster", "sim_cluster", "glmtree",
+      paste("y_bin ~ x |", zc),
+      "Binary responses with a school-level random intercept; cluster = school.",
+      "several", family = "binomial(link = \"logit\")", cluster = "school",
+      control = list(minsize = 30L)),
+    tree_spec("sim_cluster_glmtree_binomial_nocluster", "sim_cluster", "glmtree",
+      paste("y_bin ~ x |", zc),
+      "As sim_cluster_glmtree_binomial_cluster without cluster.",
+      "several", family = "binomial(link = \"logit\")", control = list(minsize = 30L)),
+    tree_spec("sim_cluster_few_lmtree_cluster", "sim_cluster_few", "lmtree",
+      "y ~ x1 + x2 + x3 | zs",
+      "A node with fewer clusters than parameters: the 3 large schools with high zs split off at the root, and that child has 3 clusters for 4 parameters. partykit's instability test fails there (the cluster-summed meat is singular, chol errors) and the node is terminal.",
+      "one", cluster = "school", control = list(minsize = 40L))
   )
 }
 
@@ -132,6 +156,7 @@ tree_call_text <- function(spec) {
     if (!is.null(spec$family)) sprintf("family = %s", spec$family),
     if (!is.null(spec$weights)) sprintf("weights = %s", spec$weights),
     if (!is.null(spec$offset)) sprintf("offset = %s", spec$offset),
+    if (!is.null(spec$cluster)) sprintf("cluster = %s", spec$cluster),
     if (spec$fun == "glmtree") {
       sprintf("%s = %s", names(GLM_CONTROL_DEFAULTS), vapply(GLM_CONTROL_DEFAULTS, deparse_value, ""))
     },
@@ -250,7 +275,7 @@ stop_reason <- function(nd, info, alpha) {
   "pruned"
 }
 
-extract_nodes <- function(tree, alpha) {
+extract_nodes <- function(tree, alpha, cluster = NULL) {
   nodes <- as.list(tree$node)
   mf <- tree$data
   z_names <- all.vars(tree$info$terms$partitioning)
@@ -264,37 +289,48 @@ extract_nodes <- function(tree, alpha) {
     }
   }
   lapply(nodes, function(nd) {
-    info <- nd$info
-    cf <- info$coefficients
-    ef <- info$estfun
-    ss <- info$.fx_split_search
-    list(
-      id = nd$id,
-      parent = if (parent[nd$id] == 0L) NULL else parent[nd$id],
-      depth = depth[nd$id],
-      kids = arr(if (is.null(nd$kids)) integer() else as.integer(nd$kids)),
-      terminal = is.null(nd$kids),
-      stop_reason = stop_reason(nd, info, alpha),
-      nobs = info$nobs,
-      n_rows = length(node_rows(tree, nd$id)),
-      minsize = info$.fx_minsize,
-      rows = arr(node_rows(tree, nd$id)),
-      coefficient_names = arr(names(cf)),
-      coefficients = arr(finite_or_na(cf)),
-      objfun = info$objfun,
-      p_value = if (is.null(info$p.value)) NULL else info$p.value,
-      test = describe_test(info, z_names),
-      split = if (is.null(nd$split)) NULL else describe_split(nd$split, z_names, mf),
-      split_search = if (is.null(ss)) NULL else list(
-        variable = ss$variable,
-        minsize = ss$minsize,
-        candidates = arr(if (is.numeric(ss$candidates)) ss$candidates else as.character(ss$candidates)),
-        objective = arr(finite_or_na(ss$objective))
-      ),
-      estfun_names = arr(colnames(ef)),
-      estfun = unname(ef)
-    )
+    out <- extract_node(nd, tree, mf, z_names, parent, depth, alpha)
+    # Clustered fixtures also record how many clusters reach the node.
+    if (!is.null(cluster)) {
+      out <- append(out,
+        list(n_clusters = length(unique(cluster[node_rows(tree, nd$id) + 1L]))),
+        after = match("n_rows", names(out)))
+    }
+    out
   })
+}
+
+extract_node <- function(nd, tree, mf, z_names, parent, depth, alpha) {
+  info <- nd$info
+  cf <- info$coefficients
+  ef <- info$estfun
+  ss <- info$.fx_split_search
+  list(
+    id = nd$id,
+    parent = if (parent[nd$id] == 0L) NULL else parent[nd$id],
+    depth = depth[nd$id],
+    kids = arr(if (is.null(nd$kids)) integer() else as.integer(nd$kids)),
+    terminal = is.null(nd$kids),
+    stop_reason = stop_reason(nd, info, alpha),
+    nobs = info$nobs,
+    n_rows = length(node_rows(tree, nd$id)),
+    minsize = info$.fx_minsize,
+    rows = arr(node_rows(tree, nd$id)),
+    coefficient_names = arr(names(cf)),
+    coefficients = arr(finite_or_na(cf)),
+    objfun = info$objfun,
+    p_value = if (is.null(info$p.value)) NULL else info$p.value,
+    test = describe_test(info, z_names),
+    split = if (is.null(nd$split)) NULL else describe_split(nd$split, z_names, mf),
+    split_search = if (is.null(ss)) NULL else list(
+      variable = ss$variable,
+      minsize = ss$minsize,
+      candidates = arr(if (is.numeric(ss$candidates)) ss$candidates else as.character(ss$candidates)),
+      objective = arr(finite_or_na(ss$objective))
+    ),
+    estfun_names = arr(colnames(ef)),
+    estfun = unname(ef)
+  )
 }
 
 # How close the fixture sits to a decision boundary. Small values mean a
@@ -330,7 +366,8 @@ tree_fixture <- function(spec, ds, instrumented) {
   tree <- inst$tree
   stopifnot(nrow(tree$data) == nrow(ds$data))
 
-  nodes <- extract_nodes(tree, spec$control$alpha)
+  nodes <- extract_nodes(tree, spec$control$alpha,
+    if (is.null(spec$cluster)) NULL else ds$data[[spec$cluster]])
   n_terminal <- length(partykit::nodeids(tree, terminal = TRUE))
   got <- if (n_terminal == 1L) "none" else if (n_terminal == 2L) "one" else "several"
   if (got != spec$expect) {
@@ -382,6 +419,17 @@ tree_fixture <- function(spec, ds, instrumented) {
     fitted_node = arr(as.integer(tree$fitted[["(fitted)"]])),
     nodes = nodes
   )
+  # The few-clusters fixture must contain the case it documents: a node whose
+  # instability tests failed with fewer clusters than coefficients.
+  if (grepl("_few_", spec$name)) {
+    hit <- Filter(function(nd) nd$test$status == "failed" &&
+      nd$n_clusters < length(nd$coefficient_names), nodes)
+    if (!length(hit)) stop(spec$name, ": no failed node with fewer clusters than parameters")
+  }
+  # Clustered fixtures name the cluster column of the data CSV.
+  if (!is.null(spec$cluster)) {
+    fx <- append(fx, list(cluster = spec$cluster), after = match("offset", names(fx)))
+  }
   # Fixtures on data with rows deleted record which source rows are gone.
   if (!is.null(ds$removed_rows)) {
     fx$source_dataset <- ds$source_dataset

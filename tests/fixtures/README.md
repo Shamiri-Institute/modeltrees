@@ -32,6 +32,10 @@ Generated with R 4.6.1, partykit 1.3-0, strucchange 1.6-0, mlbench 2.1-11, jsonl
   (0-based indices into the source data) in its schema, and the tree fixtures
   grown on it repeat both fields. Row indices in such a fixture refer to the
   reduced data.
+- A fixture grown with `cluster` has a top-level `cluster` field naming the
+  cluster column of its data CSV, and `n_clusters` in every node (the number of
+  distinct cluster ids among the node's rows). Cluster ids are in the CSV, so
+  a node's cluster vector is the cluster column at the node's `rows`.
 - Each dataset has a `.schema.json` with column types, factor levels in R's
   order, the seed, the RNG kind and the generating code.
 
@@ -44,6 +48,8 @@ Generated with R 4.6.1, partykit 1.3-0, strucchange 1.6-0, mlbench 2.1-11, jsonl
 | `data/sim_gaussian_nonzero_w0.csv` | 543 | 20261001 | sim_gaussian without the rows where w0 is zero. Same columns, row order otherwise unchanged. |
 | `data/sim_binomial.csv` | 800 | 20261002 | Simulated binary data with no, one and several planted splits. |
 | `data/sim_poisson.csv` | 800 | 20261003 | Simulated count data with an exposure offset and planted splits. |
+| `data/sim_cluster.csv` | 813 | 20261021 | Simulated grouped data: 30 schools, a school-level random intercept, school-level variables zs and zt, observation-level z1, z2, z3. The column school holds the cluster id. |
+| `data/sim_cluster_few.csv` | 739 | 20261022 | Simulated grouped data: 21 ordinary schools and 3 large schools with high zs and different coefficients. The column school holds the cluster id. |
 
 The glm.fit fixtures each have their own `data/glm_<case>.csv`, listed with
 the fixture below.
@@ -282,6 +288,56 @@ Data `data/sim_poisson.csv`. 8 inner and 9 terminal nodes.
 
 ```r
 partykit::glmtree(formula = y_multi ~ x | z1 + z2 + z3 + z4, data = sim_poisson, family = poisson(link = "log"), weights = w, offset = log(exposure), epsilon = 1e-08, maxit = 25, alpha = 0.05, bonferroni = TRUE, minsize = 40L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `trees/sim_cluster_lmtree_cluster.json`
+
+Gaussian responses with a school-level random intercept; cluster = school. The instability tests sum the scores within schools.
+
+Data `data/sim_cluster.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::lmtree(formula = y_gauss ~ x | zs + zt + z1 + z2 + z3, data = sim_cluster, cluster = school, alpha = 0.05, bonferroni = TRUE, minsize = 30L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `trees/sim_cluster_lmtree_nocluster.json`
+
+As sim_cluster_lmtree_cluster without cluster. The school-level variables zs and zt now look unstable because the random intercept is ignored.
+
+Data `data/sim_cluster.csv`. 7 inner and 8 terminal nodes.
+
+```r
+partykit::lmtree(formula = y_gauss ~ x | zs + zt + z1 + z2 + z3, data = sim_cluster, alpha = 0.05, bonferroni = TRUE, minsize = 30L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `trees/sim_cluster_glmtree_binomial_cluster.json`
+
+Binary responses with a school-level random intercept; cluster = school.
+
+Data `data/sim_cluster.csv`. 3 inner and 4 terminal nodes.
+
+```r
+partykit::glmtree(formula = y_bin ~ x | zs + zt + z1 + z2 + z3, data = sim_cluster, family = binomial(link = "logit"), cluster = school, epsilon = 1e-08, maxit = 25, alpha = 0.05, bonferroni = TRUE, minsize = 30L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `trees/sim_cluster_glmtree_binomial_nocluster.json`
+
+As sim_cluster_glmtree_binomial_cluster without cluster.
+
+Data `data/sim_cluster.csv`. 6 inner and 7 terminal nodes.
+
+```r
+partykit::glmtree(formula = y_bin ~ x | zs + zt + z1 + z2 + z3, data = sim_cluster, family = binomial(link = "logit"), epsilon = 1e-08, maxit = 25, alpha = 0.05, bonferroni = TRUE, minsize = 30L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `trees/sim_cluster_few_lmtree_cluster.json`
+
+A node with fewer clusters than parameters: the 3 large schools with high zs split off at the root, and that child has 3 clusters for 4 parameters. partykit's instability test fails there (the cluster-summed meat is singular, chol errors) and the node is terminal.
+
+Data `data/sim_cluster_few.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::lmtree(formula = y ~ x1 + x2 + x3 | zs, data = sim_cluster_few, cluster = school, alpha = 0.05, bonferroni = TRUE, minsize = 40L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
 ```
 
 ## glm.fit fixtures

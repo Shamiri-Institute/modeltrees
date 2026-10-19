@@ -1,0 +1,36 @@
+{
+  "dataset": "sim_cluster_few",
+  "description": "Simulated grouped data: 21 ordinary schools and 3 large schools with high zs and different coefficients. The column school holds the cluster id.",
+  "source": "simulated",
+  "seed": 20261022,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 739,
+  "csv": "sim_cluster_few.csv",
+  "columns": [
+    {
+      "name": "school",
+      "type": "integer"
+    },
+    {
+      "name": "x1",
+      "type": "double"
+    },
+    {
+      "name": "x2",
+      "type": "double"
+    },
+    {
+      "name": "x3",
+      "type": "double"
+    },
+    {
+      "name": "zs",
+      "type": "double"
+    },
+    {
+      "name": "y",
+      "type": "double"
+    }
+  ],
+  "generator_code": "{\n    n_low <- 21L\n    n_high <- 3L\n    g <- n_low + n_high\n    size <- c(sample(15:35, n_low, replace = TRUE), sample(60:90, n_high, replace = TRUE))\n    school <- rep(seq_len(g), size)\n    n <- length(school)\n    zs <- c(runif(n_low, 0, 6), runif(n_high, 8, 10))\n    high <- zs[school] > 7\n    u <- rnorm(g, 0, 0.7)[school]\n    d <- data.frame(school = school, x1 = rnorm(n), x2 = rnorm(n), x3 = rnorm(n), zs = zs[school])\n    d$y <- u + ifelse(high, 6, 0) + (1 + ifelse(high, -6, 0)) * d$x1 + 0.5 * d$x2 - 0.5 * d$x3 + rnorm(n)\n    d[sample(n), ]\n}"
+}
