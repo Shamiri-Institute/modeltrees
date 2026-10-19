@@ -28,6 +28,10 @@ Generated with R 4.6.1, partykit 1.3-0, strucchange 1.6-0, mlbench 2.1-11, jsonl
   stores no `test`), or `failed` (partykit stores `NA`).
 - Factor responses (binomial) are encoded by `glm.fit` as 0 for the first
   level in `response_levels` and 1 otherwise.
+- A dataset derived by deleting rows has `source_dataset` and `removed_rows`
+  (0-based indices into the source data) in its schema, and the tree fixtures
+  grown on it repeat both fields. Row indices in such a fixture refer to the
+  reduced data.
 - Each dataset has a `.schema.json` with column types, factor levels in R's
   order, the seed, the RNG kind and the generating code.
 
@@ -37,6 +41,7 @@ Generated with R 4.6.1, partykit 1.3-0, strucchange 1.6-0, mlbench 2.1-11, jsonl
 | --- | --- | --- | --- |
 | `data/synth_diabetes.csv` | 768 | none (mlbench) | mlbench::SynthDiabetes, used by the partykit 1.3-0 mob vignette in place of PimaIndiansDiabetes. |
 | `data/sim_gaussian.csv` | 600 | 20261001 | Simulated gaussian data with no, one and several planted splits. |
+| `data/sim_gaussian_nonzero_w0.csv` | 543 | 20261001 | sim_gaussian without the rows where w0 is zero. Same columns, row order otherwise unchanged. |
 | `data/sim_binomial.csv` | 800 | 20261002 | Simulated binary data with no, one and several planted splits. |
 | `data/sim_poisson.csv` | 800 | 20261003 | Simulated count data with an exposure offset and planted splits. |
 
@@ -151,12 +156,72 @@ partykit::glmtree(formula = y_multi ~ x | z1 + z2 + z3 + z4 + z5, data = sim_gau
 
 ### `trees/sim_gaussian_lmtree_zero_weights.json`
 
-Edge case: case weights with zeros. partykit 1.3-0 fails the root instability test and returns a single node.
+Documented partykit divergence: case weights with zeros. partykit 1.3-0 fails the root instability test and returns a single node. Not an oracle for Python; see sim_gaussian_lmtree_zero_weights_deleted.
 
 Data `data/sim_gaussian.csv`. 0 inner and 1 terminal nodes.
 
 ```r
 partykit::lmtree(formula = y_multi ~ x | z1 + z2 + z3 + z4 + z5, data = sim_gaussian, weights = w0, alpha = 0.05, bonferroni = TRUE, minsize = 30L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `trees/sim_gaussian_lmtree_zero_weights_deleted.json`
+
+Oracle for zero weights: the sim_gaussian_lmtree_zero_weights data and settings with the zero-weight rows removed before fitting (removed_rows lists them, 0-based, in sim_gaussian). All remaining weights are positive.
+
+Data `data/sim_gaussian_nonzero_w0.csv`. 17 inner and 18 terminal nodes. 57 rows of `sim_gaussian` removed.
+
+```r
+partykit::lmtree(formula = y_multi ~ x | z1 + z2 + z3 + z4 + z5, data = sim_gaussian_nonzero_w0, weights = w0, alpha = 0.05, bonferroni = TRUE, minsize = 30L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `trees/sim_gaussian_lmtree_numsplit_center.json`
+
+numsplit = "center": the break is the midpoint between adjacent candidates, not the left one.
+
+Data `data/sim_gaussian.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::lmtree(formula = y_one ~ x | z1 + z2 + z3 + z4 + z5, data = sim_gaussian, alpha = 0.05, bonferroni = TRUE, minsize = 30L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "center", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `trees/sim_gaussian_lmtree_trim_count.json`
+
+trim = 50: an absolute trimming count (trim > 1) instead of a proportion.
+
+Data `data/sim_gaussian.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::lmtree(formula = y_one ~ x | z1 + z2 + z3 + z4 + z5, data = sim_gaussian, alpha = 0.05, bonferroni = TRUE, minsize = 30L, maxdepth = Inf, mtry = Inf, trim = 50, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `trees/synth_diabetes_glmtree_binomial_aic.json`
+
+AIC post-pruning with the default dfsplit = TRUE. Pair with the dfsplit = FALSE fixture: the setting changes the pruned tree.
+
+Data `data/synth_diabetes.csv`. 4 inner and 5 terminal nodes.
+
+```r
+partykit::glmtree(formula = diabetes ~ glucose | pressure + triceps + insulin + mass + age, data = synth_diabetes, family = binomial(link = "logit"), epsilon = 1e-08, maxit = 25, alpha = 0.9, bonferroni = TRUE, minsize = 50L, maxdepth = 4L, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = "AIC", restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `trees/synth_diabetes_glmtree_binomial_aic_nodfsplit.json`
+
+AIC post-pruning with dfsplit = FALSE: split parameters are not counted in the pruning df, so a node that dfsplit = TRUE prunes survives.
+
+Data `data/synth_diabetes.csv`. 5 inner and 6 terminal nodes.
+
+```r
+partykit::glmtree(formula = diabetes ~ glucose | pressure + triceps + insulin + mass + age, data = synth_diabetes, family = binomial(link = "logit"), epsilon = 1e-08, maxit = 25, alpha = 0.9, bonferroni = TRUE, minsize = 50L, maxdepth = 4L, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = FALSE, prune = "AIC", restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `trees/sim_binomial_glmtree_aic_pruned.json`
+
+AIC post-pruning of a tree grown with a large alpha on null data: the unpruned tree has 7 leaves, AIC pruning leaves 6.
+
+Data `data/sim_binomial.csv`. 5 inner and 6 terminal nodes.
+
+```r
+partykit::glmtree(formula = y_null ~ x | z1 + z2 + z3 + z4, data = sim_binomial, family = binomial(link = "logit"), epsilon = 1e-08, maxit = 25, alpha = 0.9, bonferroni = TRUE, minsize = 40L, maxdepth = 4L, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = "AIC", restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
 ```
 
 ### `trees/sim_binomial_glmtree_nosplit.json`

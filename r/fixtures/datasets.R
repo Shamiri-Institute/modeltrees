@@ -96,14 +96,36 @@ build_sim_poisson <- function() {
   d
 }
 
+# The rows of a dataset with positive weight in `weight_col`, as a new dataset.
+# removed_rows holds the 0-based indices (in the source data) of the dropped
+# rows, so a fixture on the reduced data can be mapped back to the source.
+drop_zero_weight_rows <- function(src, name, description, weight_col) {
+  zero <- which(src$data[[weight_col]] == 0)
+  stopifnot(length(zero) > 0L)
+  list(
+    name = name,
+    description = description,
+    source = "simulated",
+    seed = src$seed,
+    code = sprintf("subset of %s with rows where %s == 0 removed", src$name, weight_col),
+    data = src$data[-zero, , drop = FALSE],
+    source_dataset = src$name,
+    removed_rows = zero - 1L
+  )
+}
+
 all_datasets <- function() {
+  sim_gaussian <- make_dataset("sim_gaussian",
+    "Simulated gaussian data with no, one and several planted splits.",
+    "simulated", 20261001L, build_sim_gaussian)
   list(
     make_dataset("synth_diabetes",
       "mlbench::SynthDiabetes, used by the partykit 1.3-0 mob vignette in place of PimaIndiansDiabetes.",
       "mlbench", NULL, build_synth_diabetes),
-    make_dataset("sim_gaussian",
-      "Simulated gaussian data with no, one and several planted splits.",
-      "simulated", 20261001L, build_sim_gaussian),
+    sim_gaussian,
+    drop_zero_weight_rows(sim_gaussian, "sim_gaussian_nonzero_w0",
+      "sim_gaussian without the rows where w0 is zero. Same columns, row order otherwise unchanged.",
+      "w0"),
     make_dataset("sim_binomial",
       "Simulated binary data with no, one and several planted splits.",
       "simulated", 20261002L, build_sim_binomial),

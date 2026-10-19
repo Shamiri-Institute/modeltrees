@@ -1,0 +1,61 @@
+{
+  "dataset": "sim_gaussian_nonzero_w0",
+  "description": "sim_gaussian without the rows where w0 is zero. Same columns, row order otherwise unchanged.",
+  "source": "simulated",
+  "seed": 20261001,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 543,
+  "csv": "sim_gaussian_nonzero_w0.csv",
+  "columns": [
+    {
+      "name": "x",
+      "type": "double"
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "z2",
+      "type": "factor",
+      "levels": ["a", "b", "c", "d"]
+    },
+    {
+      "name": "z3",
+      "type": "ordered",
+      "levels": ["L1", "L2", "L3", "L4", "L5"]
+    },
+    {
+      "name": "z4",
+      "type": "double"
+    },
+    {
+      "name": "z5",
+      "type": "factor",
+      "levels": ["u", "v", "w"]
+    },
+    {
+      "name": "y_null",
+      "type": "double"
+    },
+    {
+      "name": "y_one",
+      "type": "double"
+    },
+    {
+      "name": "y_multi",
+      "type": "double"
+    },
+    {
+      "name": "w",
+      "type": "integer"
+    },
+    {
+      "name": "w0",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "subset of sim_gaussian with rows where w0 == 0 removed",
+  "source_dataset": "sim_gaussian",
+  "removed_rows": [7, 14, 35, 39, 59, 74, 81, 86, 105, 112, 124, 146, 156, 158, 168, 174, 176, 180, 184, 190, 201, 208, 212, 230, 246, 267, 268, 276, 279, 283, 288, 290, 299, 310, 331, 347, 348, 380, 388, 411, 427, 432, 440, 449, 467, 499, 503, 507, 512, 534, 545, 560, 575, 589, 590, 593, 599]
+}

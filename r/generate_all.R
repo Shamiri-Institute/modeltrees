@@ -102,6 +102,10 @@ readme <- c(
   "  stores no `test`), or `failed` (partykit stores `NA`).",
   "- Factor responses (binomial) are encoded by `glm.fit` as 0 for the first",
   "  level in `response_levels` and 1 otherwise.",
+  "- A dataset derived by deleting rows has `source_dataset` and `removed_rows`",
+  "  (0-based indices into the source data) in its schema, and the tree fixtures",
+  "  grown on it repeat both fields. Row indices in such a fixture refer to the",
+  "  reduced data.",
   "- Each dataset has a `.schema.json` with column types, factor levels in R's",
   "  order, the seed, the RNG kind and the generating code.",
   "",
@@ -138,8 +142,10 @@ for (entry in tree_index) {
   readme <- c(readme,
     sprintf("### `%s`", entry$file), "",
     fx$description, "",
-    sprintf("Data `%s`. %d inner and %d terminal nodes.", fx$data_csv,
-      fx$summary$n_inner, fx$summary$n_terminal), "",
+    sprintf("Data `%s`. %d inner and %d terminal nodes.%s", fx$data_csv,
+      fx$summary$n_inner, fx$summary$n_terminal,
+      if (is.null(fx$removed_rows)) "" else sprintf(" %d rows of `%s` removed.",
+        length(fx$removed_rows), fx$source_dataset)), "",
     "```r", fx$r_call, "```", "")
 }
 readme <- c(readme,

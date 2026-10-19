@@ -1,6 +1,6 @@
 {
   "fixture": "sim_gaussian_lmtree_zero_weights",
-  "description": "Edge case: case weights with zeros. partykit 1.3-0 fails the root instability test and returns a single node.",
+  "description": "Documented partykit divergence: case weights with zeros. partykit 1.3-0 fails the root instability test and returns a single node. Not an oracle for Python; see sim_gaussian_lmtree_zero_weights_deleted.",
   "generator": "r/fixtures/trees.R",
   "r_call": "partykit::lmtree(formula = y_multi ~ x | z1 + z2 + z3 + z4 + z5, data = sim_gaussian, weights = w0, alpha = 0.05, bonferroni = TRUE, minsize = 30L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = \"vector\", xtype = \"matrix\", terminal = c(\"estfun\", \"object\"), inner = c(\"estfun\", \"object\"), model = TRUE, numsplit = \"left\", catsplit = \"binary\", vcov = \"opg\", ordinal = \"chisq\", nrep = 10000, applyfun = NULL, cores = NULL)",
   "versions": {

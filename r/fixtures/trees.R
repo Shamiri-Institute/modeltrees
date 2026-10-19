@@ -67,8 +67,35 @@ all_tree_specs <- function() {
       control = list(minsize = 30L)),
     tree_spec("sim_gaussian_lmtree_zero_weights", "sim_gaussian", "lmtree",
       paste("y_multi ~ x |", zg),
-      "Edge case: case weights with zeros. partykit 1.3-0 fails the root instability test and returns a single node.",
+      "Documented partykit divergence: case weights with zeros. partykit 1.3-0 fails the root instability test and returns a single node. Not an oracle for Python; see sim_gaussian_lmtree_zero_weights_deleted.",
       "none", weights = "w0", control = list(minsize = 30L)),
+    tree_spec("sim_gaussian_lmtree_zero_weights_deleted", "sim_gaussian_nonzero_w0", "lmtree",
+      paste("y_multi ~ x |", zg),
+      paste("Oracle for zero weights: the sim_gaussian_lmtree_zero_weights data and settings",
+        "with the zero-weight rows removed before fitting (removed_rows lists them, 0-based,",
+        "in sim_gaussian). All remaining weights are positive."),
+      "several", weights = "w0", control = list(minsize = 30L)),
+    tree_spec("sim_gaussian_lmtree_numsplit_center", "sim_gaussian", "lmtree",
+      paste("y_one ~ x |", zg),
+      "numsplit = \"center\": the break is the midpoint between adjacent candidates, not the left one.",
+      "one", control = list(minsize = 30L, numsplit = "center")),
+    tree_spec("sim_gaussian_lmtree_trim_count", "sim_gaussian", "lmtree",
+      paste("y_one ~ x |", zg),
+      "trim = 50: an absolute trimming count (trim > 1) instead of a proportion.",
+      "one", control = list(minsize = 30L, trim = 50)),
+    tree_spec("synth_diabetes_glmtree_binomial_aic", "synth_diabetes", "glmtree", sd,
+      "AIC post-pruning with the default dfsplit = TRUE. Pair with the dfsplit = FALSE fixture: the setting changes the pruned tree.",
+      "several", family = "binomial(link = \"logit\")",
+      control = list(minsize = 50L, maxdepth = 4L, alpha = 0.9, prune = "AIC")),
+    tree_spec("synth_diabetes_glmtree_binomial_aic_nodfsplit", "synth_diabetes", "glmtree", sd,
+      "AIC post-pruning with dfsplit = FALSE: split parameters are not counted in the pruning df, so a node that dfsplit = TRUE prunes survives.",
+      "several", family = "binomial(link = \"logit\")",
+      control = list(minsize = 50L, maxdepth = 4L, alpha = 0.9, prune = "AIC", dfsplit = FALSE)),
+    tree_spec("sim_binomial_glmtree_aic_pruned", "sim_binomial", "glmtree",
+      paste("y_null ~ x |", zb),
+      "AIC post-pruning of a tree grown with a large alpha on null data: the unpruned tree has 7 leaves, AIC pruning leaves 6.",
+      "several", family = "binomial(link = \"logit\")",
+      control = list(minsize = 40L, maxdepth = 4L, alpha = 0.9, prune = "AIC")),
     tree_spec("sim_binomial_glmtree_nosplit", "sim_binomial", "glmtree",
       paste("y_null ~ x |", zb), "No planted instability.", "none",
       family = "binomial(link = \"logit\")", control = list(minsize = 40L)),
@@ -317,7 +344,7 @@ tree_fixture <- function(spec, ds, instrumented) {
     list(family = f$family, link = f$link)
   }
 
-  list(
+  fx <- list(
     fixture = spec$name,
     description = spec$description,
     generator = "r/fixtures/trees.R",
@@ -355,4 +382,10 @@ tree_fixture <- function(spec, ds, instrumented) {
     fitted_node = arr(as.integer(tree$fitted[["(fitted)"]])),
     nodes = nodes
   )
+  # Fixtures on data with rows deleted record which source rows are gone.
+  if (!is.null(ds$removed_rows)) {
+    fx$source_dataset <- ds$source_dataset
+    fx$removed_rows <- arr(ds$removed_rows)
+  }
+  fx
 }

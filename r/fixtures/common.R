@@ -101,6 +101,10 @@ write_dataset <- function(ds, data_dir) {
     columns = column_schema(df),
     generator_code = ds$code
   )
+  if (!is.null(ds$removed_rows)) {
+    schema$source_dataset <- ds$source_dataset
+    schema$removed_rows <- I(ds$removed_rows)
+  }
   write_fixture_json(schema, file.path(data_dir, paste0(ds$name, ".schema.json")))
   invisible(csv_path)
 }
