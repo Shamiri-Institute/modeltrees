@@ -13,70 +13,21 @@ from typing import Any
 import numpy as np
 import pytest
 import statsmodels.api as sm  # type: ignore[import-untyped]
-from fixtures_io import FIXTURES, load_dataset, load_json, nan_array
+from fixtures_io import nan_array
+from tree_fixtures import TREE_FILES
+from tree_fixtures import data as _data
+from tree_fixtures import inputs as _inputs
+from tree_fixtures import model as _model
+from tree_fixtures import tree as _tree
 
 from modeltrees.models.families import GlmFitWarning
 from modeltrees.models.glm import GlmModel, binomial_response
 from modeltrees.models.glm_fit import glm_fit
 from modeltrees.models.lm import LmModel
-from modeltrees.node_model import FitResult, NodeModel
+from modeltrees.node_model import FitResult
 
 RTOL = 1e-8
 ATOL = 1e-10
-
-TREE_FILES = sorted(p.stem for p in (FIXTURES / "trees").glob("*.json"))
-
-
-@cache
-def _tree(name: str) -> dict[str, Any]:
-    tree: dict[str, Any] = load_json(f"trees/{name}.json")
-    return tree
-
-
-@cache
-def _data(csv: str) -> tuple[dict[str, np.ndarray], dict[str, dict[str, Any]]]:
-    return load_dataset(csv)
-
-
-def _model(tree: dict[str, Any]) -> NodeModel:
-    names = tree["coefficient_names"]
-    if tree["function_name"] == "lmtree":
-        return LmModel(coef_names=names)
-    assert tree["function_name"] == "glmtree"
-    return GlmModel(tree["family"]["family"], coef_names=names, **tree["glm_control"])
-
-
-def _offset(tree: dict[str, Any], data: dict[str, np.ndarray]) -> np.ndarray | None:
-    expr = tree["offset"]
-    if expr is None:
-        return None
-    if expr.startswith("log(") and expr.endswith(")"):
-        return np.log(data[expr[4:-1]])
-    return data[expr]
-
-
-def _inputs(
-    tree: dict[str, Any],
-) -> tuple[np.ndarray, np.ndarray | None, np.ndarray, np.ndarray | None]:
-    """Response, regressors (None for intercept only), weights and offset."""
-    data, columns = _data(tree["data_csv"])
-    response = tree["response"]
-    if columns[response]["type"] == "factor":
-        # The factor arrives as codes in R's level order; binomial_response
-        # applies R's rule: first level failure, the rest success.
-        levels = columns[response]["levels"]
-        assert levels == tree["response_levels"]
-        y = binomial_response(np.array(levels)[data[response]], levels=levels)
-    else:
-        y = data[response]
-    regressors = tree["regressors"]
-    x = (
-        np.column_stack([np.ones(y.shape[0])] + [data[r] for r in regressors])
-        if regressors
-        else None
-    )
-    w = data[tree["weights"]] if tree["weights"] else np.ones(y.shape[0])
-    return y, x, w, _offset(tree, data)
 
 
 def _nodes() -> list[Any]:

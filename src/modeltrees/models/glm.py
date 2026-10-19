@@ -123,9 +123,10 @@ def binomial_response(
     R's rule in ``binomial()$initialize`` (``y != levels(y)[1]``). The level
     order is ``levels`` if given, else the categories of a pandas-style
     categorical (``.cat.categories`` or ``.categories``), else the sorted
-    unique values. R's ``factor()`` sorts by the locale's collation, which
-    can differ from Python's sort for mixed-case strings, so pass
-    ``levels`` when the order matters.
+    unique values. R sorts strings by the locale's collation when it makes
+    factor levels, which can differ from Python's sort (for example for
+    mixed-case strings), so callers should pass the level order explicitly
+    as ``levels`` when it matters.
     """
     if levels is None:
         holder = getattr(y, "cat", y)

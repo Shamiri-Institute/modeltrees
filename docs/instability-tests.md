@@ -130,7 +130,11 @@ sends every other non-`"chisq"` value to `ordL2BB` (`:331`, `:339-342`).
 Ported: everything the default `mob_control()` needs, that is `vcov = "opg"`,
 `caseweights = TRUE`, `ordinal = "chisq"`, `trim` (fraction or absolute),
 `minsize`, `bonferroni` on or off, `mtry = Inf`, `breakties = FALSE`,
-`parm = NULL`, and `cluster` (section 4, item 14).
+`parm = NULL`, and `cluster` (section 4, item 14). `caseweights = FALSE`
+was added with the tree code (docs/tree-growing.md): `nobs` is the row count,
+the meat does not divide by the weights, the supLM time index is `1:n` and the
+factor segment weights are level counts (`:227`, `:241`, `:320`, `:358`).
+There is no R fixture for it.
 
 Out of scope because they depend on strucchange or on random numbers:
 
@@ -140,9 +144,9 @@ Out of scope because they depend on strucchange or on random numbers:
 - `mtry < Inf` (`sample`, `:218`).
 
 Out of scope for now because default `mob()` does not need them, though they
-do not depend on strucchange: `vcov = "info"` and `"sandwich"` (`:233-251`),
-`caseweights = FALSE` (`:241`), and `parm` (`:254-259`). `fluctuation_tests` takes keyword arguments so these can be
-added without changing existing calls.
+do not depend on strucchange: `vcov = "info"` and `"sandwich"` (`:233-251`)
+and `parm` (`:254-259`). `fluctuation_tests` takes keyword arguments so these
+can be added without changing existing calls.
 
 ## 4. Decisions and ambiguities
 

@@ -11,6 +11,7 @@ from numpy.typing import NDArray
 from modeltrees.models._common import check_vcov, numeric_response, regressor_matrix
 from modeltrees.models.lm_fit import lm_fit, lm_wfit
 from modeltrees.node_model import FitResult
+from modeltrees.pruning import PruneRule, lm_prune_rule
 
 FloatArray = NDArray[np.float64]
 
@@ -63,3 +64,7 @@ class LmModel:
 
     def n_response_columns(self, y: NDArray[np.generic]) -> int:
         return 1 if np.ndim(y) <= 1 else int(np.shape(y)[1])
+
+    def prune_rule(self, name: str) -> PruneRule | None:
+        """lmtree's pruning rules, for an RSS objective (lmtree.R:12-29)."""
+        return lm_prune_rule(name)

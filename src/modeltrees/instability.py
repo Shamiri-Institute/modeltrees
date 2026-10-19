@@ -4,7 +4,7 @@ Port of ``mob_grow_fluctests`` and ``root.matrix`` from partykit 1.3-0
 (reference/partykit/R/modelparty.R:195-381) for the default ``mob_control()``
 settings: ``vcov = "opg"``, ``ordinal = "chisq"``, ``caseweights = TRUE``,
 ``mtry = Inf``, ``breakties = FALSE`` and ``parm = NULL``, with optional
-``cluster`` (scores are summed within clusters before the covariance
+``caseweights = FALSE`` and ``cluster`` (scores are summed within clusters before the covariance
 estimate, :240-245). Line
 numbers below refer to modelparty.R. docs/instability-tests.md lists what is
 ported and what is out of scope.
@@ -133,7 +133,10 @@ def _cluster_codes(cluster: ArrayLike | None, n: int) -> IntArray | None:
 
 
 def decorrelated_process(
-    estfun: FloatArray, weights: FloatArray, cluster: ArrayLike | None = None
+    estfun: FloatArray,
+    weights: FloatArray,
+    cluster: ArrayLike | None = None,
+    caseweights: bool = True,
 ) -> tuple[FloatArray, NDArray[np.bool_], float]:
     """Scale and decorrelate the scores, modelparty.R:220-252, vcov "opg".
 
@@ -150,8 +153,12 @@ def decorrelated_process(
     cross product (:240-245). At most as many clusters as parameters warns
     with TooFewClustersWarning and raises TooFewClustersError.
 
+    With ``caseweights = False`` the weights are part of the scores, so
+    ``nobs`` is the number of rows and the meat does not divide them out
+    (:227, :241).
+
     Returns the process for the rows with positive weight, the mask of those
-    rows, and ``nobs``. Assumes ``caseweights = TRUE``.
+    rows, and ``nobs``.
     """
     process = np.asarray(estfun, dtype=np.float64)
     if process.ndim == 1:
@@ -161,11 +168,12 @@ def decorrelated_process(
     process = process[keep]
     w = weights[keep]
     n = process.shape[0]
-    nobs = float(np.sum(w)) if np.any(w != 1) else float(n)
+    nobs = float(np.sum(w)) if caseweights and np.any(w != 1) else float(n)
 
     process = process / math.sqrt(nobs)
-    # Weights are already inside the scores, so the meat divides them out.
-    scaled = process / np.sqrt(w)[:, None]
+    # Weights are already inside the scores, so with case weights the meat
+    # divides them out.
+    scaled = process / np.sqrt(w)[:, None] if caseweights else process
     if codes is not None:
         # Re-code after dropping rows so clusters with only zero weights vanish.
         codes = (
@@ -249,6 +257,7 @@ def fluctuation_statistics(
     minsize: int,
     trim: float = 0.1,
     cluster: ArrayLike | None = None,
+    caseweights: bool = True,
 ) -> FluctuationStatistics:
     """Instability test statistics for each partitioning variable.
 
@@ -262,14 +271,17 @@ def fluctuation_statistics(
 
     ``cluster`` holds one cluster id per row of the node. It changes only the
     covariance estimate, see :func:`decorrelated_process`.
+
+    With ``caseweights = False`` the supLM time index is the row count and
+    the factor segment weights are level counts (:320, :358).
     """
     w = np.asarray(weights, dtype=np.float64)
     process, keep, nobs = decorrelated_process(
-        np.asarray(estfun, dtype=np.float64), w, cluster
+        np.asarray(estfun, dtype=np.float64), w, cluster, caseweights
     )
     k = process.shape[1]
     trimming = suplm_trimming(nobs, trim, minsize)
-    w = w[keep]
+    w = w[keep] if caseweights else np.ones(int(np.sum(keep)))
     use_weights = bool(np.any(w != 1))
 
     m = len(z)
@@ -330,6 +342,7 @@ def fluctuation_tests(
     trim: float = 0.1,
     bonferroni: bool = True,
     cluster: ArrayLike | None = None,
+    caseweights: bool = True,
 ) -> FluctuationTests:
     """All parameter instability tests at a node, as partykit runs them.
 
@@ -339,7 +352,13 @@ def fluctuation_tests(
     TooFewClustersError, a subclass, after a TooFewClustersWarning.
     """
     stats = fluctuation_statistics(
-        estfun, z, weights, minsize=minsize, trim=trim, cluster=cluster
+        estfun,
+        z,
+        weights,
+        minsize=minsize,
+        trim=trim,
+        cluster=cluster,
+        caseweights=caseweights,
     )
     logp = statistics_to_log_pvalues(stats, [v.kind for v in z])
     p = np.exp(logp)
