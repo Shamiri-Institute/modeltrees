@@ -259,33 +259,36 @@ added without changing existing calls.
       fixture combines `weights` and `cluster`, so that combination is
       checked against the formula only (singleton clusters equal no clusters,
       zero weights equal deleted rows), not against R.
-    - *Fewer clusters than parameters.* As decided in docs/decisions.md,
-      `decorrelated_process` emits `TooFewClustersWarning` and raises
-      `TooFewClustersError`, a subclass of `InstabilityTestError`, so the
-      tree code that treats `InstabilityTestError` as partykit's `try()`
-      failure makes the node terminal. The count is of clusters among
+    - *At most as many clusters as parameters.* As decided in
+      docs/decisions.md, `decorrelated_process` emits `TooFewClustersWarning`
+      and raises `TooFewClustersError`, a subclass of `InstabilityTestError`,
+      so the tree code that treats `InstabilityTestError` as partykit's
+      `try()` failure makes the node terminal. The count is of clusters among
       positive-weight rows and `k` is the number of columns of the node's
-      scores (aliased columns excluded). In R the same nodes fail inside
-      `chol()` ("the leading minor of order 4 is not positive" in
-      `sim_cluster_few_lmtree_cluster.json`, node 3: 3 clusters, 4
-      coefficients) and `try()` swallows it, so partykit stops without any
-      message. With one cluster and more than one parameter R fails
-      earlier, at `J12 %*% t(process)` (`:252`): `tapply` over one cluster
-      makes `apply` return a vector, so the meat is 1 by 1. The outcome is
-      the same, the node is terminal. One cluster and one parameter is fine
-      in R and in the port.
-    - *Exactly as many clusters as parameters is not decided by the port.*
-      Fitted scores sum to zero over a node, so the cluster sums sum to
-      zero too and with `k` clusters the meat has rank at most `k - 1`.
-      Whether `chol()` then fails depends on rounding: in a quick R run
-      (lmtree, y on random x, 2 to 4 clusters, 8 seeds each) `try()` caught a
-      failure in 12 of 24 fits and the other 12 returned p-values from a
-      numerically singular meat. The port has the same ambiguity: it raises a
-      plain `InstabilityTestError` when `cho_factor` fails and otherwise
-      continues, and it does not raise `TooFewClustersError`, since the
-      decision says "fewer". `test_cluster_count_at_and_above_the_number_of_parameters`
-      asserts only that. If a deterministic rule is wanted, `<= k` would be
-      the natural one, but it is not what partykit does.
+      scores (aliased columns excluded). With fewer clusters than parameters
+      R fails too, inside `chol()` ("the leading minor of order 4 is not
+      positive" in `sim_cluster_few_lmtree_cluster.json`, node 3: 3 clusters,
+      4 coefficients), and `try()` swallows it, so partykit stops without any
+      message. With one cluster and more than one parameter R fails earlier,
+      at `J12 %*% t(process)` (`:252`): `tapply` over one cluster makes
+      `apply` return a vector, so the meat is 1 by 1. The outcome is the
+      same, the node is terminal.
+    - *Exactly as many clusters as parameters: the port diverges from
+      partykit, by decision.* Fitted scores sum to zero over a node, so the
+      cluster sums sum to zero too and with `k` clusters the meat has rank at
+      most `k - 1`. Whether partykit's `chol()` then fails depends on
+      rounding: in a quick R run (lmtree, y on random x, 2 to 4 clusters, 8
+      seeds each) `try()` caught a failure in 12 of 24 fits and the other 12
+      returned p-values from a numerically singular meat. The port does not
+      leave this to rounding: `n_clusters <= k` raises `TooFewClustersError`,
+      so such a node is always terminal. Where R happens to get p-values
+      there, the port stops instead; those p-values come from a singular
+      meat and are not meaningful. This includes one cluster and one
+      parameter, which R runs on a 1 by 1 meat of rounding noise. No R
+      fixture has a node with exactly `k` clusters.
+      `test_exactly_as_many_clusters_as_parameters_raises` covers
+      `k = 1, 2, 4`, and `test_one_more_cluster_than_parameters_runs` the
+      first count that is tested.
     - *Fixtures.* `sim_cluster` (30 schools of 8 to 40 pupils, random intercept
       sd 1.5, school-level `zs` and `zt`) gives four trees: lmtree and binomial
       glmtree, each with and without `cluster`. Without it, `zs` and `zt`
@@ -336,7 +339,8 @@ is the input, so model fitting is not involved:
   as every other fixture, with the node's cluster ids read from the data CSV;
   the effect of `cluster` on the root p-values of the school-level variables
   (clustered and unclustered fixtures, in R and in the port); the few-clusters
-  warning and error on R's failed node; cluster-count thresholds; zero-weight
+  warning and error on R's failed node; cluster-count thresholds (fewer than,
+  exactly and one more than `k`); zero-weight
   rows in the cluster vector (extra zero-weight rows, including a school with
   only zero-weight rows, leave R's result unchanged; zero weights equal
   deleted rows); relabelling; singleton clusters equal no clusters; input

@@ -94,8 +94,8 @@ def _tested_nodes(status: str) -> list[Any]:
 
 OK_NODES = _tested_nodes("ok")
 FAILED_NODES = _tested_nodes("failed")
-# Failed nodes split by cause: zero case weights, or fewer clusters than
-# parameters.
+# Failed nodes split by cause: zero case weights, or at most as many clusters
+# as parameters.
 ZERO_WEIGHT_FAILED = [c for c in FAILED_NODES if "cluster" not in _tree(c.values[0])]
 FEW_CLUSTER_FAILED = [c for c in FAILED_NODES if "cluster" in _tree(c.values[0])]
 CLUSTER_TREES = sorted(n for n in TREE_FILES if "cluster" in _tree(n))
@@ -602,39 +602,35 @@ def test_fewer_clusters_than_parameters_raises(n_clusters: int) -> None:
         fluctuation_tests(estfun, z, np.ones(n), minsize=10, cluster=cluster)
 
 
-def test_cluster_count_at_and_above_the_number_of_parameters() -> None:
+@pytest.mark.parametrize("k", [1, 2, 4])
+def test_exactly_as_many_clusters_as_parameters_raises(k: int) -> None:
     """Scores that sum to zero (as fitted scores do) make the cluster sums sum
     to zero, so with exactly k clusters the meat has rank k - 1. Whether chol
-    fails there depends on rounding, in R as in the port (see
-    docs/instability-tests.md, section 4, item 14), so only the absence of the
-    few-clusters rule is asserted. With more clusters the tests run."""
+    fails there depends on rounding, in R as in a port that relied on chol,
+    so the port stops at <= k (docs/decisions.md; docs/instability-tests.md,
+    section 4, item 14). k = 1 is the one cluster, one parameter case that R
+    runs on a 1 x 1 meat of rounding noise."""
+    rng = np.random.default_rng(14)
+    n = 120
+    estfun = _random_scores(rng, n, k)
+    z = [PartitioningVariable("z", VariableKind.NUMERIC, rng.uniform(size=n))]
+    with (
+        pytest.warns(TooFewClustersWarning, match=f"{k} clusters for {k} parameters"),
+        pytest.raises(TooFewClustersError),
+    ):
+        fluctuation_tests(estfun, z, np.ones(n), minsize=10, cluster=np.arange(n) % k)
+
+
+def test_one_more_cluster_than_parameters_runs() -> None:
     rng = np.random.default_rng(14)
     n, k = 120, 4
     estfun = _random_scores(rng, n, k)
     z = [PartitioningVariable("z", VariableKind.NUMERIC, rng.uniform(size=n))]
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        try:
-            fluctuation_tests(
-                estfun, z, np.ones(n), minsize=10, cluster=np.arange(n) % k
-            )
-        except TooFewClustersError:  # pragma: no cover
-            pytest.fail("k clusters for k parameters is not the few-clusters case")
-        except InstabilityTestError:
-            pass
         result = fluctuation_tests(
             estfun, z, np.ones(n), minsize=10, cluster=np.arange(n) % (k + 2)
         )
-    assert np.all(np.isfinite(result.statistic))
-
-
-def test_one_cluster_one_parameter_runs() -> None:
-    """R: one cluster and one parameter gives a 1 x 1 meat, which is fine."""
-    rng = np.random.default_rng(11)
-    n = 60
-    estfun = _random_scores(rng, n, 1)
-    z = [PartitioningVariable("z", VariableKind.NUMERIC, rng.uniform(size=n))]
-    result = fluctuation_tests(estfun, z, np.ones(n), minsize=5, cluster=np.zeros(n))
     assert np.all(np.isfinite(result.statistic))
 
 

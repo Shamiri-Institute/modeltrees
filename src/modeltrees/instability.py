@@ -41,10 +41,14 @@ class InstabilityTestError(Exception):
 
 
 class TooFewClustersError(InstabilityTestError):
-    """A node has fewer clusters than parameters, so the covariance is singular.
+    """A node has at most as many clusters as parameters.
 
-    partykit's chol() fails there and its try() makes the node terminal
-    without a message. The caller handles this error the same way.
+    With fewer clusters the covariance is singular, partykit's chol() fails
+    and its try() makes the node terminal without a message. With exactly as
+    many, fitted scores make the cluster sums sum to zero, so the covariance
+    has rank at most k - 1 and whether chol() fails depends on rounding. The
+    port makes such nodes terminal either way (docs/decisions.md). The caller
+    handles this error like any InstabilityTestError.
     """
 
 
@@ -143,8 +147,8 @@ def decorrelated_process(
     weight does not count.
 
     With ``cluster`` the scaled scores are summed within clusters before the
-    cross product (:240-245). Fewer clusters than parameters warns with
-    TooFewClustersWarning and raises TooFewClustersError.
+    cross product (:240-245). At most as many clusters as parameters warns
+    with TooFewClustersWarning and raises TooFewClustersError.
 
     Returns the process for the rows with positive weight, the mask of those
     rows, and ``nobs``. Assumes ``caseweights = TRUE``.
@@ -169,7 +173,9 @@ def decorrelated_process(
         )
         n_clusters = int(codes.max()) + 1 if codes.shape[0] else 0
         k = scaled.shape[1]
-        if n_clusters < k:
+        # partykit fails at exactly k clusters only when chol() does, which
+        # depends on rounding; the port stops at <= k by decision.
+        if n_clusters <= k:
             message = (
                 f"{n_clusters} clusters for {k} parameters: the covariance "
                 "estimate is singular, so the instability tests cannot run "
@@ -329,8 +335,8 @@ def fluctuation_tests(
 
     Raises InstabilityTestError where partykit's tests raise an error, which
     mob_grow catches to make the node terminal (modelparty.R:550, :569-573).
-    A node with fewer clusters than parameters raises TooFewClustersError, a
-    subclass, after a TooFewClustersWarning.
+    A node with at most as many clusters as parameters raises
+    TooFewClustersError, a subclass, after a TooFewClustersWarning.
     """
     stats = fluctuation_statistics(
         estfun, z, weights, minsize=minsize, trim=trim, cluster=cluster
