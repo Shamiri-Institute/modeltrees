@@ -2,8 +2,10 @@
 
 Port of ``mob_grow_fluctests`` and ``root.matrix`` from partykit 1.3-0
 (reference/partykit/R/modelparty.R:195-381) for the default ``mob_control()``
-settings: ``vcov = "opg"``, ``ordinal = "chisq"``, ``caseweights = TRUE``, no
-clusters, ``mtry = Inf``, ``breakties = FALSE`` and ``parm = NULL``. Line
+settings: ``vcov = "opg"``, ``ordinal = "chisq"``, ``caseweights = TRUE``,
+``mtry = Inf``, ``breakties = FALSE`` and ``parm = NULL``, with optional
+``cluster`` (scores are summed within clusters before the covariance
+estimate, :240-245). Line
 numbers below refer to modelparty.R. docs/instability-tests.md lists what is
 ported and what is out of scope.
 
@@ -13,6 +15,7 @@ combines them as partykit does.
 """
 
 import math
+import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -35,6 +38,18 @@ IntArray = NDArray[np.intp]
 
 class InstabilityTestError(Exception):
     """The tests failed. partykit catches this with try() and stops splitting."""
+
+
+class TooFewClustersError(InstabilityTestError):
+    """A node has fewer clusters than parameters, so the covariance is singular.
+
+    partykit's chol() fails there and its try() makes the node terminal
+    without a message. The caller handles this error the same way.
+    """
+
+
+class TooFewClustersWarning(UserWarning):
+    """Emitted before TooFewClustersError so the stop is not silent."""
 
 
 class VariableKind(Enum):
@@ -99,8 +114,22 @@ def root_matrix(x: FloatArray) -> FloatArray:
     return (vectors * np.sqrt(values)) @ vectors.T
 
 
+def _cluster_codes(cluster: ArrayLike | None, n: int) -> IntArray | None:
+    """Cluster ids as integer codes, or None. Any sortable dtype works."""
+    if cluster is None:
+        return None
+    ids = np.asarray(cluster)
+    if ids.ndim != 1 or ids.shape[0] != n:
+        raise ValueError(
+            f"cluster must have one id per row ({n}), got shape {ids.shape}"
+        )
+    if ids.dtype.kind == "f" and np.any(np.isnan(ids)):
+        raise ValueError("cluster ids must not be missing")
+    return np.unique(ids, return_inverse=True)[1].astype(np.intp).reshape(-1)
+
+
 def decorrelated_process(
-    estfun: FloatArray, weights: FloatArray
+    estfun: FloatArray, weights: FloatArray, cluster: ArrayLike | None = None
 ) -> tuple[FloatArray, NDArray[np.bool_], float]:
     """Scale and decorrelate the scores, modelparty.R:220-252, vcov "opg".
 
@@ -108,14 +137,22 @@ def decorrelated_process(
     anything else, so the result equals R's on the data with those rows
     deleted. partykit does not do this consistently (it divides the filtered
     scores by the unfiltered weights, :241, and then fails), which
-    docs/decisions.md rules out replicating.
+    docs/decisions.md rules out replicating. The cluster vector is
+    filtered with the same mask (partykit leaves it unfiltered, so ``tapply``
+    would see more ids than rows), and a cluster whose rows all have zero
+    weight does not count.
+
+    With ``cluster`` the scaled scores are summed within clusters before the
+    cross product (:240-245). Fewer clusters than parameters warns with
+    TooFewClustersWarning and raises TooFewClustersError.
 
     Returns the process for the rows with positive weight, the mask of those
-    rows, and ``nobs``. Assumes ``caseweights = TRUE`` and no clusters.
+    rows, and ``nobs``. Assumes ``caseweights = TRUE``.
     """
     process = np.asarray(estfun, dtype=np.float64)
     if process.ndim == 1:
         process = process[:, None]
+    codes = _cluster_codes(cluster, process.shape[0])
     keep = weights > 0
     process = process[keep]
     w = weights[keep]
@@ -125,6 +162,24 @@ def decorrelated_process(
     process = process / math.sqrt(nobs)
     # Weights are already inside the scores, so the meat divides them out.
     scaled = process / np.sqrt(w)[:, None]
+    if codes is not None:
+        # Re-code after dropping rows so clusters with only zero weights vanish.
+        codes = (
+            np.unique(codes[keep], return_inverse=True)[1].astype(np.intp).reshape(-1)
+        )
+        n_clusters = int(codes.max()) + 1 if codes.shape[0] else 0
+        k = scaled.shape[1]
+        if n_clusters < k:
+            message = (
+                f"{n_clusters} clusters for {k} parameters: the covariance "
+                "estimate is singular, so the instability tests cannot run "
+                "and the node is not split further (partykit does the same)"
+            )
+            warnings.warn(message, TooFewClustersWarning, stacklevel=3)
+            raise TooFewClustersError(message)
+        sums = np.zeros((n_clusters, k))
+        np.add.at(sums, codes, scaled)
+        scaled = sums
     meat = scaled.T @ scaled
     try:
         # chol2inv(chol(meat)). check_finite makes a non-finite meat raise, as
@@ -187,6 +242,7 @@ def fluctuation_statistics(
     *,
     minsize: int,
     trim: float = 0.1,
+    cluster: ArrayLike | None = None,
 ) -> FluctuationStatistics:
     """Instability test statistics for each partitioning variable.
 
@@ -197,9 +253,14 @@ def fluctuation_statistics(
     computation, so a node tests like the data with those rows deleted. A
     variable with fewer than two distinct values among the positive-weight
     rows is not tested.
+
+    ``cluster`` holds one cluster id per row of the node. It changes only the
+    covariance estimate, see :func:`decorrelated_process`.
     """
     w = np.asarray(weights, dtype=np.float64)
-    process, keep, nobs = decorrelated_process(np.asarray(estfun, dtype=np.float64), w)
+    process, keep, nobs = decorrelated_process(
+        np.asarray(estfun, dtype=np.float64), w, cluster
+    )
     k = process.shape[1]
     trimming = suplm_trimming(nobs, trim, minsize)
     w = w[keep]
@@ -262,13 +323,18 @@ def fluctuation_tests(
     minsize: int,
     trim: float = 0.1,
     bonferroni: bool = True,
+    cluster: ArrayLike | None = None,
 ) -> FluctuationTests:
     """All parameter instability tests at a node, as partykit runs them.
 
     Raises InstabilityTestError where partykit's tests raise an error, which
     mob_grow catches to make the node terminal (modelparty.R:550, :569-573).
+    A node with fewer clusters than parameters raises TooFewClustersError, a
+    subclass, after a TooFewClustersWarning.
     """
-    stats = fluctuation_statistics(estfun, z, weights, minsize=minsize, trim=trim)
+    stats = fluctuation_statistics(
+        estfun, z, weights, minsize=minsize, trim=trim, cluster=cluster
+    )
     logp = statistics_to_log_pvalues(stats, [v.kind for v in z])
     p = np.exp(logp)
     return FluctuationTests(

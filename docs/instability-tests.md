@@ -3,7 +3,7 @@
 This document maps the parameter instability tests and p-values that
 partykit 1.3-0 runs inside `mob()` to the Python port in
 `src/modeltrees/instability.py` and `src/modeltrees/pvalues.py`. It covers
-phase 2 only. No tree-growing code is involved.
+phase 2 and its cluster extension. No tree-growing code is involved.
 
 Line numbers are `file:line` in the pinned sources under `reference/`.
 `modelparty.R` means `reference/partykit/R/modelparty.R`.
@@ -21,7 +21,7 @@ it is not reachable from outside the package.
 | variables to test, `mtry` | `modelparty.R:218` | all variables (default `mtry = Inf`) |
 | drop zero-weight rows, `nobs` | `modelparty.R:220-227` | `instability.decorrelated_process` (rows dropped consistently, see section 4, item 6) |
 | scale by `sqrt(nobs)` | `modelparty.R:230` | same |
-| meat, `vcov = "opg"` | `modelparty.R:231-246` | same |
+| meat, `vcov = "opg"`, with `cluster` sums | `modelparty.R:231-246` | same (cluster branch `:243-244`, section 4, item 14) |
 | `J12 = root.matrix(chol2inv(chol(meat)))`, decorrelate | `modelparty.R:247-252` | same |
 | `parm` column selection | `modelparty.R:254-259` | not ported (default `NULL`) |
 | trimming `from`, `to`, `lambda` | `modelparty.R:261-265` | `pvalues.suplm_trimming` |
@@ -130,7 +130,7 @@ sends every other non-`"chisq"` value to `ordL2BB` (`:331`, `:339-342`).
 Ported: everything the default `mob_control()` needs, that is `vcov = "opg"`,
 `caseweights = TRUE`, `ordinal = "chisq"`, `trim` (fraction or absolute),
 `minsize`, `bonferroni` on or off, `mtry = Inf`, `breakties = FALSE`,
-`parm = NULL`, no clusters.
+`parm = NULL`, and `cluster` (section 4, item 14).
 
 Out of scope because they depend on strucchange or on random numbers:
 
@@ -141,8 +141,7 @@ Out of scope because they depend on strucchange or on random numbers:
 
 Out of scope for now because default `mob()` does not need them, though they
 do not depend on strucchange: `vcov = "info"` and `"sandwich"` (`:233-251`),
-`caseweights = FALSE` (`:241`), `cluster` (`:243-244`), and `parm`
-(`:254-259`). `fluctuation_tests` takes keyword arguments so these can be
+`caseweights = FALSE` (`:241`), and `parm` (`:254-259`). `fluctuation_tests` takes keyword arguments so these can be
 added without changing existing calls.
 
 ## 4. Decisions and ambiguities
@@ -238,6 +237,69 @@ added without changing existing calls.
     needed to run the tests. The phase 2 commit covers only `src/`, `tests/`
     and `docs/`, so `pyproject.toml` and `uv.lock` are left uncommitted for
     review.
+14. **Clusters.** With `cluster`, the scaled scores (`process/sqrt(weights)`,
+    already divided by `sqrt(nobs)`) are summed within clusters and the meat is
+    the cross product of those sums (`:243-244`). Only the meat changes. The
+    process, the supLM and chi-squared statistics and the p-value code use the
+    row-level decorrelated process as before. `decorrelated_process`,
+    `fluctuation_statistics` and `fluctuation_tests` take `cluster` as one id
+    per row of the node: any sortable dtype, grouped by value like
+    `as.numeric(cluster)`, so labels and row order do not matter. Missing ids
+    and a wrong length raise `ValueError` (R's `model.frame` removes missing
+    values before `mob_partynode` sees them).
+    - *Zero weights.* The cluster vector is filtered with the same mask as
+      the scores, so a node with zero weights tests like the data with those
+      rows deleted, clusters included. A cluster with no positive weight does
+      not count toward the number of clusters. partykit filters the scores
+      but not the cluster vector, which on top of the weight bug in item 6
+      would make `tapply` see more ids than rows. There is no R oracle for
+      this (R fails), so the tests check equivalence with the deleted-rows
+      data, whose cluster result matches the R fixture.
+    - *Case weights with clusters.* The port follows `:244` literally, but no
+      fixture combines `weights` and `cluster`, so that combination is
+      checked against the formula only (singleton clusters equal no clusters,
+      zero weights equal deleted rows), not against R.
+    - *Fewer clusters than parameters.* As decided in docs/decisions.md,
+      `decorrelated_process` emits `TooFewClustersWarning` and raises
+      `TooFewClustersError`, a subclass of `InstabilityTestError`, so the
+      tree code that treats `InstabilityTestError` as partykit's `try()`
+      failure makes the node terminal. The count is of clusters among
+      positive-weight rows and `k` is the number of columns of the node's
+      scores (aliased columns excluded). In R the same nodes fail inside
+      `chol()` ("the leading minor of order 4 is not positive" in
+      `sim_cluster_few_lmtree_cluster.json`, node 3: 3 clusters, 4
+      coefficients) and `try()` swallows it, so partykit stops without any
+      message. With one cluster and more than one parameter R fails
+      earlier, at `J12 %*% t(process)` (`:252`): `tapply` over one cluster
+      makes `apply` return a vector, so the meat is 1 by 1. The outcome is
+      the same, the node is terminal. One cluster and one parameter is fine
+      in R and in the port.
+    - *Exactly as many clusters as parameters is not decided by the port.*
+      Fitted scores sum to zero over a node, so the cluster sums sum to
+      zero too and with `k` clusters the meat has rank at most `k - 1`.
+      Whether `chol()` then fails depends on rounding: in a quick R run
+      (lmtree, y on random x, 2 to 4 clusters, 8 seeds each) `try()` caught a
+      failure in 12 of 24 fits and the other 12 returned p-values from a
+      numerically singular meat. The port has the same ambiguity: it raises a
+      plain `InstabilityTestError` when `cho_factor` fails and otherwise
+      continues, and it does not raise `TooFewClustersError`, since the
+      decision says "fewer". `test_cluster_count_at_and_above_the_number_of_parameters`
+      asserts only that. If a deterministic rule is wanted, `<= k` would be
+      the natural one, but it is not what partykit does.
+    - *Fixtures.* `sim_cluster` (30 schools of 8 to 40 pupils, random intercept
+      sd 1.5, school-level `zs` and `zt`) gives four trees: lmtree and binomial
+      glmtree, each with and without `cluster`. Without it, `zs` and `zt`
+      have root p-values below 1e-3 in both models; with it, above 0.05. The
+      clustered binomial tree still splits on `z2` and `z3` at nodes 3 and 4
+      (raw p of about 0.002 and 0.0001), which is what partykit
+      computes, not a planted effect. `sim_cluster_few` (21 ordinary schools
+      and 3 large high-`zs` schools whose intercept and `x1` slope differ by
+      6, `y ~ x1 + x2 + x3 | zs`) is the few-clusters case. Its seed
+      (20261022) was the first of a short scan in which the root split on
+      `zs` and the child failed; seeds 20261023 and 20261025 to
+      20261029 did not split at the root, because a cluster-summed test has
+      little power with 24 clusters. The generator asserts that the fixture
+      contains a failed node with fewer clusters than coefficients.
 
 ## 5. Tests
 
@@ -257,8 +319,8 @@ added without changing existing calls.
   `k = 100`, `lambda = Inf` and `NaN`, absolute trim and `minsize`
   trimming.
 
-`tests/test_instability.py`, against every node with a test in the 22 tree
-fixtures (152 nodes with status `ok`, 1 `failed`). R's `estfun` for the node
+`tests/test_instability.py`, against every node with a test in the 27 tree
+fixtures (every node with status `ok`, and the 2 `failed` ones: zero weights and few clusters). R's `estfun` for the node
 is the input, so model fitting is not involved:
 
 - the statistic alone: `nobs`, `k`, trimming, which variables have a
@@ -268,6 +330,17 @@ is the input, so model fitting is not involved:
   the node's `p.value`;
 - zero weights: R's failure on 5(a) as a documented divergence, the 5(a) root
   against the 5(b) oracle, and invariance to values in zero-weight rows;
+- clusters, against the three clustered tree fixtures (`sim_cluster_lmtree_cluster`,
+  `sim_cluster_glmtree_binomial_cluster`, `sim_cluster_few_lmtree_cluster`),
+  which go through the same statistic, p-value conversion and full-test tests
+  as every other fixture, with the node's cluster ids read from the data CSV;
+  the effect of `cluster` on the root p-values of the school-level variables
+  (clustered and unclustered fixtures, in R and in the port); the few-clusters
+  warning and error on R's failed node; cluster-count thresholds; zero-weight
+  rows in the cluster vector (extra zero-weight rows, including a school with
+  only zero-weight rows, leave R's result unchanged; zero weights equal
+  deleted rows); relabelling; singleton clusters equal no clusters; input
+  validation;
 - edge cases: one parameter (scalar root, numeric and factor), many
   parameters (`k = 39, 40, 41, 45`), constant variables, an empty trimming
   window, singular scores.
