@@ -99,34 +99,16 @@ def root_matrix(x: FloatArray) -> FloatArray:
     return (vectors * np.sqrt(values)) @ vectors.T
 
 
-def _r_divide_recycled(process: FloatArray, divisor: FloatArray) -> FloatArray:
-    """R's ``matrix / vector`` with recycling over the column-major matrix.
-
-    Matches R exactly when the lengths agree. They differ only for zero case
-    weights, where partykit divides the filtered process by the unfiltered
-    weights (modelparty.R:241). R recycles the shorter vector and errors if
-    it is longer than the matrix.
-    """
-    n, k = process.shape
-    m = divisor.shape[0]
-    if m == n:
-        return process / divisor[:, None]
-    if m > n * k:
-        raise InstabilityTestError(
-            f"dims [product {n * k}] do not match the length of object [{m}]"
-        )
-    flat = process.reshape(-1, order="F")
-    recycled = np.resize(divisor, flat.shape[0])
-    # Every weight is used at least once, so a zero weight gives Inf or NaN
-    # here and the Cholesky factorization below always fails, as in R.
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return (flat / recycled).reshape((n, k), order="F")
-
-
 def decorrelated_process(
     estfun: FloatArray, weights: FloatArray
 ) -> tuple[FloatArray, NDArray[np.bool_], float]:
     """Scale and decorrelate the scores, modelparty.R:220-252, vcov "opg".
+
+    Zero-weight rows are dropped from the scores and the weights before
+    anything else, so the result equals R's on the data with those rows
+    deleted. partykit does not do this consistently (it divides the filtered
+    scores by the unfiltered weights, :241, and then fails), which
+    docs/decisions.md rules out replicating.
 
     Returns the process for the rows with positive weight, the mask of those
     rows, and ``nobs``. Assumes ``caseweights = TRUE`` and no clusters.
@@ -136,18 +118,17 @@ def decorrelated_process(
         process = process[:, None]
     keep = weights > 0
     process = process[keep]
+    w = weights[keep]
     n = process.shape[0]
-    nobs = float(np.sum(weights)) if np.any(weights != 1) else float(n)
+    nobs = float(np.sum(w)) if np.any(w != 1) else float(n)
 
     process = process / math.sqrt(nobs)
     # Weights are already inside the scores, so the meat divides them out.
-    # partykit uses the unfiltered weights here (see _r_divide_recycled).
-    scaled = _r_divide_recycled(process, np.sqrt(weights))
-    with np.errstate(invalid="ignore", over="ignore"):
-        meat = scaled.T @ scaled
+    scaled = process / np.sqrt(w)[:, None]
+    meat = scaled.T @ scaled
     try:
-        # chol2inv(chol(meat)). R's chol fails on a non-finite meat with
-        # "leading minor is not positive"; check_finite raises instead.
+        # chol2inv(chol(meat)). check_finite makes a non-finite meat raise, as
+        # R's chol does.
         factor = scipy.linalg.cho_factor(meat, lower=False, check_finite=True)
         meat_inv = scipy.linalg.cho_solve(factor, np.eye(meat.shape[0]))
     except (np.linalg.LinAlgError, ValueError) as exc:
@@ -161,8 +142,7 @@ def _chisq_statistic(
 ) -> tuple[float, int]:
     """Factor statistic and df, modelparty.R:310-326 and :344-346.
 
-    ``weights`` is indexed with positions of the filtered rows, as partykit
-    does (it is the unfiltered vector when zero weights were dropped).
+    ``process``, ``codes`` and ``weights`` all hold the positive-weight rows.
     """
     oi = np.argsort(codes, kind="stable")
     zi = codes[oi]
@@ -212,13 +192,17 @@ def fluctuation_statistics(
 
     ``estfun`` is the node's n by k score matrix with weights included and
     ``weights`` the node's case weights (length n). ``minsize`` is the tree's
-    minimal node size, which raises the supLM trimming. A variable with fewer
-    than two distinct values among the positive-weight rows is not tested.
+    minimal node size, which raises the supLM trimming. Rows with zero weight
+    are dropped from the scores, weights and partitioning variables before any
+    computation, so a node tests like the data with those rows deleted. A
+    variable with fewer than two distinct values among the positive-weight
+    rows is not tested.
     """
     w = np.asarray(weights, dtype=np.float64)
     process, keep, nobs = decorrelated_process(np.asarray(estfun, dtype=np.float64), w)
     k = process.shape[1]
     trimming = suplm_trimming(nobs, trim, minsize)
+    w = w[keep]
     use_weights = bool(np.any(w != 1))
 
     m = len(z)

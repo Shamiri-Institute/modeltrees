@@ -195,25 +195,124 @@ def test_full_tests(name: str, node_id: int) -> None:
         )
 
 
+def _partykit_zero_weight_meat(estfun: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    """partykit 1.3-0's meat with zero weights (modelparty.R:220-246).
+
+    The process drops zero-weight rows but is divided by the unfiltered
+    weights. R recycles the shorter vector over the column-major matrix, so
+    every weight is used and a zero weight puts Inf or NaN into the meat.
+    """
+    process = estfun[weights > 0] / math.sqrt(weights.sum())
+    flat = process.reshape(-1, order="F")
+    with np.errstate(divide="ignore", invalid="ignore"):
+        scaled = (flat / np.resize(np.sqrt(weights), flat.shape[0])).reshape(
+            process.shape, order="F"
+        )
+        return scaled.T @ scaled
+
+
 @pytest.mark.parametrize(("name", "node_id"), FAILED_NODES)
-def test_failed_tests_raise(name: str, node_id: int) -> None:
-    """Zero case weights: partykit 1.3-0 divides the filtered scores by the
-    unfiltered weights (modelparty.R:241), the meat is not positive definite,
-    and chol() fails. The node becomes terminal."""
+def test_partykit_zero_weight_failure_is_a_documented_divergence(
+    name: str, node_id: int
+) -> None:
+    """Fixture 5(a): partykit 1.3-0 fails the root test with zero weights and
+    the node becomes terminal. The port does not replicate that (see
+    docs/decisions.md and docs/instability-tests.md, section 4, item 6): the
+    zero-weight rows are dropped consistently and the tests run."""
     tree, node = _get(name, node_id)
+    assert tree["summary"]["n_terminal"] == 1
+    assert node["stop_reason"] == "test_failed"
     estfun, z, weights = _node_inputs(tree, node)
     assert np.any(weights == 0)
-    with pytest.raises(InstabilityTestError, match="chol"):
-        fluctuation_tests(
-            estfun,
-            z,
-            weights,
-            minsize=tree["root_minsize"],
-            trim=tree["control"]["trim"],
-        )
+
+    # R's arithmetic: the meat is not finite, so chol() fails.
+    meat = _partykit_zero_weight_meat(estfun, weights)
+    assert not np.all(np.isfinite(meat))
+
+    # The port: no error, finite statistics.
+    result = fluctuation_tests(
+        estfun,
+        z,
+        weights,
+        minsize=tree["root_minsize"],
+        trim=tree["control"]["trim"],
+    )
+    assert np.all(np.isfinite(result.statistic))
+    assert result.best is not None
 
 
-# Edge cases built from the fixtures or by hand.
+def test_zero_weights_test_like_deleted_rows() -> None:
+    """Fixture 5(a)'s root node, run with zero weights, against the R oracle
+    5(b): the same data with the zero-weight rows removed before fitting."""
+    full = _tree("sim_gaussian_lmtree_zero_weights.json")
+    oracle = _tree("sim_gaussian_lmtree_zero_weights_deleted.json")
+    assert full["control"] == oracle["control"]
+    assert full["partitioning"] == oracle["partitioning"]
+    assert full["weights"] == oracle["weights"] == "w0"
+    removed = np.asarray(oracle["removed_rows"], dtype=np.intp)
+    assert removed.shape[0] > 0
+
+    data, _ = _dataset(full["data_csv"])
+    np.testing.assert_array_equal(np.flatnonzero(data["w0"] == 0), removed)
+    assert oracle["n"] == full["n"] - removed.shape[0]
+
+    root_full = full["nodes"][0]
+    root_oracle = oracle["nodes"][0]
+    assert root_oracle["test"]["status"] == "ok"
+    estfun, z, weights = _node_inputs(full, root_full)
+    result = fluctuation_tests(
+        estfun,
+        z,
+        weights,
+        minsize=full["root_minsize"],
+        trim=full["control"]["trim"],
+        bonferroni=full["control"]["bonferroni"],
+    )
+    test = root_oracle["test"]
+    assert result.nobs == test["nobs"]
+    assert result.k == test["k"]
+    assert result.trimming.start == test["trim_from"]
+    assert result.trimming.end == test["trim_to"]
+    np.testing.assert_allclose(
+        result.statistic, np.asarray(test["statistic"]), rtol=RTOL, atol=ATOL
+    )
+    np.testing.assert_allclose(
+        result.log_p_value,
+        nan_array(test["log_p_value_raw"]),
+        rtol=RTOL,
+        atol=ATOL,
+        equal_nan=True,
+    )
+    np.testing.assert_allclose(
+        result.p_value_adjusted,
+        nan_array(test["p_value_adjusted"]),
+        rtol=1e-8,
+        atol=0,
+        equal_nan=True,
+    )
+    assert result.best == test["best"]
+
+
+def test_zero_weight_rows_do_not_enter_the_tests() -> None:
+    """Values of z, and of the scores, in zero-weight rows change nothing."""
+    tree = _tree("sim_gaussian_lmtree_zero_weights.json")
+    estfun, z, weights = _node_inputs(tree, tree["nodes"][0])
+    zero = weights == 0
+    assert zero.any()
+    expected = fluctuation_tests(estfun, z, weights, minsize=tree["root_minsize"])
+
+    rng = np.random.default_rng(0)
+    estfun2 = estfun.copy()
+    estfun2[zero] = rng.normal(size=(int(zero.sum()), estfun.shape[1]))
+    z2 = []
+    for v in z:
+        values = np.array(v.values, copy=True)
+        values[zero] = rng.permutation(values)[: int(zero.sum())]
+        z2.append(PartitioningVariable(v.name, v.kind, values))
+    got = fluctuation_tests(estfun2, z2, weights, minsize=tree["root_minsize"])
+    np.testing.assert_array_equal(got.statistic, expected.statistic)
+    np.testing.assert_array_equal(got.log_p_value, expected.log_p_value)
+    assert got.best == expected.best
 
 
 def _random_scores(rng: np.random.Generator, n: int, k: int) -> np.ndarray:

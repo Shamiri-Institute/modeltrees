@@ -33,6 +33,11 @@ notes/phase1-questions.md. Match R unless a decision says otherwise.
   deleted (new fixture). Keep sim_gaussian_lmtree_zero_weights as a documented
   divergence from R.
 
+- Split search must take candidate split values from positive-weight rows only,
+  as the instability tests already do. A candidate from a zero-weight row could
+  win a tie and shift the break. There is no split search yet, so nothing tests
+  this; add the test with the split search.
+
 ## Interface
 
 - The core receives numeric arrays. Categorical responses, such as a binomial

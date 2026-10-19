@@ -19,7 +19,7 @@ it is not reachable from outside the package.
 | `root.matrix()`, "from strucchange" | `modelparty.R:194-203` | `instability.root_matrix` |
 | `mob_grow_fluctests()` | `modelparty.R:209-381` | `instability.fluctuation_tests` |
 | variables to test, `mtry` | `modelparty.R:218` | all variables (default `mtry = Inf`) |
-| drop zero-weight rows, `nobs` | `modelparty.R:220-227` | `instability.decorrelated_process` |
+| drop zero-weight rows, `nobs` | `modelparty.R:220-227` | `instability.decorrelated_process` (rows dropped consistently, see section 4, item 6) |
 | scale by `sqrt(nobs)` | `modelparty.R:230` | same |
 | meat, `vcov = "opg"` | `modelparty.R:231-246` | same |
 | `J12 = root.matrix(chol2inv(chol(meat)))`, decorrelate | `modelparty.R:247-252` | same |
@@ -174,21 +174,35 @@ added without changing existing calls.
    `if(lambda < 1)`; `logp_suplm` raises `ValueError`. `trim = 0` with
    `minsize = 0` gives `lambda = Inf` and `tau = 0`, which R and the port both
    map to the last table row.
-6. **Zero case weights always fail, by design of the port.** partykit 1.3-0
-   drops zero-weight rows from the process but divides by the unfiltered
-   weights at `:241`. R then recycles the weight vector over the
+6. **Zero case weights: the port diverges from partykit, by decision.**
+   partykit 1.3-0 drops zero-weight rows from the process but divides by the
+   unfiltered weights at `:241`. R then recycles the weight vector over the
    column-major matrix (with a warning), or errors if the vector is longer
    than the matrix. When the vector is recycled every weight is used at
    least once, so a zero weight puts `Inf` or `NaN` into the meat and `chol()`
    fails. With `caseweights = TRUE`, any zero weight therefore makes the
    tests fail and the node terminal. The fixture
-   `sim_gaussian_lmtree_zero_weights.json` shows this ("the leading minor of
-   order 2 is not positive"). The port does the same arithmetic in
-   `_r_divide_recycled` and raises `InstabilityTestError`. scipy's
-   `check_finite` raises before LAPACK sees the matrix, but the result is the
-   same: the tests fail. The same unfiltered indexing is kept for
-   `weights[oi]` in the segment weights and `tt0` (`:320`, `:358`). It only
-   matters in this failing case.
+   `sim_gaussian_lmtree_zero_weights.json` (5(a)) shows this ("the leading
+   minor of order 2 is not positive"). docs/decisions.md says not to
+   replicate it. The port drops zero-weight rows from the scores, weights and
+   partitioning variables before any computation (`decorrelated_process`,
+   `fluctuation_statistics`), so `nobs`, the meat, the supLM cumulative
+   weights `tt0` and the factor segment weights (`:320`, `:358`) all see the
+   positive-weight rows only. A node with zero weights then tests like the
+   data with those rows deleted. The oracle is
+   `sim_gaussian_lmtree_zero_weights_deleted.json` (5(b)): the same data and
+   settings with the 57 zero-weight rows removed before fitting
+   (`removed_rows`, 0-based into `sim_gaussian`). The root test of 5(a), run
+   by the port with zero weights, matches the 5(b) root at the tolerances in
+   section 5. The recycled-division arithmetic survives only in
+   `tests/test_instability.py`, where it shows that R's meat is not finite.
+
+   Candidate split values: the instability tests use the variable values only
+   to order the positive-weight rows, so zero-weight values cannot affect
+   them (tested by overwriting those values). No split search exists yet.
+   When it is written, the candidate values must come from positive-weight
+   rows only; otherwise a candidate from a zero-weight row can win a tie and
+   shift the break. This is recorded in docs/decisions.md.
 7. **`best` uses log p-values.** `which.min` runs on the raw log p-values
    (`:373`) before `exp()`, so ties after underflow to 0 resolve as in R.
 8. **What "tested" means in the fixtures.** The fixture field `tested` is
@@ -243,8 +257,8 @@ added without changing existing calls.
   `k = 100`, `lambda = Inf` and `NaN`, absolute trim and `minsize`
   trimming.
 
-`tests/test_instability.py`, against every node with a test in the 16 tree
-fixtures (103 nodes with status `ok`, 1 `failed`). R's `estfun` for the node
+`tests/test_instability.py`, against every node with a test in the 22 tree
+fixtures (152 nodes with status `ok`, 1 `failed`). R's `estfun` for the node
 is the input, so model fitting is not involved:
 
 - the statistic alone: `nobs`, `k`, trimming, which variables have a
@@ -252,7 +266,8 @@ is the input, so model fitting is not involved:
 - the p-value conversion alone: R's statistic in, R's raw log p-value out;
 - the full test: raw log p-values, raw and adjusted p-values, `best`, and
   the node's `p.value`;
-- the zero-weight failure;
+- zero weights: R's failure on 5(a) as a documented divergence, the 5(a) root
+  against the 5(b) oracle, and invariance to values in zero-weight rows;
 - edge cases: one parameter (scalar root, numeric and factor), many
   parameters (`k = 39, 40, 41, 45`), constant variables, an empty trimming
   window, singular scores.
