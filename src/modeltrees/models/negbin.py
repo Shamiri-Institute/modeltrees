@@ -33,12 +33,19 @@ from modeltrees.models.families import (
     Poisson,
 )
 from modeltrees.models.glm_fit import GlmFit, GlmFitError, glm_fit
-from modeltrees.node_model import FitResult, failed_fit
+from modeltrees.node_model import (
+    FitResult,
+    Report,
+    failed_fit,
+    linear_predictor,
+    rank,
+)
 
 FloatArray = NDArray[np.float64]
 
+DBL_EPSILON = float(np.finfo(np.float64).eps)
 # .Machine$double.eps^0.25, theta.ml's tolerance on the Newton step.
-THETA_EPS = float(np.finfo(np.float64).eps) ** 0.25
+THETA_EPS = DBL_EPSILON**0.25
 
 
 class NegBinError(FitError):
@@ -404,8 +411,57 @@ class NegBinModel:
                 "converged": z.converged,
                 "iter": z.iter,
                 "warnings": z.warnings,
+                # 2 * log-likelihood at (beta, theta), R's z$twologlik.
+                "twologlik": z.twologlik,
             },
         )
 
     def n_response_columns(self, y: NDArray[np.generic]) -> int:
         return 1
+
+    def loglik(self, result: FitResult) -> tuple[float, int]:
+        """``logLik.negbin``: ``twologlik / 2`` with df rank + 1 (theta).
+
+        For ``objective = "loglik"`` that is minus the objective. For
+        ``"deviance"`` it is the log-likelihood at the leaf's theta, which
+        the objective is not.
+        """
+        df = (len(result.coefficients) if result.failed else rank(result)) + 1
+        if result.failed:
+            return math.nan, df
+        if self.objective == "loglik":
+            return -result.objfun, df
+        return float(result.extras["twologlik"]) / 2, df
+
+    def report(self, result: FitResult) -> Report:
+        e = result.extras
+        messages = e.get("warnings")
+        return {
+            "theta": _optional_float(e.get("theta")),
+            "theta_se": _optional_float(e.get("theta_se")),
+            "theta_warning": e.get("theta_warning"),
+            "converged": result.converged,
+            "n_warnings": None if messages is None else len(messages),
+        }
+
+    def predict(
+        self,
+        result: FitResult,
+        x: FloatArray | None,
+        offset: FloatArray | None,
+        kind: str,
+    ) -> FloatArray:
+        """The linear predictor for "link", the mean for "response", with
+        ``make.link("log")``'s ``pmax(exp(eta), .Machine$double.eps)``."""
+        if kind not in ("link", "response"):
+            raise ValueError(f"negbintree predicts 'link' or 'response', not {kind!r}")
+        eta = linear_predictor(result, x, offset)
+        if kind == "link":
+            return eta
+        with np.errstate(over="ignore"):
+            mu = np.exp(eta)
+        return np.maximum(mu, DBL_EPSILON, out=mu)
+
+
+def _optional_float(value: object) -> float | None:
+    return None if value is None else float(value)  # type: ignore[arg-type]

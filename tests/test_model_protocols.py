@@ -61,6 +61,19 @@ def test_tree_loglik_matches_r(directory: str, name: str) -> None:
     assert ll.nobs == f["nobs"]
 
 
+def test_deviance_objective_loglik_is_not_minus_objfun() -> None:
+    """quine with objective = "deviance": the leaf loglik is negbin's
+    log-likelihood at the leaf's theta, not minus the deviance."""
+    grown = grow(*DEVIANCE)
+    m = model(fixture(*DEVIANCE))
+    assert isinstance(m, NegBinModel)
+    for leaf in (node for node in grown.nodes if node.terminal):
+        value, df = m.loglik(leaf.fit)
+        assert df == 2
+        assert not math.isclose(value, -leaf.fit.objfun, rel_tol=1e-3)
+        assert value == leaf.fit.extras["twologlik"] / 2
+
+
 def _failed_names(m: Any) -> tuple[str, ...]:
     if isinstance(m, MultinomModel):
         return ("b:(Intercept)", "b:x", "c:(Intercept)", "c:x")
