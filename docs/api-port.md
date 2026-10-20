@@ -208,3 +208,26 @@ offset, cluster, levels, kinds, na_action) -> Design`.
    values over all input rows; the warning lists them in the order
    response, regressors, partitioning variables, weights, offset, cluster.
    Inf checks run on the used rows only.
+
+## 7. Fixture parity of the design
+
+`tests/test_design_fixtures.py` builds the design of every tree and
+extension tree fixture (44) from a polars frame, of six from a pandas
+frame and of six from a dict of numpy arrays, and compares the regressor
+matrix, partitioning variables, weights, offset, cluster, raw response and
+coefficient names with `tests/tree_fixtures.py` exactly (`np.array_equal`).
+
+1. **Every fixture formula is in the subset.** The only expression is the
+   `offset = log(exposure)` argument of the poisson and negative binomial
+   fixtures, which is not part of the formula. A keyword offset is a
+   column name or an array, so the test precomputes a column
+   `log_exposure` and passes `offset="log_exposure"`.
+2. **Intercept-only models.** `tree_fixtures` passes `x = None`; the design
+   always has the `(Intercept)` column, so the test compares with a column
+   of ones (section 6, item 1).
+3. **Multinomial coefficient names** in the fixtures are class-major
+   (`mid:(Intercept)`); the design's `coef_names` are the regressor columns
+   (`(Intercept)`, `x`), which the model flattens per class.
+4. **Dict input** passes `levels` for ordered factors and for factors whose
+   schema order is not the code-point sort, so the dict subset also covers
+   rule 4 of section 4.3.
