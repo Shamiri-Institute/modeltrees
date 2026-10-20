@@ -106,6 +106,10 @@ docs/extensions-spec.md.
 - Pruning df counts theta for negative binomial (k + 1 per node), through a
   model attribute for extra parameters. No R oracle exists, so a unit test
   covers it.
+- Multinomial with a rank-deficient design: the fit counts as failed (so
+  the candidate is inadmissible, or the node terminal). nnet would fit it and
+  return arbitrary values for the aliased columns, so R has no oracle; a unit
+  test covers it. An offset stays unsupported.
 - Multinomial with a missing class: if the reference class is absent from a
   node, the fit counts as failed. Other absent classes get NaN coefficients, are
   dropped from the scores like aliased columns, and still count in minsize and

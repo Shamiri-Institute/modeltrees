@@ -166,9 +166,11 @@ Consequences:
 `restart = FALSE`) is used for the initial Poisson fit only. theta has no
 starting value: the thesis passes no `init.theta` (trusch.md:1105-1113).
 
-**Fallbacks.** None, as in the thesis. glm.nb's warnings propagate, and the
-theta warnings are also kept in `theta_warning`. An error stops `mob()`.
-See question Q6.
+**Fallbacks.** None inside the fit, as in the thesis. glm.nb's warnings
+propagate, and the theta warnings are also kept in `theta_warning`. In the R
+oracle an error stops `mob()`. In the Python port an error is a failed fit:
+the candidate split is inadmissible, or the node becomes terminal with a
+warning (Q6).
 
 With near-Poisson data, theta.ml can stop at its iteration limit with a very
 large theta, and the warning is kept in `theta_warning`. Two leaves of
@@ -349,6 +351,9 @@ differently.
 
 ## 7. Open questions
 
+The answers were recorded on 2026-10-20 (task 5a). Q1 to Q3 and Q7 keep
+the provisional specification above.
+
 Q1. **Safe logit definition.** The thesis does not contain safelogitModel's
 code, and mobtools is unavailable. Section 4 is a provisional definition:
 complete separation means no scores and a terminal node, while
@@ -357,6 +362,8 @@ The name could also refer to the safeBinaryRegression package, which stops
 with an error on separated data. That reading is speculative, and an error
 would conflict with trusch.md:2651.
 
+**Answer:** provisional as specified.
+
 Q2. **Separation criterion.** `|y - p| < 1e-6` on glm.fit's fitted values is
 deterministic and portable, but heuristic. An exact test for separation is a
 linear program (Albert and Anderson 1984; Konis 2007). scipy's `linprog`
@@ -364,36 +371,63 @@ could run it in Python, but base R has no LP solver, so R could not serve as
 the oracle. The glm.fit error path has no fixture, because no natural data
 trigger it deterministically.
 
+**Answer:** provisional as specified.
+
 Q3. **Negative binomial objective default.** loglik (partykit's convention,
 needed for AIC/BIC pruning) or deviance (party 1.0-1, needed to reproduce the
 thesis tree). This spec uses loglik with a deviance option.
+
+**Answer:** provisional as specified: loglik by default, deviance as an option.
 
 Q4. **Pruning df for negative binomial.** mob's AIC/BIC pruning counts
 `len(coefficients)` = p per node (modelparty.R:647), but `logLik.negbin`
 counts p + 1 because of theta. Should pruning count theta? No fixture uses
 pruning with negbinfit.
 
+**Answer:** pruning counts theta, so the negative binomial model
+contributes k + 1 parameters per node. It is a model attribute for extra
+parameters (docs/decisions.md, docs/model-interface.md). No R oracle exists;
+a unit test covers it.
+
 Q5. **Optional theta test.** Should there be an option to add the theta score
 as a tested column, to detect changes in overdispersion? The thesis does not
 do this. The theta score is recorded in the node fixtures.
+
+**Answer:** deferred.
 
 Q6. **negbinfit errors.** glm.nb errors propagate (no fallback, as in the
 thesis). safelogitfit instead turns errors into an inadmissible candidate.
 Should negbinfit and multinomfit do the same?
 
+**Answer:** for all models, a failed fit makes the candidate split
+inadmissible (objective Inf), and a failed node fit makes the node terminal
+with a warning. This includes negbinfit and multinomfit errors.
+
 Q7. **Multinomial node without the reference class.** Provisional: no
 coefficients and no scores. An alternative is to re-parameterize against the
 first present class, which breaks the fixed coefficient layout.
+
+**Answer:** as specified (no coefficients and no scores).
 
 Q8. **mlogit features.** The thesis' mlogitModel also covered conditional,
 nested and rank-ordered logits. Only the baseline-category multinomial logit
 is in scope here.
 
+**Answer:** out of scope.
+
 Q9. **Multinomial offset and aliasing.** No offset, and no detection of
 rank-deficient x. nnet would return arbitrary values for aliased columns.
+
+**Answer:** a rank-deficient design is a failed fit for the multinomial
+model. R has no oracle for this, since nnet fits it anyway; a unit test
+covers it. The offset stays unsupported.
 
 Q10. **Multinomial optimiser in Python.** R's coefficients are accurate to
 roughly the size of the gradient (fixture gradients are about 1e-8 relative).
 Python should use Newton's method or a tightly converged quasi-Newton
 method, not a copy of nnet's BFGS. Coefficient tolerances should be set from
 the recorded gradients.
+
+
+**Answer:** Newton's method, with coefficient tolerances taken from the
+gradients recorded in the fixtures.
