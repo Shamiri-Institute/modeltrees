@@ -21,6 +21,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from modeltrees.errors import FitError
 from modeltrees.models._qr import QRLeastSquares, dqrls
 from modeltrees.models.families import Family, GlmFitWarning
 
@@ -30,7 +31,7 @@ IntArray = NDArray[np.intp]
 DBL_EPSILON = float(np.finfo(np.float64).eps)
 
 
-class GlmFitError(ValueError):
+class GlmFitError(FitError):
     """An error R's glm.fit raises with ``stop()``, with R's message.
 
     ``warnings`` holds the warnings glm.fit gave before the error, when the

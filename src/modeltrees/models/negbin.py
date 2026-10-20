@@ -25,6 +25,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.special import digamma, gammaln, zeta
 
+from modeltrees.errors import FitError
 from modeltrees.models._common import check_vcov, numeric_response, regressor_matrix
 from modeltrees.models.families import (
     GlmFitWarning,
@@ -40,7 +41,7 @@ FloatArray = NDArray[np.float64]
 THETA_EPS = float(np.finfo(np.float64).eps) ** 0.25
 
 
-class NegBinError(ValueError):
+class NegBinError(FitError):
     """An error R's glm.nb or theta.ml would stop with."""
 
 

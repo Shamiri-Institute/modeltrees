@@ -19,6 +19,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from modeltrees._reference import reference_active
+from modeltrees.errors import NodeFitFailedWarning
 from modeltrees.instability import (
     FluctuationTests,
     InstabilityTestError,
@@ -60,10 +61,6 @@ class StopReason(Enum):
     PRUNED = "pruned"  # split found, then removed by post-pruning
     NO_ESTFUN = "no_estfun"  # the fit has no scores, as partykit's NULL estfun
     FIT_FAILED = "fit_failed"  # the node's own fit failed (not in partykit)
-
-
-class NodeFitFailedWarning(UserWarning):
-    """A node's model fit failed, so the node is terminal."""
 
 
 @dataclass(frozen=True)

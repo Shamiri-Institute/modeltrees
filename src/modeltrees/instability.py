@@ -24,6 +24,7 @@ import numpy as np
 import scipy.linalg
 from numpy.typing import ArrayLike, NDArray
 
+from modeltrees.errors import TooFewClustersWarning
 from modeltrees.pvalues import (
     Trimming,
     adjust_pvalues,
@@ -50,10 +51,6 @@ class TooFewClustersError(InstabilityTestError):
     port makes such nodes terminal either way (docs/decisions.md). The caller
     handles this error like any InstabilityTestError.
     """
-
-
-class TooFewClustersWarning(UserWarning):
-    """Emitted before TooFewClustersError so the stop is not silent."""
 
 
 class VariableKind(Enum):

@@ -28,14 +28,11 @@ from numpy.typing import NDArray
 from scipy.special import gammaln, xlog1py, xlogy
 
 from modeltrees._reference import reference_active
+from modeltrees.errors import GlmFitWarning
 
 FloatArray = NDArray[np.float64]
 
 DBL_EPSILON = float(np.finfo(np.float64).eps)
-
-
-class GlmFitWarning(UserWarning):
-    """A warning R's glm.fit or a family would give, with R's message."""
 
 
 @dataclass(frozen=True)
