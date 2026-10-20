@@ -16,6 +16,7 @@ Without complete separation the result is that of
 ``GlmModel("binomial")``.
 """
 
+import math
 from collections.abc import Sequence
 from typing import Any, Literal
 
@@ -26,7 +27,14 @@ from modeltrees._reference import reference_active
 from modeltrees.models._common import check_vcov, numeric_response, regressor_matrix
 from modeltrees.models.families import Binomial
 from modeltrees.models.glm_fit import GlmFitError, glm_fit, glm_objective
-from modeltrees.node_model import FitResult, FitStatus, failed_fit
+from modeltrees.node_model import (
+    FitResult,
+    FitStatus,
+    Report,
+    failed_fit,
+    linear_predictor,
+    rank,
+)
 
 FloatArray = NDArray[np.float64]
 
@@ -184,3 +192,37 @@ class SafeLogitModel:
 
     def n_response_columns(self, y: NDArray[np.generic]) -> int:
         return 1
+
+    def loglik(self, result: FitResult) -> tuple[float, int]:
+        """``logLik.glm`` of the binomial fit: minus the objective, df the
+        rank. A completely separated fit keeps its coefficients, so its df
+        is the rank too."""
+        if result.failed:
+            return math.nan, len(result.coefficients)
+        return -result.objfun, rank(result)
+
+    def report(self, result: FitResult) -> Report:
+        e = result.extras
+        messages = e.get("warnings")
+        return {
+            "separation": e.get("separation"),
+            "n_boundary": e.get("n_boundary"),
+            "converged": result.converged,
+            "n_warnings": None if messages is None else len(messages),
+        }
+
+    def predict(
+        self,
+        result: FitResult,
+        x: FloatArray | None,
+        offset: FloatArray | None,
+        kind: str,
+    ) -> FloatArray:
+        """The linear predictor for "link", the success probability with
+        R's logit bounds for "response"."""
+        if kind not in ("link", "response"):
+            raise ValueError(
+                f"safelogittree predicts 'link' or 'response', not {kind!r}"
+            )
+        eta = linear_predictor(result, x, offset)
+        return eta if kind == "link" else self.family.linkinv(eta)

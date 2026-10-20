@@ -20,7 +20,7 @@ from modeltrees.models.lm import LmModel
 from modeltrees.models.multinom import MultinomModel
 from modeltrees.models.negbin import NegBinModel
 from modeltrees.models.safelogit import SafeLogitModel
-from modeltrees.node_model import failed_fit
+from modeltrees.node_model import FitStatus, failed_fit
 
 RTOL = 1e-8
 PREDICT_RTOL = 1e-12
@@ -72,6 +72,25 @@ def test_deviance_objective_loglik_is_not_minus_objfun() -> None:
         assert df == 2
         assert not math.isclose(value, -leaf.fit.objfun, rel_tol=1e-3)
         assert value == leaf.fit.extras["twologlik"] / 2
+
+
+def test_separated_leaf_loglik() -> None:
+    """The completely separated safe logit leaf counts its two coefficients
+    and its objective, though it has no scores."""
+    grown = grow(*SEPARATED)
+    m = model(fixture(*SEPARATED))
+    assert isinstance(m, SafeLogitModel)
+    separated = [n for n in grown.nodes if n.fit.status is FitStatus.NO_ESTFUN]
+    assert any(n.fit.extras["separation"] == "complete" for n in separated)
+    for node in separated:
+        value, df = m.loglik(node.fit)
+        assert value == -node.fit.objfun
+        assert df == 2
+
+
+def test_the_special_leaves_are_in_the_loglik_comparison() -> None:
+    compared = {tuple(p.values) for p in _trees_with("loglik", oracle=True)}
+    assert DEVIANCE in compared and SEPARATED in compared
 
 
 def _failed_names(m: Any) -> tuple[str, ...]:
