@@ -320,3 +320,47 @@ Task 6d, `modeltrees/_api.py`: `lmtree`, `glmtree`, `negbintree`,
 6. **`mob()` trees** have `formula = None`, `model_name =
    "mob(<model class>)"`, every row used, and `response_levels` from the
    model's `levels` attribute if it has one (the multinomial model).
+
+## 11. Prediction
+
+Task 6d, `modeltrees/_predict.py` and `ModelTree.predict`.
+
+1. **Coding new data.** The design's `Term`s are the `xlevels`: a numeric
+   term needs a numeric (or Boolean) column, a categorical one is matched
+   by label (R's `as.character` labels, so an integer column made nominal
+   in training matches integer values). A level dropped in training
+   (declared but unused) has no matrix column and no kid, so it counts as
+   unseen.
+2. **Which columns are needed.** `type="node"` reads only the
+   partitioning variables; the other types also read the regressors and
+   the offset. A needed column that is absent raises `DataError`.
+3. **Unseen levels.** `unseen="error"` raises for an unseen level in any
+   column read, on the row's path or not, as R's `model.frame(xlev = ...)`
+   does. With `unseen="null"` a row with an unseen level gets no
+   prediction at all (node 0, NaN, None), even if the level is in a
+   variable off its path: section 4.2's "no prediction for those rows",
+   taken literally.
+4. **Routing.** Numeric breaks as `.bincode(right = TRUE)`: `-Inf` goes
+   to kid 1 and `Inf` to kid 2; NaN and null are missing. A level absent
+   from the node goes to the kid with the larger `nobs` (`w2n`), kid 1 on
+   a tie.
+5. **Offset.** With `newdata`, `offset=` (a column name or an array)
+   wins; otherwise a tree grown with an offset column reads that column
+   from the new data, and a tree grown with an offset array raises
+   `DataError` asking for `offset=`. A missing offset value gives NaN for
+   that row (the node is still returned). `offset=` without `newdata`
+   raises `TypeError`: the training rows use the training offset.
+6. **Training rows.** `predict()` without data uses `fitted_node` and the
+   stored design, so it equals `predict(training_frame)` bit for bit;
+   rows dropped for missing values get no prediction.
+7. **Trees grown by `mob()`** take `z` (a mapping of every partitioning
+   variable to its values: floats; for factors integer codes into the
+   training levels, or labels), `x` and `offset` as arrays, instead of
+   `newdata`. `x` is required for types other than `"node"` unless the
+   model was intercept-only (`x=None` in training). Without `z` the
+   training rows are predicted.
+8. **Validation order.** The type and `unseen` are checked first, then
+   the data is coded (missing columns, wrong storage), then unseen levels,
+   then the model is asked for an empty prediction of the type, so a type
+   the model does not define (multinomial `"response"`, `"prob"` for the
+   others) raises its `ValueError` before any leaf is computed.

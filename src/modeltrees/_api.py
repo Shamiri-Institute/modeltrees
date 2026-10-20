@@ -25,6 +25,16 @@ from modeltrees._design import (
     r_double_label,
 )
 from modeltrees._frame import DataInput, Kind
+from modeltrees._predict import (
+    PredictType,
+    Unseen,
+    check_type,
+    code_arrays,
+    code_newdata,
+    predict_leaves,
+    raise_unseen,
+    route,
+)
 from modeltrees._response import CodedResponse, ResponseRule, code_response
 from modeltrees.instability import VariableKind
 from modeltrees.models.glm import GlmModel
@@ -405,6 +415,123 @@ class ModelTree:
         """The largest node depth, the root at depth 1 (so ``maxdepth``
         bounds it; partykit's ``depth()`` is one less)."""
         return max(info.depth for info in self._node_infos)
+
+    # Prediction
+
+    def predict(
+        self,
+        newdata: DataInput | None = None,
+        *,
+        type: PredictType = "response",
+        offset: ColumnSpec = None,
+        unseen: Unseen = "error",
+        x: ArrayLike | None = None,
+        z: Mapping[str, ArrayLike] | None = None,
+    ) -> NDArray[Any]:
+        """Predictions as a numpy array (docs/api-design.md, section 4.2).
+
+        ``type``: "node" (the leaf id per row, int64, 0 for no node),
+        "link" (the linear predictor), "response" (its inverse link),
+        "prob" and "class" (multinomial: the probability matrix with
+        columns in ``response_levels`` order, and the most probable label
+        as an object array). For a multinomial tree "link" is the
+        ``(n, K - 1)`` matrix of the non-reference classes and "response"
+        is undefined. Rows without a prediction are NaN (None for
+        "class").
+
+        ``newdata`` is coded with the training levels; None predicts the
+        training rows (rows dropped for missing values get none). A row
+        stops at the first split whose variable it lacks (node 0). A level
+        absent from the node at a split goes to the larger kid. A level
+        never seen in training raises :class:`UnseenLevelError`, or with
+        ``unseen="null"`` gives the row no prediction. ``offset`` (a column
+        name or an array) overrides the offset of new data, which is
+        otherwise read from the training offset's column. Trees grown by
+        :func:`mob` take ``z`` (and ``x``, ``offset``) instead of
+        ``newdata``.
+        """
+        check_type(type, unseen)
+        needs_x = type != "node"
+        if self._design is None:
+            if newdata is not None:
+                raise TypeError(
+                    "a tree grown by mob() predicts from x and z, not newdata"
+                )
+            if z is None and (x is not None or offset is not None):
+                raise TypeError("pass z, the partitioning variables, with x or offset")
+            coded = None
+            if z is not None:
+                if offset is not None and isinstance(offset, str):
+                    raise TypeError("offset must be an array for a tree grown by mob()")
+                coded = code_arrays(
+                    self._grown.variables,
+                    z,
+                    x,
+                    offset,
+                    has_x=self._x is not None,
+                    has_offset=self._offset is not None,
+                    needs_x=needs_x,
+                )
+        else:
+            if x is not None or z is not None:
+                raise TypeError("x and z are for trees grown by mob(); pass newdata")
+            if newdata is None and offset is not None:
+                raise TypeError("offset applies to newdata; pass the data as newdata")
+            coded = (
+                None
+                if newdata is None
+                else code_newdata(self._design, newdata, offset=offset, needs_x=needs_x)
+            )
+
+        if coded is None:
+            # The training rows.
+            nodes = np.array(self._fitted_node)
+            no_prediction = ~self._used_rows
+            xm, off = self._training_x() if needs_x else (None, None)
+        else:
+            if coded.unseen.any() and unseen == "error":
+                raise_unseen(coded.unseen_levels)
+            nodes = route(self._grown.root, coded.z, coded.n)
+            nodes[coded.unseen] = 0
+            no_prediction = coded.x_missing | coded.unseen
+            xm, off = coded.x, coded.offset
+        if type == "node":
+            return nodes
+        assert xm is not None
+        leaves = {node.id: node for node in self._grown.root.walk() if node.terminal}
+        kind = type
+        values = predict_leaves(
+            self._model,
+            leaves,
+            nodes,
+            xm,
+            off,
+            no_prediction | (nodes == 0),
+            kind,
+            self._grown.root,
+        )
+        if type != "class":
+            return values
+        levels = self._response_levels or tuple(
+            str(v) for v in getattr(self._model, "levels", ())
+        )
+        labels = np.full(values.shape[0], None, dtype=object)
+        defined = ~np.isnan(values)
+        labels[defined] = [levels[int(c)] for c in values[defined]]
+        return labels
+
+    def _training_x(self) -> tuple[NDArray[np.float64], NDArray[np.float64] | None]:
+        """The training regressors and offset over the input rows, NaN for
+        dropped rows (an intercept column when the model had none)."""
+        used = self._used_rows
+        x = self._x if self._x is not None else np.ones((int(used.sum()), 1))
+        xm = np.full((used.shape[0], x.shape[1]), np.nan)
+        xm[used] = x
+        off = None
+        if self._offset is not None:
+            off = np.full(used.shape[0], np.nan)
+            off[used] = self._offset
+        return xm, off
 
     def __repr__(self) -> str:
         n_inner = len(self._node_infos) - len(self.leaves)
