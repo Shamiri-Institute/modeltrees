@@ -168,12 +168,28 @@ before numpy is imported. Median seconds:
 | both 1 | 0.340 | 2.70 | 2.52 | 22.29 |
 | `OPENBLAS_NUM_THREADS=4` | 0.350 | 2.66 | 2.53 | 23.10 |
 
-No setting is faster beyond the noise. The matrices in a node fit are n by
-2, so OpenBLAS runs its products on one thread anyway, and process CPU use
-stays near 100 to 120 % with the default (the 1000 % seen in the baseline
-was at n = 20000). Decision: no change and no recommendation to pin threads.
-Setting `OPENBLAS_NUM_THREADS=1` is harmless if mob runs inside a
-multiprocess job.
+No setting is faster beyond the noise at these sizes. The matrices in a
+node fit are n by 2, so OpenBLAS runs most products on one thread anyway,
+and process CPU use stays near 100 to 120 % with the default.
+
+At n = 20000 it is different (glm, one run each, measured after Step 2):
+
+| path | threads | seconds | CPU |
+| --- | --- | --- | --- |
+| reference | default (12) | 546.5 | 1148 % |
+| reference | `OPENBLAS_NUM_THREADS=1` | 239.5 | 99 % |
+| fast (Steps 1 and 2) | default (12) | 207.7 | |
+| fast (Steps 1 and 2) | `OPENBLAS_NUM_THREADS=1` | 221.6 | 99 % |
+
+With the dqrdc2 port, the vector-matrix products on 10000-row columns
+cross OpenBLAS's threading threshold, and 12 threads on a product that small
+cost more than they gain: the reference path is 2.3 times slower with the
+default threads. The LAPACK path (1d) does not suffer from it, so after
+Step 1 the setting no longer matters (207.7 against 221.6 s is within the
+noise). Decision: no code change and no dependency. Anyone timing the
+reference path on large nodes, or running mob inside a multiprocess job,
+should set `OPENBLAS_NUM_THREADS=1`. This also means most of the
+baseline's n = 20000 glm time was thread contention, not arithmetic.
 
 ### b to d. Changes and their effect
 
@@ -336,6 +352,144 @@ simulated trees against `reference_path()`.
 one by one) and 0.008 s the batch scorer (half of it the batched
 eigendecompositions); the instability tests 0.021 s; node fits the rest.
 
+## Step 3: results and options for glm
+
+### What Steps 1 and 2 achieved
+
+Median seconds from `bench_tree.py` (n = 1000 and 5000: 3 runs after a
+warm-up; n = 20000: lm 3 runs, glm 1 run, after a warm-up), on the same
+machine as the baseline and R:
+
+| model | n | baseline | now | speedup | R partykit | now vs R |
+| --- | --- | --- | --- | --- | --- | --- |
+| lm | 1000 | 0.302 | 0.017 | 18x | 0.219 | 13x faster |
+| lm | 5000 | 2.246 | 0.040 | 56x | 3.184 | 80x faster |
+| lm | 20000 | 49.70 | 0.101 | 490x | 43.45 | 430x faster |
+| glm | 1000 | 2.582 | 1.976 | 1.3x | 1.620 | 1.2x slower |
+| glm | 5000 | 22.96 | 20.51 | 1.1x | 28.56 | 1.4x faster |
+| glm | 20000 | 549.1 | 207.7 | 2.6x | 449.9 | 2.2x faster |
+
+All trees are unchanged (same 7 nodes and splits as the baseline). For lm
+the gain is Step 2: split search went from quadratic to near-linear in n.
+For glm it is Step 1d, the LAPACK solve; at n = 20000 most of the gain is
+that the LAPACK path no longer triggers OpenBLAS's threading (Step 1a). glm
+split search still fits both sides of every candidate, so it stays
+quadratic in the node size.
+
+### The profile now
+
+lm (n = 5000, 0.047 s under cProfile): half instability tests (0.021 s),
+half split search (0.024 s), of which the two factor searches fitted one
+by one take 0.011 s and the batch scorer 0.008 s. Nothing dominates.
+
+glm (n = 5000, 25.4 s under cProfile; table in Step 1): `find_split` is
+still more than 99 % of the time, in 9967 side fits of about 4 IRLS
+iterations each. Per fit, the time is the IRLS arithmetic on the side's
+rows: binomial deviance residuals 21 %, inverse link and its derivative
+15 %, the rest of the IRLS body 13 %, the LAPACK solves 19 %, the AIC's
+binomial log-density 6 %, masking the node data 4 %. Per-fit overhead
+outside the arithmetic is no longer significant, so further gains must
+either make each fit cheaper or fit fewer candidates.
+
+### Options for further glm speedups
+
+Measured with prototypes in a scratch directory, not in `src/` (the task
+excluded implementing approximate modes and parallelism). Timings at
+n = 5000 on the root node (4961 candidates in `z1`) unless stated; some ran
+while another benchmark occupied one core.
+
+**1. Exact kernels per family (exact, bit-identical).** The binomial
+deviance residuals compute two logarithms and two divisions per row, of
+which one of each is discarded for a 0/1 response. Computing
+`2 * wt * log(1 / t)` with `t = where(y == 1, mu, 1 - mu)` is the same
+arithmetic on the kept elements, so it is bit-identical (checked), and it
+takes 26 us instead of 85 us per call at 2500 rows. Similar
+specializations exist for the logit inverse link and its derivative, and
+for the AIC with 0/1 responses and unit sizes.
+- Gain: about 14 % from the deviance alone, an estimated 20 to 25 % with
+  the others.
+- Trade-offs: per-family code paths that must be kept bit-identical to
+  R's formulas and tested element for element; no effect on results; no
+  change to the quadratic scaling.
+
+**2. Multiprocessing over candidates (exact, bit-identical).** Workers fit
+disjoint chunks of candidates with the same code; the objectives are
+bit-identical to the serial search (checked). With `fork` and
+`OPENBLAS_NUM_THREADS=1`, the root search took 18.6 s serially and 10.6,
+6.3, 5.3 and 4.8 s with 2, 4, 8 and 10 workers (1.8, 2.9, 3.5 and 3.9
+times).
+- Gain: 3 to 4 times on this 12-core machine, sublinear (memory bandwidth
+  and turbo). Only worth it above a node-size threshold.
+- Trade-offs: process start-up and data copies per search; `spawn` (the
+  default on macOS and Windows) needs picklable models and re-imports per
+  worker; BLAS threads must be pinned in workers to avoid
+  oversubscription; nested parallelism if the caller already runs jobs in
+  parallel; harder debugging and error propagation. Results identical, so
+  it can be on by option (`n_jobs`) without a reference question.
+
+**3. Warm starts (approximate, verifiable).** Starting each candidate's
+IRLS from the previous candidate's coefficients, which is what partykit's
+`restart = FALSE` does, halves the iterations (2.02 instead of 4.00 per
+fit) and cut the whole n = 5000 tree from 25.1 to 16.3 s (35 %). Here the
+split objectives differed from cold starts by at most 4e-16 relative and
+the tree was the same.
+- Gain: about 35 %, combinable with options 1 and 2.
+- Trade-offs: the converged objective depends on the starting point within
+  glm.fit's deviance tolerance (`|dev - devold| / (0.1 + |dev|) < 1e-8`),
+  and R's own `restart = FALSE` fixture
+  (`sim_binomial_glmtree_multisplit_norestart`) has split objectives that
+  differ from `restart = TRUE` at node 2. Used silently under
+  `restart = TRUE`, it would change R's semantics. An exact variant screens
+  with warm starts, then refits cold every candidate within a margin of the
+  best (tied to the tolerance, say 1e-6 relative) plus a handful, as Step 2
+  does. Without a proven bound on the warm-cold gap, that is exact unless a
+  warm fit errs by more than the margin, which is very unlikely but not
+  proven. Starting values also interact with step halving and
+  non-convergence.
+
+**4. One-step Newton screening with exact verification (approximate
+screen).** From the node's fit, one Newton step per side from cumulative
+sums of the per-row negative log-likelihood, score and Hessian gives an
+approximate objective for every candidate in 6 to 8 ms at n = 5000 (2 ms at
+1000), against 26 s for the exact search. Then the shortlist is refitted
+exactly. The approximation errors were 0.5 to 4.2 on objectives of about
+3200, larger than the gaps between the best candidates (0.0067 to 0.67).
+The spread of the error among the 50 best candidates (0.2 to 0.6) also
+exceeded the gap in one of the three tests (`z1` and `z2` at n = 5000, `z1`
+at 1000), yet the exact winner ranked first by approximation in all three.
+- Gain: very large. glm split search would cost a handful of exact fits per
+  node, as lm does now (tens to hundreds of times faster).
+- Trade-offs: no error bound, so unlike Step 2 a fixed shortlist can miss
+  the true winner in a close race, and the tree can then differ from R's.
+  Mitigations: a generous shortlist (a percentage of candidates, or every
+  candidate within several times the observed error spread), a second
+  Newton step or warm-started fits for the top few hundred, or a rigorous
+  lower bound per side (for example a convex-dual bound for the logistic
+  likelihood) to certify that unrefitted candidates cannot win. The last
+  would make it exact, but it is research-level work for each family. It
+  should be an opt-in mode with the number of refits reported, validated
+  against the reference path on the fixtures and simulations.
+
+**5. Candidate cap (approximate).** Evaluate at most K candidates per
+variable (for example the 1/K quantiles of the positive-weight values), at
+cost proportional to K instead of n.
+- Gain: about n / K at the root (50 times for K = 100 at n = 5000).
+- Trade-offs: the break moves to the nearest evaluated quantile, so split
+  points differ from R's except by luck. The best candidate can be missed
+  entirely when the objective is not smooth in the cut point, and a local
+  refinement around the best quantile helps only if it is. Simplest to
+  build, least faithful; partykit has no such option.
+
+Not considered: compiled kernels (numba, Cython), which add a runtime
+dependency or a build step that CLAUDE.md rules out.
+
+**Suggested order.** Options 1 and 2 keep results identical and combine to
+roughly 4 to 5 times. Option 3's exact variant adds about a third and
+reuses Step 2's screening code. Option 4 is the only route to lm-like
+speed for glm; it should be opt-in until a certified bound (or extensive
+validation) makes it safe as a default. Option 5 changes split points and
+is the last resort.
+
 ## Reproducing
 
 ```
@@ -347,5 +501,7 @@ Rscript scripts/bench_r.R DIR 3 1000 5000 20000           # partykit on the same
 ```
 
 The default sizes are n = 1000 and 5000. With `--full`, the baseline run
-took more than 40 minutes, almost all of it the glm runs at n = 20000; the
-R script at n = 20000 takes 35 minutes.
+took more than 40 minutes, almost all of it the glm runs at n = 20000; now
+the glm cell at n = 20000 takes about 3.5 minutes per run. The R script
+with n = 20000 takes 35 minutes. To time the reference path, wrap the call
+in `modeltrees.reference_path()`.
