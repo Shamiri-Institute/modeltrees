@@ -2,8 +2,13 @@
 
 Usage, from the repository root:
 
-    uv run python scripts/bench_tree.py [--sizes 1000 5000 20000] [--runs 3]
-        [--profile-top 12]
+    uv run python scripts/bench_tree.py [--sizes 1000 5000] [--full] [--runs 3]
+        [--models lm glm] [--profile-top 12] [--no-profile] [--write-csv DIR]
+
+The default sizes are n = 1000 and 5000; --full adds n = 20000, whose glm run
+takes minutes. --write-csv writes each simulated data set to
+DIR/bench_<n>.csv and exits, for scripts/bench_r.R to time partykit on the
+same data.
 
 The data has 6 partitioning variables: z1 to z4 numeric, z5 ordered (5 levels)
 and z6 nominal (5 levels). The coefficients change at z1 <= 0, at z5 (ordered)
@@ -14,6 +19,7 @@ Nothing is optimized or tuned: this measures the library as it is.
 import argparse
 import cProfile
 import io
+import os
 import pstats
 import statistics
 import time
@@ -67,6 +73,26 @@ def simulate(n: int, seed: int = SEED) -> Data:
     return Data(n, np.column_stack([np.ones(n), xv]), z, y_gauss, y_bin)
 
 
+def write_csv(d: Data, path: str) -> None:
+    """The data as CSV with 17 significant digits, factors as 1-based codes."""
+    cols = {
+        "y_gauss": d.y_gauss,
+        "y_bin": d.y_bin,
+        "x": d.x[:, 1],
+        **{name: v.values for name, v in d.z.items()},
+    }
+    with open(path, "w") as f:
+        f.write(",".join(cols) + "\n")
+        f.writelines(
+            ",".join(
+                f"{int(c[i]) + 1}" if name in ("z5", "z6") else f"{float(c[i]):.17g}"
+                for name, c in cols.items()
+            )
+            + "\n"
+            for i in range(d.n)
+        )
+
+
 def runner(name: str, d: Data) -> Callable[[], ModelTree]:
     def run() -> ModelTree:
         with warnings.catch_warnings():
@@ -106,18 +132,31 @@ def profile(run: Callable[[], ModelTree], top: int) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--sizes", type=int, nargs="+", default=[1000, 5000, 20000])
+    ap.add_argument("--sizes", type=int, nargs="+", default=[1000, 5000])
+    ap.add_argument("--full", action="store_true", help="also run n = 20000")
     ap.add_argument("--runs", type=int, default=3)
+    ap.add_argument("--models", nargs="+", default=["lm", "glm"])
     ap.add_argument("--profile-top", type=int, default=12)
     ap.add_argument("--no-profile", action="store_true")
+    ap.add_argument("--write-csv", metavar="DIR")
     args = ap.parse_args()
+    sizes = list(args.sizes) + (
+        [20000] if args.full and 20000 not in args.sizes else []
+    )
+
+    if args.write_csv:
+        for n in sizes:
+            path = os.path.join(args.write_csv, f"bench_{n}.csv")
+            write_csv(simulate(n), path)
+            print(f"wrote {path}")
+        return
 
     print(f"numpy {np.__version__}, runs per cell {args.runs} (after one warm-up)\n")
     print("model  n       nodes leaves depth  min s   median s  max s")
     profiles = []
-    for n in args.sizes:
+    for n in sizes:
         d = simulate(n)
-        for name in ("lm", "glm"):
+        for name in args.models:
             run = runner(name, d)
             times, tree = time_runs(run, args.runs)
             leaves = sum(nd.terminal for nd in tree.nodes)

@@ -35,6 +35,27 @@ optimized or tuned for this document. Script: `scripts/bench_tree.py`
 Every run recovers the planted tree: 3 splits, 4 leaves, depth 3 (the root has
 depth 1).
 
+### R reference point
+
+`scripts/bench_r.R` times partykit 1.3-0 (`lmtree` and `glmtree` with
+`family = binomial()`, default settings, R 4.6.1) on the same data, which
+`bench_tree.py --full --write-csv DIR` writes with 17 significant digits.
+One warm-up, then 3 timed runs per cell, on the same machine:
+
+| model | n | nodes | leaves | depth | min s | median s | max s |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| lm | 1000 | 7 | 4 | 3 | 0.219 | 0.219 | 0.245 |
+| glm | 1000 | 7 | 4 | 3 | 1.601 | 1.620 | 1.791 |
+| lm | 5000 | 7 | 4 | 3 | 3.150 | 3.184 | 3.185 |
+| glm | 5000 | 7 | 4 | 3 | 28.491 | 28.557 | 28.564 |
+| lm | 20000 | 7 | 4 | 3 | 42.791 | 43.454 | 44.040 |
+| glm | 20000 | 7 | 4 | 3 | 443.191 | 449.882 | 458.993 |
+
+R grows the same tree shape. The Python baseline above is within a factor
+of 1.6 of R everywhere: slower at n = 1000, faster for lm at 5000 and
+20000 and for glm at 5000, and 20 % slower for glm at 20000. partykit also
+refits both sides of every candidate, so R scales the same way.
+
 Scaling: lm grows 7.5x from n = 1000 to 5000 and 22x from 5000 to 20000 (n
 grows 5x and 4x). glm grows 8.9x and 24x. That is roughly quadratic in n. The
 glm tree costs about 8 to 11 times the lm tree at every size.
@@ -126,9 +147,13 @@ document.
 ## Reproducing
 
 ```
-uv run python scripts/bench_tree.py                       # all sizes, 3 runs, profiles
+uv run python scripts/bench_tree.py                       # n = 1000, 5000, 3 runs, profiles
+uv run python scripts/bench_tree.py --full                # also n = 20000
 uv run python scripts/bench_tree.py --sizes 1000 --runs 5 --no-profile
+uv run python scripts/bench_tree.py --full --write-csv DIR
+Rscript scripts/bench_r.R DIR 3 1000 5000 20000           # partykit on the same data
 ```
 
-The full default run takes more than 40 minutes, almost all of it the glm
-runs at n = 20000.
+The default sizes are n = 1000 and 5000. With `--full`, the baseline run
+took more than 40 minutes, almost all of it the glm runs at n = 20000; the
+R script at n = 20000 takes 35 minutes.
