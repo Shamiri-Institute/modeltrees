@@ -152,8 +152,12 @@ need them.
   ordered factor to trigger polynomial contrasts. This diverges from R for
   pandas ordered categoricals used as regressors (R would use `contr.poly`);
   the README states it.
-- Boolean columns are coded as R codes a logical: one indicator column named
-  `<col>TRUE`.
+- Boolean columns are coded as R codes a logical: a factor with levels
+  `FALSE` and `TRUE`, both always kept, even when one does not occur. With
+  an intercept that is one indicator column named `<col>TRUE`. In a model
+  without an intercept, a Boolean that is the first categorical term gets
+  both indicator columns, `<col>FALSE` and `<col>TRUE`, as
+  `model.matrix(y ~ 0 + b)` does (docs/api-port.md, section 6, item 3).
 - Column names follow R so that coefficient names compare directly with R's:
   `(Intercept)`, `x` for a numeric column, `<col><level>` for an indicator
   (for example `z2b`), `<col>TRUE` for a Boolean.
@@ -571,11 +575,14 @@ V = H^-1 M H^-1,   M = c * sum_g s_g s_g',   s_g = sum_{i in g} estfun_i
   leaf's `nobs`. `type="HC0"` omits the second factor. The default is
   `HC1` with `cadjust=True` for every model, the extension models included
   (section 13, decision 7). It equals statsmodels' `cov_type="cluster"`
-  with its default correction. That it is also `vcovCL`'s default for lm
-  and glm objects is a claim from the documentation and must be verified
-  against sandwich's source before release; the R fixture (section 9)
-  therefore passes `type` and `cadjust` explicitly and does not rely on
-  vcovCL's defaults. *Alternatives:* HC0 only (simplest), HC0 for the
+  with its default correction. sandwich::vcovCL defaults to HC1 only for
+  plain lm fits and to HC0 for every other model, glm included
+  (vcovCL.R:88-94). We default to HC1 with cadjust for every model, so the
+  correction does not change silently when moving between lmtree and
+  glmtree, and so the default matches statsmodels' cluster correction. For
+  glmtree, negbintree, safelogittree and multinomtree, a user comparing
+  against R's vcovCL must pass type="HC0". The docstring and the README say
+  this. *Alternatives:* HC0 only (simplest), HC0 for the
   extension models, or statsmodels' naming. **Chosen: sandwich's names, one
   default for every model**, because R is the oracle and one default is
   easier to state.
@@ -949,8 +956,11 @@ R fixtures that would still be worth generating later:
   leaf lacks the reference class (docs/extensions-port.md, 7.3, has no R
   tree with one).
 - **sandwich::vcovCL** on the leaf fits of a clustered lmtree, glmtree
-  (binomial, poisson), glm.nb and multinom, with `type = "HC0"` and
-  `"HC1"` and `cadjust = TRUE` passed explicitly (5.1).
+  (binomial, poisson), glm.nb and multinom. The fixture passes `type` and
+  `cadjust` explicitly, never relying on vcovCL's defaults (which differ
+  between lm and every other model, 5.1), and generates both
+  `type = "HC0"` and `type = "HC1"` (with `cadjust = TRUE`) for every
+  model.
 - **formula features**: a tree with a factor regressor (treatment coding
   and its names), `y ~ 0 + f | z`, a logical partitioning variable, and a
   model frame with `NA` rows (na.omit).
@@ -1066,9 +1076,14 @@ written to match.
 6. **Model-based standard errors are deferred.** v0.1 has sandwich
    covariances only (5.4).
 7. **`vcov` defaults to `type="HC1"` with `cadjust=True` for every model.**
-   The claim that this is `vcovCL`'s default for glm objects must be
-   verified against sandwich's source before release, so the R fixture
-   passes `type` and `cadjust` explicitly (5.1, 9).
+   sandwich::vcovCL defaults to HC1 only for plain lm fits and to HC0 for
+   every other model, glm included (vcovCL.R:88-94). One default keeps the
+   correction from changing silently between lmtree and glmtree and
+   matches statsmodels' cluster correction. A user comparing a glmtree,
+   negbintree, safelogittree or multinomtree leaf with R's vcovCL must pass
+   `type="HC0"`; the docstring and the README say this. The R fixture
+   passes `type` and `cadjust` explicitly and generates both HC0 and HC1
+   for every model (5.1, 9).
 8. **Multinomial `predict(type="response")` is undefined and raises**,
    pointing to `type="prob"` (the probability matrix) and `type="class"`
    (the labels) (4.2).
