@@ -46,26 +46,25 @@ notes/phase1-questions.md. Match R unless a decision says otherwise.
 - Speedups must not change results. The exact per-candidate path stays in the
   code as the reference implementation, and tests compare every faster path
   against it and against the R fixtures.
-- The reference implementation is selected with
-  `modeltrees.reference_path()`, a context manager: `find_split_reference`,
-  full fits in split search and the dqrdc2 port for every least-squares
-  solve. Outside it, `dqrls` takes a LAPACK path when every column keeps at
-  least 1e-4 of its norm (1000 times R's tolerance), glm split-search fits
-  skip warnings, null deviance and residuals, split search fits on the
-  node's own arrays, and the binomial and poisson families use specialised
-  formulas for their deviance residuals, links and AIC. The fast and reference paths agree to rounding (about
-  1e-15 relative), not bit for bit, because LAPACK and the port round
-  differently. docs/performance.md has the details.
+- The reference implementation is selected with `modeltrees.reference_path()`, a
+  context manager: `find_split_reference`, full fits in split search and the
+  dqrdc2 port for every least-squares solve. Outside it, `dqrls` takes a LAPACK
+  path when every column keeps at least 1e-4 of its norm (1000 times R's
+  tolerance), glm split-search fits skip warnings, null deviance and residuals,
+  split search fits on the node's own arrays, and the binomial and poisson
+  families use specialised formulas for their deviance residuals, links and AIC.
+  The fast and reference paths agree to rounding (about 1e-15 relative), not bit
+  for bit, because LAPACK and the port round differently. docs/performance.md
+  has the details.
 - Batch split objectives (docs/model-interface.md, section 4.1): a model may
-  score all numeric candidates at once with an error bound. Split search
-  refits exactly every candidate that could be the best given the bounds
-  (within a relative margin of 1e-6, and at least 5), and NaN candidates,
-  then takes the first minimum. The winner and its tie rule are the exact
-  search's. The other candidates' objectives in `SplitSearch.objective` are
-  approximations within their error bound. `LmModel` implements it, with
-  rank-deficient or ill-conditioned sides (condition number of the scaled
-  cross-products above 1e8) fitted exactly. Not used with
-  `restart = FALSE` or for factors.
+  score all numeric candidates at once with an error bound. Split search refits
+  exactly every candidate that could be the best given the bounds (within a
+  relative margin of 1e-6, and at least 5), and NaN candidates, then takes the
+  first minimum. The winner and its tie rule are the exact search's. The other
+  candidates' objectives in `SplitSearch.objective` are approximations within
+  their error bound. `LmModel` implements it, with rank-deficient or
+  ill-conditioned sides (condition number of the scaled cross-products above
+  1e8) fitted exactly. Not used with `restart = FALSE` or for factors.
 
 ## Interface
 
@@ -100,21 +99,27 @@ docs/extensions-spec.md.
 - Safe logit: a node fitted to its 0/1 response within 1e-6 everywhere has no
   scores and is terminal. Quasi-separation is only reported. An exact LP check
   is deferred.
-- Fit failures, all models: a candidate split whose child fit fails (or is
-  separated, for safe logit) is inadmissible with objective Inf, and the node
-  records how many candidates failed. A failed node fit makes the node terminal
-  with a warning instead of raising.
+- Fit failures, all models: a candidate split whose child fit has status failed
+  (a glm.fit error, or a rank-deficient multinomial design) is inadmissible with
+  objective Inf, and the node records how many candidates failed. A fit with
+  status no_estfun, such as a completely separated safe logit child or a
+  single-class multinomial child, stays admissible with its objective, as in R,
+  and makes the node terminal. A failed node fit makes the node terminal with a
+  warning instead of raising.
 - Pruning df counts theta for negative binomial (k + 1 per node), through a
   model attribute for extra parameters. No R oracle exists, so a unit test
   covers it.
-- Multinomial with a rank-deficient design: the fit counts as failed (so
-  the candidate is inadmissible, or the node terminal). nnet would fit it and
-  return arbitrary values for the aliased columns, so R has no oracle; a unit
-  test covers it. An offset stays unsupported.
+- Multinomial with a rank-deficient design: the fit counts as failed (so the
+  candidate is inadmissible, or the node terminal). nnet would fit it and return
+  arbitrary values for the aliased columns, so R has no oracle; a unit test
+  covers it. An offset stays unsupported.
 - Multinomial with a missing class: if the reference class is absent from a
-  node, the fit counts as failed. Other absent classes get NaN coefficients, are
-  dropped from the scores like aliased columns, and still count in minsize and
-  pruning df.
+  node, the fit has no coefficients (all NaN) and no scores, with the objective
+  R computes (fitted with the first present class as reference). It has status
+  no_estfun, so it stays admissible in split search and the node is terminal.
+  Other absent classes get NaN coefficients, are dropped from the scores like
+  aliased columns, and still count in minsize and pruning df. A rank-deficient
+  design stays a failed fit.
 - The glm.fit-based extension models copy glm.fit's early working weights in the
   scores (about 2e-8 from the exact derivative), as GlmModel does.
 
