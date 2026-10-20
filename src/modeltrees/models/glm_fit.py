@@ -31,7 +31,13 @@ DBL_EPSILON = float(np.finfo(np.float64).eps)
 
 
 class GlmFitError(ValueError):
-    """An error R's glm.fit raises with ``stop()``, with R's message."""
+    """An error R's glm.fit raises with ``stop()``, with R's message.
+
+    ``warnings`` holds the warnings glm.fit gave before the error, when the
+    caller recorded them.
+    """
+
+    warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -59,9 +65,10 @@ class GlmFit:
     warnings: tuple[str, ...]
 
 
-def _warn(messages: list[str], message: str) -> None:
+def _warn(messages: list[str], message: str, emit: bool = True) -> None:
     messages.append(message)
-    warnings.warn(message, GlmFitWarning, stacklevel=3)
+    if emit:
+        warnings.warn(message, GlmFitWarning, stacklevel=3)
 
 
 @dataclass
@@ -118,9 +125,12 @@ def _irls(
     maxit: int,
     messages: list[str] | None,
     etastart: ArrayLike | None = None,
+    emit: bool = True,
 ) -> _Irls:
     """glm.fit up to its final warnings. ``messages = None`` is quiet mode:
     no warnings and no working residuals, with the same arithmetic otherwise.
+    ``emit = False`` records the warnings in ``messages`` without emitting
+    them.
     """
     quiet = messages is None
     nobs = yv.shape[0]
@@ -137,12 +147,12 @@ def _irls(
             warnings.simplefilter("always", GlmFitWarning)
             init = family.initialize(yv, prior)
         for w_ in caught:
-            _warn(messages, str(w_.message))
+            _warn(messages, str(w_.message), emit)
     yv, n_trials, mustart = init.y, init.n, init.mustart
 
     def warn(message: str) -> None:
         if messages is not None:
-            _warn(messages, message)
+            _warn(messages, message, emit)
 
     linkinv, mu_eta, variance = family.linkinv, family.mu_eta, family.variance
 
@@ -334,13 +344,34 @@ def glm_fit(
     maxit: int = 25,
     intercept: bool = True,
     etastart: ArrayLike | None = None,
+    emit_warnings: bool = True,
 ) -> GlmFit:
-    """Fit a GLM by IRLS exactly as ``glm.fit`` does."""
+    """Fit a GLM by IRLS exactly as ``glm.fit`` does.
+
+    ``emit_warnings = False`` keeps R's warnings in ``warnings`` without
+    emitting them, as ``withCallingHandlers`` with ``muffleWarning`` does.
+    """
     xm, yv, prior, off = _prepare(x, y, weights, offset)
     nobs = yv.shape[0]
     nvars = xm.shape[1]
     messages: list[str] = []
-    r = _irls(xm, yv, family, prior, start, off, epsilon, maxit, messages, etastart)
+    try:
+        r = _irls(
+            xm,
+            yv,
+            family,
+            prior,
+            start,
+            off,
+            epsilon,
+            maxit,
+            messages,
+            etastart,
+            emit_warnings,
+        )
+    except GlmFitError as exc:
+        exc.warnings = tuple(messages)
+        raise
     yv, mu, fit = r.y, r.mu, r.fit
     assert r.residuals is not None
     linkinv = family.linkinv
@@ -389,6 +420,9 @@ class GlmObjective:
     aic: float
     rank: int
     converged: bool
+    fitted_values: FloatArray
+    boundary: bool
+    warnings: tuple[str, ...]  # empty unless record_warnings
 
 
 def glm_objective(
@@ -402,16 +436,44 @@ def glm_objective(
     epsilon: float = 1e-8,
     maxit: int = 25,
     etastart: ArrayLike | None = None,
+    record_warnings: bool = False,
 ) -> GlmObjective:
     """``glm_fit`` without warnings, null deviance, residuals and weights.
 
-    The coefficients, AIC and rank are computed by the same arithmetic as in
-    :func:`glm_fit`, so they are identical to its result. R's errors still
-    raise :class:`GlmFitError`.
+    The coefficients, AIC, rank and fitted values are computed by the same
+    arithmetic as in :func:`glm_fit`, so they are identical to its result.
+    R's errors still raise :class:`GlmFitError`. ``record_warnings = True``
+    collects R's warnings in the result without emitting them (and computes
+    the working residuals, which are then discarded).
     """
     xm, yv, prior, off = _prepare(x, y, weights, offset)
     nvars = xm.shape[1]
-    r = _irls(xm, yv, family, prior, start, off, epsilon, maxit, None, etastart)
+    messages: list[str] | None = [] if record_warnings else None
+    try:
+        r = _irls(
+            xm,
+            yv,
+            family,
+            prior,
+            start,
+            off,
+            epsilon,
+            maxit,
+            messages,
+            etastart,
+            emit=False,
+        )
+    except GlmFitError as exc:
+        exc.warnings = () if messages is None else tuple(messages)
+        raise
     rank = 0 if nvars == 0 or r.fit is None else r.fit.rank
     aic_model = family.aic(r.y, r.n_trials, r.mu, prior, r.dev) + 2 * rank
-    return GlmObjective(r.coef, float(aic_model), rank, r.conv)
+    return GlmObjective(
+        r.coef,
+        float(aic_model),
+        rank,
+        r.conv,
+        r.mu,
+        r.boundary,
+        () if messages is None else tuple(messages),
+    )

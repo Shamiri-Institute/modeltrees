@@ -3,7 +3,8 @@
 How the extension models of docs/extensions-spec.md are ported to Python,
 the decisions taken where the spec or R left a choice, and how the port
 compares with the R fixtures. Task 5a covers the fit failure protocol and
-the negative binomial model. Safe logit and multinomial follow.
+the negative binomial model (sections 2 to 5), task 5b the safe logit
+(section 6) and multinomial (section 7) models.
 
 Line numbers `negbin.R:N` refer to `reference/MASS/R/negbin.R` (MASS
 7.3-66).
@@ -18,6 +19,7 @@ Line numbers `negbin.R:N` refer to `reference/MASS/R/negbin.R` (MASS
 | `glm.nb`'s internal `loglik` (`negbin.R:82-84`) | `models/negbin.py`: `negbin_loglik` |
 | `MASS::glm.nb(y ~ 0 + x, ...)` (`negbin.R:76-211`) | `models/negbin.py`: `glm_nb`, `NegBinFit` |
 | `negbinfit` (`r/extensions/negbin.R`) | `models/negbin.py`: `NegBinModel` |
+| `safelogitfit` (`r/extensions/safelogit.R`) | `models/safelogit.py`: `SafeLogitModel`, `classify_separation` |
 | fit failures, `estfun = NULL`, theta in the pruning df | `node_model.FitStatus`, `failed_fit`, `extra_df`, `uses_batch_split`; `tree.StopReason.FIT_FAILED`, `NO_ESTFUN` (docs/model-interface.md, section 4.2) |
 
 ## 2. Decisions on the failure protocol
@@ -165,3 +167,68 @@ Growing the 7 negbin fixture trees takes about 28 s, almost all in
 Poisson fit, then usually one or two alternations, each a glm.fit and a
 `theta.ml` call. There is no batch scorer (`split_objectives`) for this
 model.
+
+## 6. Safe logit
+
+`SafeLogitModel` (docs/extensions-spec.md, section 4, provisional) is
+glm.fit with `binomial("logit")` on the positive-weight rows, as
+`GlmModel("binomial")` fits, plus the three "safe" rules of
+`safelogitfit`.
+
+1. **Warnings.** glm.fit's warnings are recorded, never emitted, in node
+   fits and split-search fits alike, and returned in `extras["warnings"]`
+   with R's `unique()` (first occurrences, in order). For this,
+   `glm_fit(emit_warnings=False)` and `glm_objective(record_warnings=True)`
+   record without emitting, and `GlmFitError.warnings` carries the warnings
+   given before an error, as R's `warns` does.
+2. **Errors.** A `GlmFitError` is a failed fit (`failed_fit`) with
+   `extras["status"] = "error"` and the message in `reason` and
+   `extras["error"]`; `separation`, `n_boundary` and `boundary` are None
+   (R's NA). A non-binary response still raises `ValueError`, as
+   safelogitfit stops before its `tryCatch`.
+3. **Separation.** `classify_separation` counts the positive-weight rows
+   with `|y - p| < separation_tol` among glm.fit's fitted values. The
+   objective-only fits of split search (`glm_objective`, which now also
+   returns the fitted values and `boundary`) classify it too, so a
+   completely separated fit has status `NO_ESTFUN` everywhere, and the
+   `reference_path()` fit agrees.
+
+**Separated candidates are admissible.** docs/decisions.md says a
+candidate whose child "is separated, for safe logit" is inadmissible. The
+R oracle does not do this: safelogitfit returns glm.fit's finite objective
+for a completely separated fit, and mob() uses it. The fixture
+`sim_separation_safelogit` depends on it: the root split
+`{g1, g2, g3} | {g4}` wins with objective 208.99, node 2's objective plus
+about 4e-10 for the separated `g4` group, and node 2's split creates a
+completely separated child (node 4). So `NO_ESTFUN` fits count in split
+search with their objective, as docs/model-interface.md, section 4.2, says,
+and only a glm.fit error (status `failed`) makes a candidate inadmissible.
+The decisions entry is read that way here; its wording should be
+clarified.
+
+**Comparison with R** (`tests/test_safelogit.py`, `rtol = 1e-8`,
+`atol = 1e-10`):
+
+1. Node fits (`node_fits/safelogit_*`, 4 fixtures): coefficients,
+   objective, scores, status, separation, `n_boundary`, `converged`,
+   `boundary` and warnings. Observed: coefficients within 1e-13 absolute,
+   objectives and scores within 4e-15. The coefficients of the two
+   completely separated fits are compared at `rtol = 1e-3`, as the spec
+   asks; they agree to 1.4e-10 absolute (slope about 952). The
+   objective-only fit gives the same coefficients, objective, status and
+   extras bit for bit.
+2. Without separation the fit is bit for bit `GlmModel("binomial")`'s:
+   on `safelogit_none`, and on the whole `sim_separation_safelogit_plain`
+   tree (rows, splits, coefficients, objectives, scores, test statistics,
+   split-search objectives).
+3. Split search on every fixture node, and both trees
+   (`sim_separation_safelogit`, `sim_separation_safelogit_plain`): the
+   items of section 4, item 3, plus the separation info and the
+   `no_estfun` stops of nodes 4 and 5. No warning is emitted while
+   growing, as in R.
+
+Every comparison passes; no quantity diverges. A unit test checks that
+plain `GlmModel("binomial")` on `sim_separation` grows the same first two
+splits and then splits further, as the spec describes. The glm.fit error
+path has no R fixture; a unit test triggers it with a `start` of the wrong
+length.
