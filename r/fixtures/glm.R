@@ -4,10 +4,12 @@
 
 glm_case <- function(name, description, seed, family, builder,
                      weights = FALSE, offset = FALSE, start = NULL,
-                     epsilon = 1e-8, maxit = 25L, expect_converged = TRUE) {
+                     epsilon = 1e-8, maxit = 25L, expect_converged = TRUE,
+                     error_probe = NULL) {
   list(name = name, description = description, seed = seed, family = family,
     builder = builder, weights = weights, offset = offset, start = start,
-    epsilon = epsilon, maxit = maxit, expect_converged = expect_converged)
+    epsilon = epsilon, maxit = maxit, expect_converged = expect_converged,
+    error_probe = error_probe)
 }
 
 all_glm_cases <- function() {
@@ -93,7 +95,21 @@ all_glm_cases <- function() {
         d <- data.frame(x0 = 1, x1 = rnorm(n))
         d$y <- rpois(n, exp(-1.2 + 0.5 * d$x1))
         d
-      }, start = c(2, -4))
+      }, start = c(2, -4)),
+    # Step halving. The first full IRLS step from the start makes exp()
+    # overflow, so the deviance is Inf and glm.fit halves the step. The inner
+    # halving loop gives up after maxit halvings: here maxit = 26 is an error and
+    # maxit = 27 is the smallest that gets through.
+    glm_case("poisson_step_halving", "Poisson counts with mean exp(0.5 + 0.05 x) on x in [0, 100], fitted from the poor start (-5, -2): the first step diverges and is halved. Converges with maxit = 1000.",
+      20261032L, "poisson(link = \"log\")", function() {
+        x1 <- seq(0, 100, length.out = 40L)
+        data.frame(x0 = 1, x1 = x1, y = rpois(40L, exp(0.5 + 0.05 * x1)))
+      }, start = c(-5, -2), maxit = 1000L),
+    glm_case("poisson_step_halving_maxit", "Same data and start as poisson_step_halving with maxit = 27, the smallest value for which the halving loop succeeds. glm.fit stops without converging. The fixture also records the error at maxit = 26.",
+      20261032L, "poisson(link = \"log\")", function() {
+        x1 <- seq(0, 100, length.out = 40L)
+        data.frame(x0 = 1, x1 = x1, y = rpois(40L, exp(0.5 + 0.05 * x1)))
+      }, start = c(-5, -2), maxit = 27L, expect_converged = FALSE, error_probe = 26L)
   )
 }
 
@@ -138,6 +154,17 @@ glm_fixture <- function(case, data_dir) {
     stop(sprintf("glm case %s: converged = %s, expected %s", case$name, z$converged, case$expect_converged))
   }
 
+  # An error that glm.fit raises at a smaller maxit, recorded by message.
+  probe <- if (is.null(case$error_probe)) NULL else {
+    msg <- tryCatch({
+      suppressWarnings(eval(parse(text = sub(sprintf("maxit = %s", deparse_value(case$maxit)),
+        sprintf("maxit = %s", deparse_value(case$error_probe)), call_text, fixed = TRUE))[[1L]], env))
+      NA_character_
+    }, error = function(e) conditionMessage(e))
+    if (is.na(msg)) stop("glm case ", case$name, ": expected an error at maxit = ", case$error_probe)
+    list(maxit = case$error_probe, message = msg)
+  }
+
   # partykit's fitter on the same data, with case weights as glmtree uses it.
   x <- as.matrix(d[, xcols])
   w <- if (case$weights) d$w else NULL
@@ -165,6 +192,7 @@ glm_fixture <- function(case, data_dir) {
     start = if (is.null(case$start)) NULL else arr(case$start),
     control = list(epsilon = case$epsilon, maxit = case$maxit),
     warnings = arr(res$warnings),
+    error_at_smaller_maxit = probe,
     result = list(
       coefficient_names = arr(names(z$coefficients)),
       coefficients = arr(finite_or_na(z$coefficients)),

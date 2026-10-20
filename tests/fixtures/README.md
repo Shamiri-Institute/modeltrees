@@ -8,8 +8,8 @@ Generated with R 4.6.1, partykit 1.3-0, strucchange 1.6-0, mlbench 2.1-11, jsonl
 
 ## Conventions
 
-- Numbers are written with 17 significant digits in JSON and the shortest
-  exact form (15 to 17 digits) in CSV, so every double round-trips exactly.
+- Numbers are written with 17 significant digits in JSON and CSV, so every
+  double round-trips exactly under a correctly rounded parser.
 - `null` stands for R's `NA` or a non-finite value. In `split_search.objective`
   it marks an inadmissible candidate (R: `Inf`). In test p-values it marks a
   variable that was not tested (fewer than two distinct values in the node).
@@ -48,7 +48,7 @@ Generated with R 4.6.1, partykit 1.3-0, strucchange 1.6-0, mlbench 2.1-11, jsonl
 | `data/sim_gaussian_nonzero_w0.csv` | 543 | 20261001 | sim_gaussian without the rows where w0 is zero. Same columns, row order otherwise unchanged. |
 | `data/sim_binomial.csv` | 800 | 20261002 | Simulated binary data with no, one and several planted splits. |
 | `data/sim_poisson.csv` | 800 | 20261003 | Simulated count data with an exposure offset and planted splits. |
-| `data/sim_cluster.csv` | 813 | 20261021 | Simulated grouped data: 30 schools, a school-level random intercept, school-level variables zs and zt, observation-level z1, z2, z3. The column school holds the cluster id. |
+| `data/sim_cluster.csv` | 813 | 20261021 | Simulated grouped data: 30 schools, a school-level random intercept, school-level variables zs and zt, observation-level z1, z2, z3, and positive integer case weights w. The column school holds the cluster id. |
 | `data/sim_cluster_few.csv` | 739 | 20261022 | Simulated grouped data: 21 ordinary schools and 3 large schools with high zs and different coefficients. The column school holds the cluster id. |
 
 The glm.fit fixtures each have their own `data/glm_<case>.csv`, listed with
@@ -290,6 +290,56 @@ Data `data/sim_poisson.csv`. 8 inner and 9 terminal nodes.
 partykit::glmtree(formula = y_multi ~ x | z1 + z2 + z3 + z4, data = sim_poisson, family = poisson(link = "log"), weights = w, offset = log(exposure), epsilon = 1e-08, maxit = 25, alpha = 0.05, bonferroni = TRUE, minsize = 40L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
 ```
 
+### `trees/sim_gaussian_lmtree_weights_nocaseweights.json`
+
+caseweights = FALSE: the weights are not treated as frequencies. Same data and weights as sim_gaussian_lmtree_weights.
+
+Data `data/sim_gaussian.csv`. 3 inner and 4 terminal nodes.
+
+```r
+partykit::lmtree(formula = y_multi ~ x | z1 + z2 + z3 + z4 + z5, data = sim_gaussian, weights = w, alpha = 0.05, bonferroni = TRUE, minsize = 30L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = FALSE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `trees/sim_gaussian_glmtree_gaussian_weights_nocaseweights.json`
+
+caseweights = FALSE on glmtree. Same data and weights as sim_gaussian_glmtree_gaussian_weights.
+
+Data `data/sim_gaussian.csv`. 3 inner and 4 terminal nodes.
+
+```r
+partykit::glmtree(formula = y_multi ~ x | z1 + z2 + z3 + z4 + z5, data = sim_gaussian, family = gaussian(link = "identity"), weights = w, epsilon = 1e-08, maxit = 25, alpha = 0.05, bonferroni = TRUE, minsize = 30L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = FALSE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `trees/sim_binomial_glmtree_multisplit_norestart.json`
+
+restart = FALSE: split search reuses the previous candidate's coefficients as starting values. Same data and settings as sim_binomial_glmtree_multisplit.
+
+Data `data/sim_binomial.csv`. 2 inner and 3 terminal nodes.
+
+```r
+partykit::glmtree(formula = y_multi ~ x | z1 + z2 + z3 + z4, data = sim_binomial, family = binomial(link = "logit"), epsilon = 1e-08, maxit = 25, alpha = 0.05, bonferroni = TRUE, minsize = 40L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = FALSE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `trees/sim_cluster_lmtree_cluster_weights.json`
+
+Positive integer case weights with cluster = school: the weighted scores are summed within schools before the covariance estimate.
+
+Data `data/sim_cluster.csv`. 7 inner and 8 terminal nodes.
+
+```r
+partykit::lmtree(formula = y_gauss ~ x | zs + zt + z1 + z2 + z3, data = sim_cluster, weights = w, cluster = school, alpha = 0.05, bonferroni = TRUE, minsize = 30L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `trees/sim_cluster_glmtree_binomial_cluster_weights.json`
+
+Binary responses with positive integer case weights and cluster = school.
+
+Data `data/sim_cluster.csv`. 4 inner and 5 terminal nodes.
+
+```r
+partykit::glmtree(formula = y_bin ~ x | zs + zt + z1 + z2 + z3, data = sim_cluster, family = binomial(link = "logit"), weights = w, cluster = school, epsilon = 1e-08, maxit = 25, alpha = 0.05, bonferroni = TRUE, minsize = 30L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
 ### `trees/sim_cluster_lmtree_cluster.json`
 
 Gaussian responses with a school-level random intercept; cluster = school. The instability tests sum the scores within schools.
@@ -456,6 +506,26 @@ Data `data/glm_poisson_start.csv`, seed 20261019. Converged: TRUE, iterations: 1
 
 ```r
 stats::glm.fit(x = as.matrix(d[, c("x0", "x1")]), y = d$y, weights = NULL, start = c(2, -4), offset = NULL, family = poisson(link = "log"), control = stats::glm.control(epsilon = 1e-08, maxit = 25L))
+```
+
+### `glm/glm_poisson_step_halving.json`
+
+Poisson counts with mean exp(0.5 + 0.05 x) on x in [0, 100], fitted from the poor start (-5, -2): the first step diverges and is halved. Converges with maxit = 1000.
+
+Data `data/glm_poisson_step_halving.csv`, seed 20261032. Converged: TRUE, iterations: 251.
+
+```r
+stats::glm.fit(x = as.matrix(d[, c("x0", "x1")]), y = d$y, weights = NULL, start = c(-5, -2), offset = NULL, family = poisson(link = "log"), control = stats::glm.control(epsilon = 1e-08, maxit = 1000L))
+```
+
+### `glm/glm_poisson_step_halving_maxit.json`
+
+Same data and start as poisson_step_halving with maxit = 27, the smallest value for which the halving loop succeeds. glm.fit stops without converging. The fixture also records the error at maxit = 26.
+
+Data `data/glm_poisson_step_halving_maxit.csv`, seed 20261032. Converged: FALSE, iterations: 27.
+
+```r
+stats::glm.fit(x = as.matrix(d[, c("x0", "x1")]), y = d$y, weights = NULL, start = c(-5, -2), offset = NULL, family = poisson(link = "log"), control = stats::glm.control(epsilon = 1e-08, maxit = 27L))
 ```
 
 ## p-value fixture

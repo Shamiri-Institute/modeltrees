@@ -1,0 +1,24 @@
+{
+  "dataset": "glm_poisson_step_halving",
+  "description": "Poisson counts with mean exp(0.5 + 0.05 x) on x in [0, 100], fitted from the poor start (-5, -2): the first step diverges and is halved. Converges with maxit = 1000.",
+  "source": "simulated",
+  "seed": 20261032,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 40,
+  "csv": "glm_poisson_step_halving.csv",
+  "columns": [
+    {
+      "name": "x0",
+      "type": "double"
+    },
+    {
+      "name": "x1",
+      "type": "double"
+    },
+    {
+      "name": "y",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "{\n    x1 <- seq(0, 100, length.out = 40L)\n    data.frame(x0 = 1, x1 = x1, y = rpois(40L, exp(0.5 + 0.05 * x1)))\n}"
+}

@@ -27,6 +27,7 @@
     "maxit": 3
   },
   "warnings": ["glm.fit: algorithm did not converge"],
+  "error_at_smaller_maxit": null,
   "result": {
     "coefficient_names": ["x0", "x1"],
     "coefficients": [0.0047778554265759422, 5.699488513859281],

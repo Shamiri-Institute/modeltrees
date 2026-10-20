@@ -38,16 +38,11 @@ write_fixture_json <- function(x, path) {
   invisible(path)
 }
 
-# Shortest of 15, 16 or 17 significant digits that round-trips exactly.
+# 17 significant digits always round-trip a double under a correctly rounded
+# parser. R's own as.numeric() is not correctly rounded, so no round-trip check
+# is made here.
 format_double <- function(x) {
-  out <- sprintf("%.15g", x)
-  for (d in c(16L, 17L)) {
-    bad <- !is.na(x) & as.numeric(out) != x
-    if (!any(bad)) break
-    out[bad] <- sprintf(paste0("%.", d, "g"), x[bad])
-  }
-  stopifnot(identical(as.numeric(out), as.numeric(x)))
-  out
+  sprintf("%.17g", x)
 }
 
 # Describe each column so Python can rebuild identical types.

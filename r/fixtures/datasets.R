@@ -121,7 +121,10 @@ build_sim_cluster <- function() {
   left <- d$z1 <= 5
   d$y_gauss <- u + ifelse(left, 1 + 2 * d$x, -1 + 0.5 * d$x) + e
   d$y_bin <- as.integer(runif(n) < plogis(u + ifelse(left, -0.5 + d$x, 0.5 - d$x)))
-  d[sample(n), ]
+  d <- d[sample(n), ]
+  # Positive integer case weights, drawn last so the other columns are unchanged.
+  d$w <- sample(1:3, n, replace = TRUE)
+  d
 }
 
 # 21 ordinary schools (zs below 6) and 3 large schools with high zs (above 8)
@@ -187,7 +190,7 @@ all_datasets <- function() {
       "Simulated count data with an exposure offset and planted splits.",
       "simulated", 20261003L, build_sim_poisson),
     make_dataset("sim_cluster",
-      "Simulated grouped data: 30 schools, a school-level random intercept, school-level variables zs and zt, observation-level z1, z2, z3. The column school holds the cluster id.",
+      "Simulated grouped data: 30 schools, a school-level random intercept, school-level variables zs and zt, observation-level z1, z2, z3, and positive integer case weights w. The column school holds the cluster id.",
       "simulated", 20261021L, build_sim_cluster),
     make_dataset("sim_cluster_few",
       "Simulated grouped data: 21 ordinary schools and 3 large schools with high zs and different coefficients. The column school holds the cluster id.",

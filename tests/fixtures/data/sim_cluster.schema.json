@@ -1,6 +1,6 @@
 {
   "dataset": "sim_cluster",
-  "description": "Simulated grouped data: 30 schools, a school-level random intercept, school-level variables zs and zt, observation-level z1, z2, z3. The column school holds the cluster id.",
+  "description": "Simulated grouped data: 30 schools, a school-level random intercept, school-level variables zs and zt, observation-level z1, z2, z3, and positive integer case weights w. The column school holds the cluster id.",
   "source": "simulated",
   "seed": 20261021,
   "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
@@ -44,7 +44,11 @@
     {
       "name": "y_bin",
       "type": "integer"
+    },
+    {
+      "name": "w",
+      "type": "integer"
     }
   ],
-  "generator_code": "{\n    g <- 30L\n    school <- rep(seq_len(g), sample(8:40, g, replace = TRUE))\n    n <- length(school)\n    zs <- runif(g, 0, 10)\n    zt <- factor(sample(c(\"urban\", \"rural\", \"peri\"), g, replace = TRUE))\n    u <- rnorm(g, 0, 1.5)[school]\n    d <- data.frame(school = school, x = rnorm(n), zs = zs[school], zt = zt[school], z1 = runif(n, 0, \n        10), z2 = factor(sample(c(\"a\", \"b\", \"c\"), n, replace = TRUE)), z3 = rnorm(n))\n    e <- rnorm(n)\n    left <- d$z1 <= 5\n    d$y_gauss <- u + ifelse(left, 1 + 2 * d$x, -1 + 0.5 * d$x) + e\n    d$y_bin <- as.integer(runif(n) < plogis(u + ifelse(left, -0.5 + d$x, 0.5 - d$x)))\n    d[sample(n), ]\n}"
+  "generator_code": "{\n    g <- 30L\n    school <- rep(seq_len(g), sample(8:40, g, replace = TRUE))\n    n <- length(school)\n    zs <- runif(g, 0, 10)\n    zt <- factor(sample(c(\"urban\", \"rural\", \"peri\"), g, replace = TRUE))\n    u <- rnorm(g, 0, 1.5)[school]\n    d <- data.frame(school = school, x = rnorm(n), zs = zs[school], zt = zt[school], z1 = runif(n, 0, \n        10), z2 = factor(sample(c(\"a\", \"b\", \"c\"), n, replace = TRUE)), z3 = rnorm(n))\n    e <- rnorm(n)\n    left <- d$z1 <= 5\n    d$y_gauss <- u + ifelse(left, 1 + 2 * d$x, -1 + 0.5 * d$x) + e\n    d$y_bin <- as.integer(runif(n) < plogis(u + ifelse(left, -0.5 + d$x, 0.5 - d$x)))\n    d <- d[sample(n), ]\n    d$w <- sample(1:3, n, replace = TRUE)\n    d\n}"
 }

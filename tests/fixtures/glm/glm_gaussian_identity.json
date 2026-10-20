@@ -27,6 +27,7 @@
     "maxit": 25
   },
   "warnings": [],
+  "error_at_smaller_maxit": null,
   "result": {
     "coefficient_names": ["x0", "x1", "x2"],
     "coefficients": [1.3302665904097066, 2.1383047199187475, -1.8918221062765443],

@@ -27,6 +27,7 @@
     "maxit": 25
   },
   "warnings": ["glm.fit: fitted probabilities numerically 0 or 1 occurred"],
+  "error_at_smaller_maxit": null,
   "result": {
     "coefficient_names": ["x0", "x1"],
     "coefficients": [-0.054219770259936101, 74.944972692413572],
