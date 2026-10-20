@@ -12,7 +12,11 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from modeltrees._reference import reference_active
-from modeltrees.models._common import check_vcov, numeric_response, regressor_matrix
+from modeltrees.models._common import (
+    numeric_response,
+    regressor_matrix,
+    weighted_crossprod,
+)
 from modeltrees.models.families import Family, get_family
 from modeltrees.models.glm_fit import glm_fit, glm_objective
 from modeltrees.node_model import FitResult, Report, linear_predictor, rank
@@ -34,6 +38,11 @@ class GlmModel:
     divided by the dispersion: 1 for binomial and poisson, otherwise
     ``sum(wres^2 / weights) / sum(working weights)`` with case weights and
     ``sum(wres^2) / sum(working weights)`` without (glmtree.R:96-110).
+
+    With ``vcov=True`` the Hessian is ``X' diag(working weights) X /
+    dispersion`` over the non-aliased columns, with the working weights and
+    the dispersion of the scores: ``summary.glm``'s bread (the expected
+    information, which is the observed one for canonical links).
 
     Rows with zero weight are left out of the fit and get zero scores. For
     binomial and poisson this is exactly R's result. For gaussian R's AIC
@@ -68,7 +77,6 @@ class GlmModel:
         estfun: bool = False,
         vcov: bool = False,
     ) -> FitResult:
-        check_vcov(vcov)
         yv = numeric_response(y)
         n = yv.shape[0]
         xm, names = regressor_matrix(n, x, self.coef_names)
@@ -80,7 +88,7 @@ class GlmModel:
             off_fit = None if off is None else off[keep]
         else:
             xm_fit, y_fit, w_fit, off_fit = xm, yv, w, off
-        if not estfun and not reference_active():
+        if not estfun and not vcov and not reference_active():
             # Split search needs only the objective (and the coefficients for
             # restart = FALSE): no warnings, null deviance or residuals.
             o = glm_objective(
@@ -114,7 +122,8 @@ class GlmModel:
         df = z.rank + (1 if z.family.family in _DISPERSION_IN_DF else 0)
         objfun = z.aic / 2 - df
         scores = None
-        if estfun:
+        hessian = None
+        if estfun or vcov:
             wres = z.residuals * z.weights
             if z.family.family in _UNIT_DISPERSION:
                 dispersion = 1.0
@@ -123,14 +132,18 @@ class GlmModel:
                     num = wres**2 / w_fit if caseweights else wres**2
                 dispersion = float(np.nansum(num) / np.nansum(z.weights))
             cols = ~np.isnan(z.coefficients)
-            scores = np.zeros((n, int(cols.sum())))
-            scores[keep] = wres[:, None] * xm_fit[:, cols] / dispersion
+            if estfun:
+                scores = np.zeros((n, int(cols.sum())))
+                scores[keep] = wres[:, None] * xm_fit[:, cols] / dispersion
+            if vcov:
+                hessian = weighted_crossprod(xm_fit[:, cols], z.weights) / dispersion
         return FitResult(
             coefficients=z.coefficients,
             coef_names=names,
             objfun=float(objfun),
             estfun=scores,
             converged=z.converged,
+            hessian=hessian,
         )
 
     def n_response_columns(self, y: NDArray[np.generic]) -> int:

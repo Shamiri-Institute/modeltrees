@@ -296,19 +296,6 @@ def test_intercept_only_when_x_is_none() -> None:
         np.testing.assert_allclose(got.coefficients, [7 / 3])
 
 
-def test_vcov_is_out_of_scope() -> None:
-    kw: dict[str, Any] = {
-        "start": None,
-        "offset": None,
-        "cluster": None,
-        "caseweights": True,
-        "estfun": False,
-    }
-    for model in (GlmModel("poisson"),):
-        with pytest.raises(NotImplementedError, match="v0.1"):
-            model.fit(np.ones(3), None, weights=np.ones(3), vcov=True, **kw)
-
-
 def test_n_response_columns() -> None:
     assert LmModel().n_response_columns(np.ones(4)) == 1
     assert GlmModel().n_response_columns(np.ones(4)) == 1

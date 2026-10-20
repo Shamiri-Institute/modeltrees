@@ -16,6 +16,7 @@ order ``eps / FD_STEP = 2e-11`` relative to the largest entry, so
 with R use the suite's ``RTOL = 1e-8``.
 """
 
+import warnings
 from collections.abc import Callable
 from functools import cache
 from typing import Any
@@ -26,6 +27,11 @@ import statsmodels.api as sm  # type: ignore[import-untyped]
 from fixtures_io import FIXTURES, load_dataset, load_json, nan_array
 from grown_trees import fixture, model, tree_inputs
 
+from modeltrees.models.families import (
+    Family,
+    GlmFitWarning,
+)
+from modeltrees.models.glm import GlmModel
 from modeltrees.models.lm import LmModel
 from modeltrees.node_model import FitResult
 
@@ -247,3 +253,204 @@ def test_lm_zero_weights_add_nothing() -> None:
     kept = LmModel().fit(y[w0 > 0], x[w0 > 0], weights=w0[w0 > 0], vcov=True)
     assert full.hessian is not None and kept.hessian is not None
     np.testing.assert_allclose(full.hessian, kept.hessian, rtol=1e-13)
+
+
+# 2. GlmModel: X' diag(working weights) X / dispersion.
+
+
+def _glm_model(name: str) -> GlmModel:
+    g = _glm_fixture(name)
+    return GlmModel(g["family"]["family"], **g["control"])
+
+
+@cache
+def _glm_fit(name: str) -> FitResult:
+    y, x, w, off = _glm_inputs(name)
+    start = _glm_fixture(name)["start"]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", GlmFitWarning)
+        return _glm_model(name).fit(
+            y,
+            x,
+            start=None if start is None else np.array(start, np.float64),
+            weights=w,
+            offset=off,
+            estfun=True,
+            vcov=True,
+        )
+
+
+def _glm_dispersion(name: str) -> float:
+    """The scores' dispersion from R's working residuals and weights."""
+    g = _glm_fixture(name)
+    if g["family"]["family"] in ("binomial", "poisson"):
+        return 1.0
+    _, _, w, _ = _glm_inputs(name)
+    ww = np.array(g["result"]["working_weights"])
+    wres = np.array(g["result"]["working_residuals"]) * ww
+    keep = w > 0
+    return float(np.sum(wres[keep] ** 2 / w[keep]) / np.sum(ww))
+
+
+def glm_score_sum(
+    family: Family,
+    y: FloatArray,
+    x: FloatArray,
+    w: FloatArray,
+    off: FloatArray | None,
+    dispersion: float,
+) -> Callable[[FloatArray], FloatArray]:
+    """``sum_i w_i (y_i - mu_i) mu'(eta_i) / V(mu_i) x_i / dispersion``, the
+    exact score of a GLM, as a function of the coefficients."""
+
+    def score_sum(beta: FloatArray) -> FloatArray:
+        eta = x @ beta + (0 if off is None else off)
+        mu = family.linkinv(eta)
+        out: FloatArray = (w * (y - mu) * family.mu_eta(eta) / family.variance(mu)) @ x
+        return out / dispersion
+
+    return score_sum
+
+
+def exact_weights(
+    family: Family,
+    beta: FloatArray,
+    x: FloatArray,
+    w: FloatArray,
+    off: FloatArray | None,
+) -> FloatArray:
+    """The working weights at ``beta``, ``w mu'(eta)^2 / V(mu)``."""
+    eta = x @ beta + (0 if off is None else off)
+    out: FloatArray = w * family.mu_eta(eta) ** 2 / family.variance(family.linkinv(eta))
+    return out
+
+
+def lag_bound(
+    early: FloatArray, exact: FloatArray, x: FloatArray, dispersion: float
+) -> FloatArray:
+    """``|X|' |W_early - W_exact| |X| / dispersion``: how far a Hessian at
+    glm.fit's working weights (from the start of the last iteration) can be
+    from the derivative at the estimate."""
+    out: FloatArray = np.abs(x).T @ (np.abs(early - exact)[:, None] * np.abs(x))
+    return out / dispersion
+
+
+@pytest.mark.parametrize("name", GLM_FILES)
+def test_glm_hessian_by_hand_with_r_working_weights(name: str) -> None:
+    g = _glm_fixture(name)
+    _, x, _, _ = _glm_inputs(name)
+    got = _glm_fit(name)
+    assert got.hessian is not None and got.estfun is not None
+    keep = ~np.isnan(got.coefficients)
+    np.testing.assert_array_equal(
+        keep, ~np.isnan(nan_array(g["result"]["coefficients"]))
+    )
+    assert got.hessian.shape == (got.estfun.shape[1],) * 2
+    symmetric(got.hessian)
+    xk = x[:, keep]
+    ww = np.array(g["result"]["working_weights"])
+    expected = xk.T @ (ww[:, None] * xk) / _glm_dispersion(name)
+    np.testing.assert_allclose(got.hessian, expected, rtol=RTOL)
+
+
+@pytest.mark.parametrize("name", GLM_FILES)
+def test_glm_hessian_is_minus_the_score_derivative(name: str) -> None:
+    y, x, w, off = _glm_inputs(name)
+    got = _glm_fit(name)
+    assert got.hessian is not None
+    family = _glm_model(name).family
+    keep = ~np.isnan(got.coefficients)
+    pos = w > 0
+    xk, yk, wk = x[pos][:, keep], y[pos], w[pos]
+    ok = None if off is None else off[pos]
+    beta = got.coefficients[keep]
+    dispersion = _glm_dispersion(name)
+    fd = central_difference(glm_score_sum(family, yk, xk, wk, ok, dispersion), beta)
+    early = np.array(_glm_fixture(name)["result"]["working_weights"])[pos]
+    lag = lag_bound(early, exact_weights(family, beta, xk, wk, ok), xk, dispersion)
+    assert_fd(got.hessian, fd, lag)
+    if got.converged:
+        # The deviance criterion lets the last step be about sqrt(epsilon),
+        # so a converged fit's lag is small (observed up to 4e-5).
+        assert np.max(lag) <= 1e-4 * np.max(np.abs(fd))
+
+
+CONVERGED_GLM = [n for n in GLM_FILES if _glm_fixture(n)["result"]["converged"]]
+
+
+@pytest.mark.parametrize("name", CONVERGED_GLM)
+def test_glm_inverse_against_statsmodels(name: str) -> None:
+    """statsmodels' covariance is ``scale (X'WX)^-1`` at its own (tight)
+    estimate; ours is ``dispersion H^-1`` at glm.fit's working weights. The
+    tolerance is twice the first-order change of the inverse by the lag
+    bound, plus RTOL."""
+    y, x, w, off = _glm_inputs(name)
+    got = _glm_fit(name)
+    assert got.hessian is not None
+    family = _glm_model(name).family
+    keep = ~np.isnan(got.coefficients)
+    pos = w > 0
+    xk = x[pos][:, keep]
+    sm_family = {
+        "gaussian": sm.families.Gaussian(),
+        "binomial": sm.families.Binomial(),
+        "poisson": sm.families.Poisson(),
+    }[family.family]
+    ref = sm.GLM(
+        y[pos],
+        xk,
+        family=sm_family,
+        freq_weights=w[pos],
+        offset=None if off is None else off[pos],
+    ).fit(tol=1e-13)
+    # H = X'WX / dispersion, statsmodels' covariance scale (X'WX)^-1 (scale
+    # 1 for binomial and poisson, its own sigma^2 for gaussian).
+    v = np.linalg.inv(got.hessian) * ref.scale / _glm_dispersion(name)
+    beta = got.coefficients[keep]
+    early = np.array(_glm_fixture(name)["result"]["working_weights"])[pos]
+    off_k = None if off is None else off[pos]
+    lag = lag_bound(early, exact_weights(family, beta, xk, w[pos], off_k), xk, 1.0)
+    # V = scale A^-1 with A = X'WX moves by about V dA V / scale.
+    tol = 2 * np.abs(v) @ lag @ np.abs(v) / ref.scale + RTOL * np.max(np.abs(v))
+    expected = ref.cov_params()
+    assert np.all(np.abs(v - expected) <= tol)
+
+
+@pytest.mark.parametrize(
+    ("name", "node_id"), vcovcl_leaves("glm_binomial", "glm_poisson")
+)
+def test_glm_hessian_against_r(name: str, node_id: int) -> None:
+    leaf = _leaf(name, node_id)
+    got = leaf_fit(name, node_id)
+    assert got.hessian is not None
+    np.testing.assert_allclose(got.hessian, np.array(leaf["hessian"]), rtol=RTOL)
+    # Dispersion 1 for binomial and poisson.
+    np.testing.assert_allclose(
+        np.linalg.inv(got.hessian), np.array(leaf["vcov_model"]), rtol=RTOL
+    )
+
+
+def test_glm_gaussian_hessian_uses_the_score_dispersion() -> None:
+    # Gaussian scores are divided by the dispersion, so H is X'WX over it,
+    # with and without case weights.
+    y, x, w, _ = _glm_inputs("glm_gaussian_weighted")
+    for caseweights in (True, False):
+        got = GlmModel("gaussian").fit(
+            y, x, weights=w, caseweights=caseweights, estfun=True, vcov=True
+        )
+        assert got.hessian is not None and got.estfun is not None
+        resid = got.estfun[:, 0] / x[:, 0]  # wres / dispersion
+        wres = y - x @ got.coefficients
+        dispersion = float(np.median((w * wres) / resid))
+        np.testing.assert_allclose(
+            got.hessian * dispersion, x.T @ (w[:, None] * x), rtol=1e-12
+        )
+
+
+def test_glm_vcov_without_estfun() -> None:
+    # vcov=True alone takes the full glm.fit path and gives the same Hessian.
+    y, x, w, off = _glm_inputs("glm_poisson_log")
+    a = GlmModel("poisson").fit(y, x, weights=w, offset=off, estfun=True, vcov=True)
+    b = GlmModel("poisson").fit(y, x, weights=w, offset=off, vcov=True)
+    assert a.hessian is not None and b.hessian is not None and b.estfun is None
+    np.testing.assert_array_equal(a.hessian, b.hessian)
