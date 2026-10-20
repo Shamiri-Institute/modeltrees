@@ -18,6 +18,7 @@ class-major order (all regressors of l_2, then l_3, ...), the order of
 ``vcov(multinom)`` and sandwich's ``estfun.multinom``.
 """
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -29,7 +30,7 @@ from scipy.special import logsumexp
 
 from modeltrees.models._common import check_vcov, regressor_matrix
 from modeltrees.models._qr import dqrdc2
-from modeltrees.node_model import FitResult, FitStatus, failed_fit
+from modeltrees.node_model import FitResult, FitStatus, Report, failed_fit
 
 FloatArray = NDArray[np.float64]
 IntArray = NDArray[np.intp]
@@ -351,3 +352,94 @@ class MultinomModel:
     def n_response_columns(self, y: NDArray[np.generic]) -> int:
         # NCOL of a factor is 1: minsize defaults to ceiling(10 (K - 1) p).
         return 1
+
+    def loglik(self, result: FitResult) -> tuple[float, int]:
+        """``logLik.multinom``: minus the objective, with df the number of
+        estimated coefficients, ``(K' - 1) p`` for the K' present classes.
+
+        A fit without the reference class has R's objective and R's df
+        (fitted with the first present class as reference), though its
+        coefficients are NaN here. One class present gives 0 and 0.
+        """
+        if result.failed:
+            return math.nan, len(result.coefficients)
+        p = len(result.coefficients) // (len(self.levels) - 1)
+        present = len(result.extras["classes_present"])
+        return -result.objfun, (present - 1) * p
+
+    def report(self, result: FitResult) -> Report:
+        e = result.extras
+        present = e.get("classes_present")
+        return {
+            "fit_status": e.get("status"),
+            "classes_present": None
+            if present is None
+            else ", ".join(str(c) for c in present),
+            "converged": e.get("converged"),
+        }
+
+    def predict(
+        self,
+        result: FitResult,
+        x: FloatArray | None,
+        offset: FloatArray | None,
+        kind: str,
+    ) -> FloatArray:
+        """Predictions from the fitted multinomial logit.
+
+        "link" is the ``(n, K - 1)`` matrix of linear predictors of the
+        non-reference classes, "prob" the ``(n, K)`` class probabilities,
+        "class" the 0-based code of the most probable class (ties to the
+        first) as floats. "response" is undefined and raises. An absent
+        class has probability 0 and NaN link. A fit with one class present
+        gives that class probability 1 and a NaN link; a failed fit, or
+        one without the reference class (no coefficients), gives NaN.
+        """
+        if kind == "response":
+            raise ValueError(
+                "type 'response' is undefined for a multinomial tree; use "
+                "'prob' for the class probabilities or 'class' for the labels"
+            )
+        if kind not in ("link", "prob", "class"):
+            raise ValueError(
+                f"multinomtree predicts 'link', 'prob' or 'class', not {kind!r}"
+            )
+        if offset is not None:
+            raise ValueError("multinomfit does not support an offset")
+        if x is None:
+            raise ValueError("x is needed, with its intercept column")
+        xm = np.asarray(x, dtype=np.float64)
+        if xm.ndim == 1:
+            xm = xm[:, None]
+        n, p = xm.shape
+        n_levels = len(self.levels)
+        beta = np.asarray(result.coefficients, dtype=np.float64)
+        if beta.shape[0] != (n_levels - 1) * p:
+            raise ValueError(
+                f"x has {p} columns for {beta.shape[0]} coefficients "
+                f"and {n_levels} classes"
+            )
+        beta = beta.reshape(n_levels - 1, p)
+        status = result.extras.get("status")
+        absent = np.all(np.isnan(beta), axis=1)
+        link = np.full((n, n_levels - 1), np.nan)
+        prob = np.full((n, n_levels), np.nan)
+        if status == "single_class" and not result.failed:
+            prob[:] = 0.0
+            only = self.levels.index(result.extras["classes_present"][0])
+            prob[:, only] = 1.0
+        elif status != "reference_absent" and not result.failed:
+            eta = np.zeros((n, n_levels))
+            eta[:, 1:] = xm @ np.where(np.isnan(beta), 0.0, beta).T
+            link[:, ~absent] = eta[:, 1:][:, ~absent]
+            eta[:, 1:][:, absent] = -np.inf
+            expo = np.exp(eta - np.max(eta, axis=1, keepdims=True))
+            prob = expo / np.sum(expo, axis=1, keepdims=True)
+        if kind == "link":
+            return link
+        if kind == "prob":
+            return prob
+        codes = np.full(n, np.nan)
+        defined = ~np.any(np.isnan(prob), axis=1)
+        codes[defined] = np.argmax(prob[defined], axis=1)
+        return codes
