@@ -124,6 +124,10 @@ class Design:
     cluster: NDArray[Any] | None
     used_rows: NDArray[np.bool_]
     missing_counts: dict[str, int] = field(default_factory=dict)
+    # The offset's column name when it was given as one (predict reads it
+    # from new data), and the input's dataframe backend (None for a mapping).
+    offset_column: str | None = None
+    backend: str | None = None
 
     @property
     def n_rows(self) -> int:
@@ -402,6 +406,8 @@ def build_design(
         cluster=cl,
         used_rows=complete,
         missing_counts=missing_counts,
+        offset_column=offset if isinstance(offset, str) else None,
+        backend=frame.backend,
     )
 
 

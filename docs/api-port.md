@@ -255,3 +255,34 @@ the raw response of the design.
    as multinom; None for a numeric or Boolean response. A binomial or
    safe logit response with a single kept level is allowed (every row is a
    failure), as in R; multinom needs two.
+
+## 9. The public result classes
+
+Task 6d, `modeltrees/_api.py`: `ModelTree`, `NodeInfo`, `SplitRule`,
+`TestResult`, `RecordedWarning` and `TreeSummary`; `LogLik` stays in
+`modeltrees/_loglik.py` and is re-exported.
+
+1. **`SplitRule`** has the five fields of section 3.2 plus
+   `absent_levels` (the training levels absent from the node at a nominal
+   split, which `predict` sends to the larger kid) and `boolean` (a
+   Boolean partitioning variable). `threshold` is the break for a numeric
+   split, the last level that goes left (a label) for an ordered one, and
+   None for a nominal one. `conditions()` gives the left and right
+   condition strings.
+2. **Rule strings** follow `print.partynode`: a numeric break is
+   `round(break, 5)` written as R's `as.character` (`z1 <= 3.99578`), an
+   ordered split `z3 <= L2` / `z3 > L2`. A nominal split is written
+   `z2 in {a, c}` as section 3.2 shows (R prints `z2 in a, c`). A Boolean
+   variable gives `b = false` / `b = true` (section 1.4).
+3. **`TestResult.p_value`** is the adjusted p-value, None for a variable
+   that was not tested (R's `NA`); the statistic is then 0, as in R.
+4. **`NodeInfo.extras`** is the model's report (section 3.5) plus
+   `"warnings"`, the fit's warning texts, for the models that keep them
+   (negative binomial, safe logit). A model without `report` gives an
+   empty dict.
+5. **`ModelTree.depth`** is the largest node depth with the root at depth
+   1, so that `maxdepth` bounds it. partykit's `depth()` is one less (0
+   for a root-only tree).
+6. **`ModelTree.model`** exposes the node model, read-only, in addition to
+   the fields of section 3.1. `used_rows` and `fitted_node` are read-only
+   numpy arrays; setting an attribute raises `AttributeError`.

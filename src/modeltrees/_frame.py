@@ -13,9 +13,10 @@ Categorical's physical order is not, so its levels are left to the design
 builder's code-point sort, as for strings.
 """
 
+import importlib.util
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import narwhals.stable.v2 as nw
 import numpy as np
@@ -89,6 +90,9 @@ class Frame:
                 raise DataError(f"columns have different lengths ({detail})")
             self.names: tuple[str, ...] = tuple(self._arrays)
             self.n_rows: int = next(iter(lengths.values()), 0)
+            # The backend result frames are built in (section 3.3); None for
+            # a mapping.
+            self.backend: str | None = None
             return
         native = nw.from_native(data, pass_through=True)
         if isinstance(native, nw.LazyFrame):
@@ -104,6 +108,7 @@ class Frame:
         self._arrays = {}
         self.names = tuple(str(c) for c in native.columns)
         self.n_rows = int(native.shape[0])
+        self.backend = str(native.implementation)
 
     def __contains__(self, name: object) -> bool:
         return name in self.names
@@ -227,3 +232,29 @@ def read_columns(
     """The columns ``names`` of ``data`` and the number of rows."""
     frame = Frame(data)
     return {name: frame.column(name) for name in dict.fromkeys(names)}, frame.n_rows
+
+
+def is_importable(backend: str) -> bool:
+    """Whether the dataframe library ``backend`` can be imported."""
+    return importlib.util.find_spec(backend) is not None
+
+
+def build_frame(columns: Mapping[str, ArrayLike], backend: str) -> Any:
+    """A native dataframe of ``backend`` ("polars", "pandas", "pyarrow", or
+    any eager backend narwhals supports) from equal-length columns.
+
+    Numeric numpy arrays are passed as they are; other columns (strings,
+    Booleans or numbers with None) as lists, so that None becomes the
+    backend's null. Raises ``ImportError`` if the backend is missing.
+    """
+    if not is_importable(backend):
+        raise ImportError(
+            f"backend {backend!r} is not installed; install it or pass "
+            "backend='numpy' for a dict of numpy arrays"
+        )
+    data: dict[str, Any] = {}
+    for name, values in columns.items():
+        array = np.asarray(values)
+        data[name] = array if array.dtype.kind in "biuf" else array.tolist()
+    # Any eager backend narwhals knows, by name (narwhals checks it).
+    return nw.from_dict(data, backend=cast(Any, backend)).to_native()
