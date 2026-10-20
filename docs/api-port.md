@@ -231,3 +231,27 @@ coefficient names with `tests/tree_fixtures.py` exactly (`np.array_equal`).
 4. **Dict input** passes `levels` for ordered factors and for factors whose
    schema order is not the code-point sort, so the dict subset also covers
    rule 4 of section 4.3.
+
+## 8. Response coding
+
+Task 6d, `modeltrees/_response.py`, `code_response(response, rule, *,
+weighted) -> CodedResponse(values, levels)`, applied by the entry points to
+the raw response of the design.
+
+1. **Counts are whole numbers.** Section 4.3 says only "non-negative
+   counts" for poisson and negbin. R stops on negative values and only
+   warns on non-integer ones, but our poisson log-density (as R's `dpois`)
+   is -Inf for them, so every objective would be Inf. Non-integer values
+   raise `DataError` too.
+2. **Binomial proportions.** Values strictly between 0 and 1 without
+   `weights=` raise `DataError` ("pass the number of trials as weights").
+   With weights, a non-integer number of successes keeps R's
+   `GlmFitWarning` from the family; it is not checked here. Values outside
+   [0, 1] raise `DataError` (R stops with "y values must be 0 <= y <= 1").
+3. **Booleans** are numeric 0/1 for every model but multinom, which needs
+   a categorical response.
+4. **`response_levels`** is the kept level order of a categorical response
+   (after unused levels are dropped), for binomial and safe logit as well
+   as multinom; None for a numeric or Boolean response. A binomial or
+   safe logit response with a single kept level is allowed (every row is a
+   failure), as in R; multinom needs two.
