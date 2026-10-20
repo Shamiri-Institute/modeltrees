@@ -241,6 +241,13 @@ def test_predict_equals_hand_computed_leaf_fits(directory: str, name: str) -> No
         fit = _leaf_refit(f, leaf)
         coef = fit.coefficients
         xr = xm[rows]
+        if multinom and fit.extras["status"] == "reference_absent":
+            # No coefficients without the reference class: no prediction
+            # (docs/api-port.md 3.3, item 5).
+            assert np.all(np.isnan(got["link"][rows]))
+            assert np.all(np.isnan(got["prob"][rows]))
+            assert all(label is None for label in got["class"][rows])
+            continue
         if multinom:
             assert isinstance(m, MultinomModel)
             k = len(m.levels)
@@ -306,6 +313,10 @@ def test_coef_table_matches_the_fixture(directory: str, name: str) -> None:
         e = expected_nodes[node_id]
         got = np.array([table[c][i] for c in e["coefficient_names"]], dtype=np.float64)
         expected = nan_array(e["coefficients"])
+        if isinstance(m, MultinomModel) and e["estfun"] is None:
+            # A leaf without the reference class has no coefficients.
+            assert np.all(np.isnan(expected)) and np.all(np.isnan(got))
+            continue
         if isinstance(m, MultinomModel):
             leaf = grow(directory, name).node(node_id)
             y, x, w, r_estfun = _node_data(name, e)

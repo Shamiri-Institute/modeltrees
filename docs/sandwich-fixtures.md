@@ -251,6 +251,11 @@ z2 (noise) and z3 (noise).
   relative; they agree exactly, since partykit fits the same subsets. The
   field also lists the reference-absent leaves with their objective.
 
+**Moved to `extension_trees/` in task 6e** (docs/api-port.md, section
+14): the five tests below were fixed and the file is now
+`extension_trees/sim_multinom_noref_onesplit.json`. The rest of this
+section is the reasoning at the time.
+
 **Why not in `extension_trees/`.** With the file there, the port agrees
 with R on everything the suite compares that the fixture can feed: the
 public tree equals the array path, structure and splits, every

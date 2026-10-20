@@ -210,6 +210,12 @@ def test_predict_matches_the_hand_computed_leaf_fit(directory: str, name: str) -
 
 
 def _check_multinom(m: MultinomModel, fit: Any, xr: np.ndarray) -> None:
+    if fit.extras["status"] == "reference_absent":
+        # No coefficients without the reference class, so no prediction
+        # (docs/api-port.md 3.3, item 5).
+        for kind in ("link", "prob", "class"):
+            assert np.all(np.isnan(m.predict(fit, xr, None, kind))), kind
+        return
     n_classes = len(m.levels)
     p = xr.shape[1]
     beta = fit.coefficients.reshape(n_classes - 1, p)

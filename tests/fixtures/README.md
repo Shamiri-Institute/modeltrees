@@ -543,7 +543,7 @@ present, status and objective of each side, which add up to the
 split-search objective) and the leaf without the reference class with its
 objective.
 
-### `reference_absent_trees/sim_multinom_noref_onesplit.json`
+### `extension_trees/sim_multinom_noref_onesplit.json`
 
 Multinomial logit where the reference class lo is absent for z1 > 0.7. Split-search candidates at or above the last lo observation have a right child without lo, fitted with mid as reference (objective only, no coefficients or scores). The tree splits there, and that leaf stops with stop_reason no_estfun (model_info status reference_absent). See reference_absent.
 

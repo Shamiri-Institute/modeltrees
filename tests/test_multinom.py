@@ -69,6 +69,7 @@ def test_fixture_lists() -> None:
     ]
     assert TREES == [
         "sim_multinom_cluster",
+        "sim_multinom_noref_onesplit",
         "sim_multinom_nosplit",
         "sim_multinom_onesplit",
     ]
@@ -385,15 +386,25 @@ def test_tree_nodes(name: str) -> None:
         assert g.nobs == e["nobs"]
         _assert_split(g.split, e["split"])
         assert g.fit.coef_names == tuple(e["coefficient_names"])
-        y, x, w, r_estfun = _node_data(name, e)
-        tol = _coef_tol(_r_offset(g.fit, x, y, w, r_estfun))
-        np.testing.assert_allclose(
-            g.fit.coefficients, nan_array(e["coefficients"]), rtol=0, atol=tol
-        )
         assert g.fit.objfun == pytest.approx(e["objfun"], rel=RTOL)
-        assert g.fit.estfun is not None
-        _assert_scores(g.fit.estfun, r_estfun, x, w, tol)
         info = e["model_info"]
+        if e["estfun"] is None:
+            # A leaf without the reference class: R's objective, no
+            # coefficients and no scores.
+            assert g.fit.status is FitStatus.NO_ESTFUN
+            assert e["stop_reason"] == "no_estfun"
+            assert g.fit.estfun is None
+            assert np.all(np.isnan(g.fit.coefficients))
+            assert np.all(np.isnan(nan_array(e["coefficients"])))
+            assert g.test is None and g.test_failed
+        else:
+            y, x, w, r_estfun = _node_data(name, e)
+            tol = _coef_tol(_r_offset(g.fit, x, y, w, r_estfun))
+            np.testing.assert_allclose(
+                g.fit.coefficients, nan_array(e["coefficients"]), rtol=0, atol=tol
+            )
+            assert g.fit.estfun is not None
+            _assert_scores(g.fit.estfun, r_estfun, x, w, tol)
         assert g.fit.extras["status"] == info["status"]
         assert g.fit.extras["classes_present"] == _labels(info["classes_present"])
 
@@ -498,6 +509,39 @@ def test_tree_summary(name: str) -> None:
     assert sum(n.fit.objfun for n in leaves) == pytest.approx(
         summary["objfun"], rel=RTOL
     )
+
+
+def test_reference_absent_sides() -> None:
+    """Every admissible root candidate of the reference-absent tree, each
+    side fitted on its own: R's classes, status and objective per side."""
+    name = "sim_multinom_noref_onesplit"
+    fixture = _tree_fixture(name)
+    check = fixture["reference_absent"]
+    y, x, w = _inputs(fixture)
+    z = variables(fixture)[check["variable"]].values
+    m = _model(fixture)
+    admissible = [c for c in check["candidates"] if c["objective"] is not None]
+    assert len(admissible) == check["n_admissible"]
+    n_absent = 0
+    for c in admissible:
+        left = z <= c["candidate"]
+        for side, mask in (("left", left), ("right", ~left)):
+            got = m.fit(y[mask], x[mask], weights=w[mask], estfun=False)
+            assert int(mask.sum()) == c[f"n_{side}"]
+            assert got.extras["status"] == c[f"status_{side}"]
+            assert got.extras["classes_present"] == _labels(c[f"classes_{side}"])
+            assert got.objfun == pytest.approx(c[f"objective_{side}"], rel=RTOL)
+            if c[f"status_{side}"] == "reference_absent":
+                assert got.status is FitStatus.NO_ESTFUN
+                n_absent += 1
+    assert n_absent == check["n_reference_absent_candidates"]
+    leaf = check["leaves_without_reference"][0]
+    g = _grown(name).node(leaf["id"])
+    assert g.stop_reason is StopReason.NO_ESTFUN
+    assert g.fit.extras["status"] == "reference_absent"
+    assert g.fit.objfun == pytest.approx(leaf["objfun"], rel=RTOL)
+    split = _grown(name).node(1).split
+    assert split is not None and split.breaks == check["chosen_break"]
 
 
 # 3. Unit tests without an R fixture.

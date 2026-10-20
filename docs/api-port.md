@@ -340,10 +340,15 @@ Task 6d, `modeltrees/_predict.py` and `ModelTree.predict`.
    prediction at all (node 0, NaN, None), even if the level is in a
    variable off its path: section 4.2's "no prediction for those rows",
    taken literally.
-4. **Routing.** Numeric breaks as `.bincode(right = TRUE)`: `-Inf` goes
-   to kid 1 and `Inf` to kid 2; NaN and null are missing. A level absent
-   from the node goes to the kid with the larger `nobs` (`w2n`), kid 1 on
-   a tie.
+4. **Routing.** Numeric breaks as `.bincode(right = TRUE)`: `z <= break`
+   goes to kid 1 and `Inf` to kid 2; NaN and null are missing. R routes
+   `-Inf` at random: `.bincode(x, c(-Inf, b, Inf), right = TRUE)` has the
+   intervals `(-Inf, b]` and `(b, Inf]`, so `-Inf` falls in neither and
+   partykit draws a kid (docs/sandwich-fixtures.md 2.2). The port sends
+   `-Inf` to kid 1, as `-Inf <= b` says, a documented divergence; the
+   predict fixtures mark those rows random and give no expected value. A
+   level absent from the node goes to the kid with the larger `nobs`
+   (`w2n`), kid 1 on a tie (R routes such a row at random too).
 5. **Offset.** With `newdata`, `offset=` (a column name or an array)
    wins; otherwise a tree grown with an offset column reads that column
    from the new data, and a tree grown with an offset array raises
@@ -440,3 +445,27 @@ helpers moved from `tests/test_design_fixtures.py` to
 5. **Missing data** against the same frame with the rows deleted by hand:
    the grown trees are identical, and the dropped rows have node 0 and NaN
    predictions.
+
+## 14. The reference-absent tree in `extension_trees/`
+
+Task 6e, step 0. `sim_multinom_noref_onesplit` moved from
+`reference_absent_trees/` to `extension_trees/` (the one-line change in
+`r/generate_all.R`; two regenerations gave byte-identical output, and the
+JSON is unchanged). The suites that glob `extension_trees/` now grow it.
+
+1. **Counts.** There are 13 extension tree fixtures, so the public layer and
+   the design parity tests cover 45 trees, 44 of them oracles. The counts
+   in sections 1, 3.1, 7 and 13 are those of task 6d.
+2. **What the standing tests check on it.** Structure, splits, every
+   split-search objective, the instability tests, the fitted nodes and
+   logLik, as for every multinomial tree; the leaf without the reference
+   class has R's objective, NaN coefficients, no scores and
+   `StopReason.NO_ESTFUN`, its coefficient table row is NaN, and every
+   prediction in it is NaN (section 3.3, item 5).
+   `test_reference_absent_sides` fits both sides of every admissible root
+   candidate and compares their classes, status and objective with the
+   fixture's `reference_absent` field.
+3. **The fixture README** still introduces the file under its own heading
+   ("Reference-absent multinomial tree ... in its own directory"), since
+   that text is in `r/generate_all.R` and the task allowed one changed
+   line there.

@@ -73,7 +73,7 @@ noref_tree_index <- list()
 for (spec in reference_absent_tree_specs()) {
   fx <- tree_fixture(spec, datasets[[spec$dataset]], instrumented)
   fx$reference_absent <- reference_absent_check(spec, fx, datasets[[spec$dataset]])
-  rel <- file.path("reference_absent_trees", paste0(spec$name, ".json"))
+  rel <- file.path("extension_trees", paste0(spec$name, ".json"))
   emit(fx, rel)
   noref_tree_index[[length(noref_tree_index) + 1L]] <- list(file = rel, fixture = fx)
 }
