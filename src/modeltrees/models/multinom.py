@@ -206,8 +206,9 @@ class MultinomModel:
 
     - A non-reference class is absent: its coefficients are NaN, it has no
       score columns, and the fit uses the present classes.
-    - The reference class is absent: a failed fit. ``extras["value"]`` still
-      holds the objective of the present classes, as R computes it.
+    - The reference class is absent: NaN coefficients and no scores
+      (``NO_ESTFUN``), with the objective R computes, fitted with the first
+      present class as reference, in ``objfun`` and ``extras["value"]``.
     - One class present: objective 0, NaN coefficients, no scores
       (``NO_ESTFUN``).
     - The positive-weight design is rank deficient (``dqrdc2`` with lm.fit's
@@ -319,8 +320,18 @@ class MultinomModel:
         extras["value"] = z.value
         extras["max_rel_gradient"] = float(np.max(np.abs(z.gradient) / scale))
         if reference_absent:
-            return failed_fit(
-                names, f"the reference class {self.levels[0]!r} is absent", **extras
+            # The coefficients cannot be expressed relative to the reference
+            # class, but the objective is R's, so the fit stays admissible in
+            # split search and the node is terminal.
+            return FitResult(
+                coefficients=np.full(len(names), np.nan),
+                coef_names=names,
+                objfun=z.value,
+                estfun=None,
+                converged=z.converged,
+                status=FitStatus.NO_ESTFUN,
+                reason=f"the reference class {self.levels[0]!r} is absent",
+                extras=extras,
             )
         coef = np.full((n_levels - 1, p), np.nan)
         coef[present[1:] - 1] = z.coefficients

@@ -266,12 +266,12 @@ copy of nnet's BFGS (decisions Q10).
    so its objective counts in split search, as R's does. A non-reference
    class absent: its coefficients are NaN, it has no score columns, and
    `minsize` and the pruning df still count it (`len(coefficients)`). The
-   reference class absent: a failed fit, as decided, although R returns a
-   finite objective; `extras["value"]` still holds that objective, fitted
-   with the first present class as reference, and matches R's. In split
-   search such a candidate is inadmissible, which R's is not. None of the
-   fixture trees has such a candidate (their split searches have no
-   failed candidates).
+   reference class absent (`extras["status"] = "reference_absent"`): NaN
+   coefficients, no scores and `NO_ESTFUN`, with the objective R computes,
+   fitted with the first present class as reference, in both `objfun` and
+   `extras["value"]`. As in R, such a candidate stays admissible in split
+   search, competes with its true objective and can win; the child is then
+   terminal. None of the fixture trees has such a candidate.
 4. **Rank.** A design whose positive-weight rows, scaled by `sqrt(w)`, have
    rank below `p` under `dqrdc2` with lm.fit's tolerance `1e-7` is a failed
    fit with `extras["status"] = "rank_deficient"` (decisions Q9). An offset
@@ -328,9 +328,9 @@ recomputed at our coefficients moved by `-H^-1 g_R` reproduce R's to
 
 1. Node fits (`node_fits/multinom_*`, 6 fixtures): names, coefficients,
    objective (observed 2e-15 relative), scores, status and classes
-   present; the reference-absent fit is failed with R's objective in
-   `extras["value"]`, and the single-class fit has objective 0 and no
-   scores. Starting values change the estimate by less than 1e-12.
+   present; the reference-absent fit has status `no_estfun`, no scores and
+   R's objective in `objfun` and `extras["value"]`, and the single-class
+   fit has objective 0 and no scores. Starting values change the estimate by less than 1e-12.
 2. Split search on every fixture node: candidates, the Inf pattern, every
    objective (observed 1e-13 relative), the chosen split, no failed
    candidates.
@@ -347,8 +347,10 @@ Every comparison passes at the tolerances above; no quantity diverges.
 frequency weights against replicated rows, zero weights against deleted
 rows, a class present only with zero weight, the rank-deficient design
 (also only on the positive-weight rows, and as inadmissible split
-candidates), reference-absent candidates (inadmissible) next to
-single-class sides (admissible, objective 0), the offset error, the default
+candidates), reference-absent candidates (admissible, with the sum of both
+sides' objectives) next to single-class sides (admissible, objective 0), a
+split whose reference-absent child gives the smallest objective and is
+chosen, with that child terminal by `no_estfun`, the offset error, the default
 `minsize` `ceiling(10 (K - 1) p)` and the pruning df with an absent class,
 a single-class node stopping with `no_estfun`, convergence from a far
 start, and complete separation.

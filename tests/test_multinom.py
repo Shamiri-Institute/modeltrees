@@ -194,17 +194,19 @@ def test_node_fit_absent_class() -> None:
     assert got.extras["classes_present"] == ("lo", "mid")
 
 
-def test_node_fit_reference_absent_is_failed() -> None:
+def test_node_fit_reference_absent_has_no_estfun() -> None:
     expected = _node_fixture("multinom_reference_absent")["result"]
     got = _node_fit("multinom_reference_absent")
-    assert got.status is FitStatus.FAILED and math.isinf(got.objfun)
+    assert got.status is FitStatus.NO_ESTFUN and got.converged
     assert got.estfun is None and np.all(np.isnan(got.coefficients))
     assert got.coef_names == tuple(expected["coefficient_names"])
+    # R's objective, in objfun and in extras["value"].
+    assert got.objfun == pytest.approx(expected["objfun"], rel=RTOL)
     info = expected["model_info"]
+    assert got.extras["value"] == got.objfun
+    assert got.extras["value"] == pytest.approx(info["value"], rel=RTOL)
     assert got.extras["status"] == info["status"] == "reference_absent"
     assert got.extras["classes_present"] == _labels(info["classes_present"])
-    # R's objective, which the failed fit reports but does not use.
-    assert got.extras["value"] == pytest.approx(info["value"], rel=RTOL)
 
 
 def test_node_fit_single_class() -> None:
@@ -621,10 +623,11 @@ def test_rank_deficient_candidates_are_inadmissible() -> None:
     assert got.n_failed == int(np.sum(inside))
 
 
-def test_reference_absent_candidates_are_inadmissible() -> None:
+def test_reference_absent_candidates_stay_admissible() -> None:
     # Rows sorted by class: a cut at or after the last reference row leaves
-    # the right side without the reference class. Once the right side holds
-    # only class c, it is a single-class fit with objective 0, admissible.
+    # the right side without the reference class, a no_estfun fit with R's
+    # objective. Once the right side holds only class c, it is a
+    # single-class fit with objective 0. Both are admissible.
     x, y = _sim(11, n=200)
     order = np.argsort(y, kind="stable")
     x, y = x[order], y[order]
@@ -632,10 +635,73 @@ def test_reference_absent_candidates_are_inadmissible() -> None:
     got, admissible = _search(x, y)
     no_ref = admissible & (got.values >= n_ref - 1) & (got.values < n_ref + n_mid - 1)
     only_c = admissible & (got.values >= n_ref + n_mid - 1)
-    assert np.any(no_ref) and np.all(np.isinf(got.objective[no_ref]))
-    assert np.any(only_c) and np.all(np.isfinite(got.objective[only_c]))
-    assert np.all(np.isfinite(got.objective[admissible & ~no_ref]))
-    assert got.n_failed == int(np.sum(no_ref))
+    assert np.any(no_ref) and np.any(only_c)
+    assert np.all(np.isfinite(got.objective[admissible]))
+    assert got.n_failed == 0
+    m = MultinomModel(LEVELS)
+    for i in np.flatnonzero(no_ref):
+        cut = int(got.values[i]) + 1
+        left = m.fit(y[:cut], x[:cut], weights=np.ones(cut))
+        right = m.fit(y[cut:], x[cut:], weights=np.ones(200 - cut))
+        assert right.status is FitStatus.NO_ESTFUN
+        assert right.extras["status"] == "reference_absent"
+        assert got.objective[i] == pytest.approx(left.objfun + right.objfun, rel=RTOL)
+
+
+def _reference_absent_block(seed: int) -> tuple[np.ndarray, np.ndarray]:
+    """Rows 0 to 99 from all three classes; rows 100 to 199 only b or c,
+    by the sign of x1 with 10 percent noise."""
+    x, y = _sim(seed, n=200)
+    rng = np.random.default_rng(seed + 100)
+    flip = rng.random(100) < 0.1
+    y = y.copy()
+    y[100:] = np.where((x[100:, 1] > 0) ^ flip, 2, 1)
+    return x, y
+
+
+def test_reference_absent_split_competes_and_wins() -> None:
+    # The best split leaves the right child without the reference class.
+    # Its objective is the sum of both sides' true objectives, so it beats
+    # every other cut and is chosen, as R's would be.
+    x, y = _reference_absent_block(19)
+    got, admissible = _search(x, y)
+    assert got.n_failed == 0
+    assert np.all(np.isfinite(got.objective[admissible]))
+    assert got.best is not None and got.values[got.best] == 99
+    m = MultinomModel(LEVELS)
+    left = m.fit(y[:100], x[:100], weights=np.ones(100))
+    right = m.fit(y[100:], x[100:], weights=np.ones(100))
+    assert left.status is FitStatus.OK
+    assert right.status is FitStatus.NO_ESTFUN
+    assert right.extras["status"] == "reference_absent"
+    assert right.objfun == right.extras["value"] > 0
+    assert got.objective[got.best] == pytest.approx(
+        left.objfun + right.objfun, rel=RTOL
+    )
+    others = admissible & (got.values != 99)
+    assert np.all(got.objective[others] > got.objective[got.best])
+
+
+def test_reference_absent_node_is_terminal() -> None:
+    x, y = _reference_absent_block(19)
+    z = np.r_[np.zeros(100), np.ones(100)]
+    # minsize 30 lets the children pass the minsize rule, so the right
+    # child stops for its missing scores.
+    tree = mob(
+        MultinomModel(LEVELS),
+        y,
+        x,
+        {"z": _variable(z)},
+        weights=np.ones(200),
+        control=MobControl(minsize=30),
+    )
+    assert len(tree.nodes) == 3
+    assert tree.node(2).stop_reason is not StopReason.NO_ESTFUN
+    right = tree.node(3)
+    assert right.stop_reason is StopReason.NO_ESTFUN
+    assert right.fit.extras["status"] == "reference_absent"
+    assert np.all(np.isnan(right.fit.coefficients))
+    assert math.isfinite(right.fit.objfun) and right.fit.objfun > 0
 
 
 def test_single_class_side_counts_in_split_search() -> None:
