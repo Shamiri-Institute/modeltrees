@@ -145,3 +145,80 @@ item 6, which needs no fixture.
   generator passes the integer school ids of the leaf's rows.
 - sandwich's default `type` is HC1 only for objects whose first class is
   `lm`; every fixture passes `type` explicitly.
+
+## 2. predict
+
+### 2.1 Trees and rows
+
+`tests/fixtures/predict/` has one file each for
+`trees/sim_gaussian_lmtree_weights` (numeric, ordered and nominal splits,
+with absent levels), `trees/sim_binomial_glmtree_multisplit` and
+`trees/sim_poisson_glmtree_multisplit` (offset `log(exposure)`). The new
+rows are built from the first training row of a node, so they reach that
+node unless a change sends them elsewhere earlier. `target_node` names the
+node a case is aimed at, and `reaches_target_node` says whether R's route
+passes through it.
+
+### 2.2 Which rows R routes at random
+
+partykit routes a row with `kidids_split` and, where that gives `NA`,
+draws a kid with probability 1/2 (`kidids_node`, node.R:189-194; mob
+trees have no surrogates and no `prob`). The generator marks a row
+`random` by walking the tree with partykit's own `kidids_split` and no
+fallback, and checks the marking with `predict(type = "node")` under seeds
+1 to 25: deterministic rows never move and every random row moves at least
+once. `NA` arises for:
+
+- **a missing split variable** on the row's path. Off the path it does not
+  matter (`missing_off_path` rows are deterministic), as the design says.
+- **`-Inf` in a numeric split variable.** `.bincode(x, c(-Inf, b, Inf),
+  right = TRUE)` uses intervals `(-Inf, b]` and `(b, Inf]`, so `-Inf` falls
+  in neither and is routed at random. `Inf` goes to kid 2. This
+  **differs from docs/api-port.md 11.4**, which sends `-Inf` to kid 1. The
+  `minus_inf` rows are therefore random and have no expected values.
+- **a level with no kid** (split index `NA`). In all three trees every such
+  level is absent from its node because an ancestor already split on the
+  same variable (for example node 14 of the lmtree splits z2 with b and d
+  absent, but node 11 sends b and d to the other side). So the
+  `absent_level` rows are deterministic: they never reach the node
+  (`reaches_target_node` false) and R routes them by the ancestor's split.
+  None of the existing tree fixtures has a reachable level without a kid,
+  so the design's larger-kid rule has no R oracle here; R would route such
+  a row at random.
+- Absent levels of an **ordered** split variable route by the break, never
+  at random (ordered splits have `breaks`, no `index`).
+
+Rows at the exact break go to kid 1 (`right = TRUE`); one step above
+(`b + |b| 2^-52`) to kid 2.
+
+### 2.3 Expected values and failing calls
+
+`expected.node`, `.response` and `.link` come from one `predict()` call on
+the deterministic rows (`newdata[deterministic, ]`); random rows are null.
+A missing regressor gives NA for response and link and still a node; a
+missing offset variable (poisson) the same. The generator checks every
+response and link against the leaf coefficients written out
+(`X beta + log(exposure)` and the inverse link) and stops above 1e-12;
+they agree exactly.
+
+Calls R does not answer:
+
+- `type = "link"` for the **lmtree**: `predict.lmtree` passes the type to
+  `predict.lm`, which stops ("'arg' should be one of ..."). The design's
+  `"link"` for lmtree has no R value; it equals `"response"`.
+- **Unseen levels** (`unseen_level_calls`): partykit checks the levels of
+  the split variables only (`predict.party`, party.R:295-310). An extra
+  level in a split variable sends it to `model.frame(xlev = ...)`, which
+  stops with "factor z2 has new level zz_unseen". An extra level in a
+  partitioning variable that no split uses (z3 in the binomial tree, z2 in
+  the poisson tree) is **not checked**: R routes the row as before. The
+  design's `unseen="error"` raises for both (docs/api-port.md 11.3), which
+  is stricter than R for the second case.
+
+### 2.4 Not exposed
+
+partykit gives no way to ask whether a row was routed at random; the
+generator reconstructs it with the unexported `kidids_split`. Newdata must
+have the training factor levels and column classes exactly, or partykit
+goes through `model.frame` with the default `na.action`, which would drop
+rows with missing values and misalign the result; every fixture keeps both.

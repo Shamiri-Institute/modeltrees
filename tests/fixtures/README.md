@@ -603,6 +603,28 @@ docs/sandwich-fixtures.md records the decisions.
 - `vcovcl/sim_cluster_models_safelogit_cluster.json`: sandwich::vcovCL on every leaf of cluster_trees/sim_cluster_models_safelogit_cluster.json. Model `safelogit`, 2 leaves, clusters per leaf 36, 36.
 - `vcovcl/sim_cluster_models_multinom_cluster.json`: sandwich::vcovCL on every leaf of cluster_trees/sim_cluster_models_multinom_cluster.json. Model `multinom`, 2 leaves, clusters per leaf 36, 36.
 
+## predict fixtures
+
+Generator: `r/fixtures/predict.R`. New rows for a tree fixture, each built
+from the first training row of a node with some columns changed (`cases`:
+`case`, `target_node`, `source_row`, `changed`, `note`): numeric splits at
+the break, one step above it, at -Inf and Inf; ordered splits at the break
+level, the level above and absent levels; nominal levels absent from the
+node; the split variable missing; and per leaf the off-path partitioning
+variables missing, the regressor missing, the offset variable missing and
+the unchanged row. `newdata` holds the columns (factor labels; numbers with
+null for NA and the strings "Inf" and "-Inf"). `routing` is
+`deterministic` or `random` (partykit draws a kid at random for a missing
+value, a level with no kid, or a value outside `.bincode`'s intervals such
+as -Inf; `random_reason` says which), checked by predicting under 25 seeds.
+`expected` has R's `node`, `response` and `link` for the deterministic
+rows (null for random rows and for R's NA predictions). `failing_calls`
+and `unseen_level_calls` record calls R stops on, with the message.
+
+- `predict/sim_gaussian_lmtree_weights.json`: predict() of trees/sim_gaussian_lmtree_weights.json on new rows built from training rows: break values, absent levels, missing values on and off the path, a missing regressor. 93 rows, 20 routed at random.
+- `predict/sim_binomial_glmtree_multisplit.json`: predict() of trees/sim_binomial_glmtree_multisplit.json on new rows built from training rows: break values, absent levels, missing values on and off the path, a missing regressor. 15 rows, 3 routed at random.
+- `predict/sim_poisson_glmtree_multisplit.json`: predict() of trees/sim_poisson_glmtree_multisplit.json on new rows built from training rows: break values, absent levels, missing values on and off the path, a missing regressor and a missing offset. 20 rows, 3 routed at random.
+
 ## Node-level fit fixtures
 
 Generator: `r/fixtures/extensions.R`. One fit of an extension model on a

@@ -22,7 +22,7 @@ setwd(original_dir)
 for (f in sort(list.files(file.path(r_dir, "extensions"), pattern = "[.]R$", full.names = TRUE))) {
   source(f)
 }
-for (f in c("common.R", "datasets.R", "trees.R", "glm.R", "pvalues.R", "extensions.R", "sandwich.R")) {
+for (f in c("common.R", "datasets.R", "trees.R", "glm.R", "pvalues.R", "extensions.R", "sandwich.R", "predict.R")) {
   source(file.path(r_dir, "fixtures", f))
 }
 
@@ -99,6 +99,16 @@ for (nm in names(VCOVCL_MODELS)) {
   rel <- file.path("vcovcl", paste0(nm, ".json"))
   emit(fx, rel)
   vcovcl_index[[length(vcovcl_index) + 1L]] <- list(file = rel, fixture = fx)
+}
+
+# predict() on new data for three tree fixtures.
+predict_index <- list()
+for (nm in PREDICT_TREES) {
+  spec <- specs_by_name[[nm]]
+  fx <- predict_fixture(spec, grown[[nm]]$fixture, datasets[[spec$dataset]])
+  rel <- file.path("predict", paste0(nm, ".json"))
+  emit(fx, rel)
+  predict_index[[length(predict_index) + 1L]] <- list(file = rel, fixture = fx)
 }
 
 # Node-level fits of the extension models.
@@ -280,6 +290,31 @@ for (entry in vcovcl_index) {
     sprintf("- `%s`: %s Model `%s`, %d leaves, clusters per leaf %s.", entry$file,
       fx$description, fx$model, length(fx$leaves),
       paste(vapply(fx$leaves, function(l) as.character(l$n_clusters), ""), collapse = ", ")))
+}
+readme <- c(readme, "",
+  "## predict fixtures",
+  "",
+  "Generator: `r/fixtures/predict.R`. New rows for a tree fixture, each built",
+  "from the first training row of a node with some columns changed (`cases`:",
+  "`case`, `target_node`, `source_row`, `changed`, `note`): numeric splits at",
+  "the break, one step above it, at -Inf and Inf; ordered splits at the break",
+  "level, the level above and absent levels; nominal levels absent from the",
+  "node; the split variable missing; and per leaf the off-path partitioning",
+  "variables missing, the regressor missing, the offset variable missing and",
+  "the unchanged row. `newdata` holds the columns (factor labels; numbers with",
+  "null for NA and the strings \"Inf\" and \"-Inf\"). `routing` is",
+  "`deterministic` or `random` (partykit draws a kid at random for a missing",
+  "value, a level with no kid, or a value outside `.bincode`'s intervals such",
+  "as -Inf; `random_reason` says which), checked by predicting under 25 seeds.",
+  "`expected` has R's `node`, `response` and `link` for the deterministic",
+  "rows (null for random rows and for R's NA predictions). `failing_calls`",
+  "and `unseen_level_calls` record calls R stops on, with the message.",
+  "")
+for (entry in predict_index) {
+  fx <- entry$fixture
+  readme <- c(readme,
+    sprintf("- `%s`: %s %d rows, %d routed at random.", entry$file, fx$description, fx$n,
+      sum(vapply(fx$cases, function(c) c$routing == "random", TRUE))))
 }
 readme <- c(readme, "",
   "## Node-level fit fixtures",
