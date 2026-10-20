@@ -20,6 +20,7 @@ Line numbers `negbin.R:N` refer to `reference/MASS/R/negbin.R` (MASS
 | `MASS::glm.nb(y ~ 0 + x, ...)` (`negbin.R:76-211`) | `models/negbin.py`: `glm_nb`, `NegBinFit` |
 | `negbinfit` (`r/extensions/negbin.R`) | `models/negbin.py`: `NegBinModel` |
 | `safelogitfit` (`r/extensions/safelogit.R`) | `models/safelogit.py`: `SafeLogitModel`, `classify_separation` |
+| `multinomfit` (`r/extensions/multinom.R`, nnet's `multinom`) | `models/multinom.py`: `MultinomModel`, `multinom_newton`, `multinom_response` |
 | fit failures, `estfun = NULL`, theta in the pruning df | `node_model.FitStatus`, `failed_fit`, `extra_df`, `uses_batch_split`; `tree.StopReason.FIT_FAILED`, `NO_ESTFUN` (docs/model-interface.md, section 4.2) |
 
 ## 2. Decisions on the failure protocol
@@ -232,3 +233,126 @@ plain `GlmModel("binomial")` on `sim_separation` grows the same first two
 splits and then splits further, as the spec describes. The glm.fit error
 path has no R fixture; a unit test triggers it with a `start` of the wrong
 length.
+
+## 7. Multinomial logit
+
+`MultinomModel` (docs/extensions-spec.md, section 5, provisional) fits the
+baseline-category logit by Newton's method in numpy and scipy, not by a
+copy of nnet's BFGS (decisions Q10).
+
+1. **Response and layout.** `MultinomModel(levels)` takes the full level
+   order, whose first level is the reference class; `y` holds 0-based codes.
+   `multinom_response(y, levels)` maps labels to codes, and with
+   `codes=True` checks integer codes. The order is always explicit, because
+   R sorts factor levels by the locale. Coefficients are `(K - 1) p`,
+   class-major, named `"<level>:<regressor>"`; the scores are
+   `w_i (1{y_i = l_k} - p_ik) x_ij` in the same order.
+2. **Newton's method** (`multinom_newton`). From zero, or from `start` with
+   NaN set to 0 (R's `multinom_start_wts`), each iteration solves with the
+   Hessian of minus the log-likelihood (`scipy.linalg.solve`,
+   `assume_a="pos"`) and halves the step until the objective does not
+   increase by more than `1e-12 (1 + |objective|)`. Without that rounding
+   allowance, steps near the optimum, whose objective change is below its
+   rounding error, were halved for nothing. Convergence is on the
+   gradient: every entry at most `gtol = 1e-12` times `sum_i w_i |x_ij|`,
+   the largest it can be. Quadratic convergence makes the tight `gtol`
+   cost at most one step; with `1e-10` the estimate stopped about 5e-10
+   from statsmodels' on random data. `maxit = 100`. A fit that stops
+   without converging (singular Hessian, no decreasing step, `maxit`) keeps
+   its estimate, with `converged = False`; under complete separation the
+   coefficients grow until the gradient criterion is met, as glm.fit's do.
+3. **Degenerate nodes.** Classes count as present with positive total
+   weight. One class present: objective 0, NaN coefficients, `NO_ESTFUN`,
+   so its objective counts in split search, as R's does. A non-reference
+   class absent: its coefficients are NaN, it has no score columns, and
+   `minsize` and the pruning df still count it (`len(coefficients)`). The
+   reference class absent: a failed fit, as decided, although R returns a
+   finite objective; `extras["value"]` still holds that objective, fitted
+   with the first present class as reference, and matches R's. In split
+   search such a candidate is inadmissible, which R's is not. None of the
+   fixture trees has such a candidate (their split searches have no
+   failed candidates).
+4. **Rank.** A design whose positive-weight rows, scaled by `sqrt(w)`, have
+   rank below `p` under `dqrdc2` with lm.fit's tolerance `1e-7` is a failed
+   fit with `extras["status"] = "rank_deficient"` (decisions Q9). An offset
+   raises `ValueError`, as multinomfit stops.
+5. **Extras.** `status` (`ok`, `single_class`, `reference_absent`,
+   `rank_deficient`), `classes_present` (labels), `converged`,
+   `iterations`, `value` and `max_rel_gradient`. Zero-weight rows are left
+   out of the fit and get zero scores, as in multinomfit.
+
+**Tolerances from R's gradient.** nnet's BFGS (`reltol = 1e-16`) stops with
+a gradient `g_R` that the fixtures record as the column sums of R's
+scores, up to 1.6e-8 of the column sums of absolute scores. Newton's
+method converges to the MLE, from which R's coefficients differ by
+`-H^-1 g_R` to first order, with `H` the Hessian of minus the
+log-likelihood at the MLE. On every node fit this offset predicts R's
+coefficients to within 5 percent of its size, or 1e-10
+(`test_r_offset_explains_the_difference`; the observed residuals are
+about 1e-14 except 8e-11 for `multinom_absent_class`, whose gradient is
+tiny). The tests therefore use, per fixture and per tree node:
+
+- coefficients: `atol = 2 max |H^-1 g_R| + 1e-10`, required to be below
+  1e-6;
+- scores: per entry `w_i |x_ij| ||x_i||_1 coef_tol / 2`, plus 1e-10, the
+  change the coefficient tolerance can cause, since
+  `sum_l |d p_ik / d eta_il| = 2 p_ik (1 - p_ik) <= 1/2`;
+- test statistics and adjusted p-values: twice their change when our
+  coefficients are moved by `-H^-1 g_R` and the tests recomputed, plus
+  `1e-8` relative;
+- objectives, split-search objectives and everything structural: the
+  usual `rtol = 1e-8`, or exact.
+
+The values that result:
+
+| fixture | max \|H^-1 g_R\| | coefficient atol | observed |
+| --- | --- | --- | --- |
+| `node_fits/multinom_full` | 4.7e-8 | 9.4e-8 | 4.7e-8 |
+| `node_fits/multinom_start` | 7.5e-9 | 1.5e-8 | 7.5e-9 |
+| `node_fits/multinom_weights_zero` | 4.9e-8 | 9.7e-8 | 4.9e-8 |
+| `node_fits/multinom_absent_class` | 5.3e-10 | 1.2e-9 | 5.3e-10 |
+| `sim_multinom_nosplit`, node 1 | 1.1e-8 | 2.2e-8 | 1.1e-8 |
+| `sim_multinom_onesplit`, nodes 1, 2, 3 | 4.7e-8, 6.8e-12, 2.0e-12 | 9.4e-8, 1.1e-10, 1.0e-10 | 4.7e-8, 6.8e-12, 8.3e-12 |
+| `sim_multinom_cluster`, nodes 1, 2, 3 | 5.1e-12, 1.0e-7, 1.1e-14 | 1.1e-10, 2.1e-7, 1.0e-10 | 5.0e-12, 1.0e-7, 1.1e-12 |
+
+Where R's gradient is largest (onesplit node 1, cluster node 2) the test
+statistics differ from R's by up to 6.3e-7 relative and the adjusted
+p-values by up to 2.1e-6. Two checks show that this is R's optimisation
+error and not the port: the instability tests run on R's own scores
+reproduce R's statistics and p-values to 3e-15 relative
+(`test_tests_on_r_scores`, at the usual tolerance), and the statistics
+recomputed at our coefficients moved by `-H^-1 g_R` reproduce R's to
+2e-13.
+
+**Comparison with R** (`tests/test_multinom.py`):
+
+1. Node fits (`node_fits/multinom_*`, 6 fixtures): names, coefficients,
+   objective (observed 2e-15 relative), scores, status and classes
+   present; the reference-absent fit is failed with R's objective in
+   `extras["value"]`, and the single-class fit has objective 0 and no
+   scores. Starting values change the estimate by less than 1e-12.
+2. Split search on every fixture node: candidates, the Inf pattern, every
+   objective (observed 1e-13 relative), the chosen split, no failed
+   candidates.
+3. Trees (`sim_multinom_nosplit`, `sim_multinom_onesplit`,
+   `sim_multinom_cluster`): ids, depths, parents, kids, stop reasons, rows,
+   splits (exact), coefficients, objectives, scores, model info, test
+   statistics, adjusted p-values, `best`, split-search objectives,
+   `fitted_node` and the summary.
+
+Every comparison passes at the tolerances above; no quantity diverges.
+
+**Without an R oracle** (unit tests): statsmodels' `MNLogit` on random data
+(coefficients, log-likelihood and per-row scores, observed 4e-16),
+frequency weights against replicated rows, zero weights against deleted
+rows, a class present only with zero weight, the rank-deficient design
+(also only on the positive-weight rows, and as inadmissible split
+candidates), reference-absent candidates (inadmissible) next to
+single-class sides (admissible, objective 0), the offset error, the default
+`minsize` `ceiling(10 (K - 1) p)` and the pruning df with an absent class,
+a single-class node stopping with `no_estfun`, convergence from a far
+start, and complete separation.
+
+**Speed.** `sim_multinom_onesplit` and `sim_multinom_cluster` take about
+4 s each: 1,565 Newton fits per tree with 4 coefficients, about 5
+iterations each. There is no batch scorer.
