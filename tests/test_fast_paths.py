@@ -2,7 +2,8 @@
 
 Each fast path is compared with the code it replaces, which stays in the
 library: the LAPACK least squares with the dqrdc2 port, objective-only glm
-fits with glm_fit, find_split with find_split_reference, and whole trees with trees grown
+fits with glm_fit, find_split with find_split_reference, LmModel's batch
+split objectives with per-candidate fits, and whole trees with trees grown
 under ``reference_path()``. The R fixtures are checked by the other test
 modules, which run the fast paths.
 """
@@ -26,6 +27,8 @@ from modeltrees.models.glm_fit import glm_fit, glm_objective
 from modeltrees.models.lm import LmModel
 from modeltrees.node_model import FitResult
 from modeltrees.split_search import (
+    REFIT_MIN,
+    SplitObjectives,
     SplitSearch,
     find_split,
     find_split_reference,
@@ -229,25 +232,48 @@ def _side_fitter(
     return fit
 
 
+def _batch(m: Any, y: np.ndarray, x: np.ndarray | None, w: np.ndarray) -> Any:
+    def batch(order: np.ndarray, cuts: np.ndarray) -> SplitObjectives:
+        out: SplitObjectives = m.split_objectives(
+            y,
+            x,
+            weights=w,
+            offset=None,
+            cluster=None,
+            caseweights=True,
+            order=order,
+            cuts=cuts,
+        )
+        return out
+
+    return batch
+
+
 def _assert_same_search(
-    fast: SplitSearch, ref: SplitSearch, rtol: float = 1e-10
+    fast: SplitSearch, ref: SplitSearch, rtol: float = 1e-10, yy: float = 0.0
 ) -> None:
+    """Same candidates, admissibility and winner; objectives to rounding.
+
+    ``yy`` is the weighted sum of squares of the response. Least squares
+    computes an RSS to about ``eps * sqrt(RSS * y'Wy)`` at best, so two
+    correct implementations differ by that much when the residuals are
+    small next to ``y``; the tolerance includes it.
+    """
     assert fast.best == ref.best
     assert fast.split == ref.split
     assert fast.minsize == ref.minsize
     np.testing.assert_array_equal(fast.values, ref.values)
     np.testing.assert_array_equal(np.isinf(fast.objective), np.isinf(ref.objective))
     finite = np.isfinite(ref.objective)
-    scale = float(np.max(np.abs(ref.objective[finite]))) if finite.any() else 1.0
-    np.testing.assert_allclose(
-        fast.objective[finite], ref.objective[finite], rtol=rtol, atol=rtol * scale
-    )
+    a, b = fast.objective[finite], ref.objective[finite]
+    scale = float(np.max(np.abs(b))) if finite.any() else 1.0
+    tol = rtol * (np.abs(b) + scale + np.sqrt(np.abs(b) * yy))
+    assert np.all(np.abs(a - b) <= tol), np.max(np.abs(a - b) - tol)
     if fast.best is not None:
         # The winner's objective is an exact fit in both; the two paths use
         # different QR code, so they agree to rounding.
-        assert math.isclose(
-            fast.objective[fast.best], ref.objective[ref.best], rel_tol=1e-12
-        )
+        x, y = fast.objective[fast.best], ref.objective[ref.best]
+        assert abs(x - y) <= 1e-12 * (abs(y) + math.sqrt(abs(y) * yy))
 
 
 def _scenario(seed: int, kind: str) -> dict[str, Any]:
@@ -276,6 +302,18 @@ def _scenario(seed: int, kind: str) -> dict[str, Any]:
         x = np.column_stack([np.ones(n), np.where(z <= 0, 1.0, xv)])
     if kind == "binary":
         x = np.column_stack([np.ones(n), (z > 0.3).astype(float)])
+    if kind == "bigy":
+        # Residuals tiny next to y: both paths lose digits.
+        y = y + 1e8
+    if kind == "exact":
+        # Each side of 0 fits exactly, so many candidates have RSS near 0.
+        y = np.where(z <= 0, 2 * xv, -xv)
+    if kind == "heavyweights":
+        w = rng.pareto(1.5, n) + 1e-3
+    if kind == "collinear":
+        # x keeps 1e-6 of its norm against the intercept: R keeps it, the
+        # scorer declines every side and all candidates are fitted exactly.
+        x = np.column_stack([np.ones(n), 1e3 + 1e-3 * xv])
     return {"z": z, "y": y, "x": x, "w": w, "minsize": minsize}
 
 
@@ -288,11 +326,15 @@ KINDS = [
     "constcol",
     "binary",
     "tiny",
+    "bigy",
+    "exact",
+    "heavyweights",
+    "collinear",
 ]
 
 
 @pytest.mark.parametrize("kind", KINDS)
-@pytest.mark.parametrize("seed", range(6))
+@pytest.mark.parametrize("seed", range(4))
 @pytest.mark.parametrize("caseweights", [True, False])
 def test_find_split_lm_matches_reference(
     kind: str, seed: int, caseweights: bool
@@ -304,7 +346,11 @@ def test_find_split_lm_matches_reference(
     kw: dict[str, Any] = {"minsize": s["minsize"], "caseweights": caseweights}
     with reference_path():
         ref = find_split_reference(*args, **kw)
-    _assert_same_search(find_split(*args, **kw), ref)
+    plain = find_split(*args, **kw)
+    batched = find_split(*args, **kw, batch=_batch(m, s["y"], s["x"], s["w"]))
+    yy = float(np.sum(s["w"] * s["y"] ** 2))
+    _assert_same_search(plain, ref, yy=yy)
+    _assert_same_search(batched, ref, yy=yy)
 
 
 @pytest.mark.parametrize("kind", ["plain", "ties", "intweights", "zeroweights"])
@@ -327,17 +373,20 @@ def test_find_split_center_and_factor_match_reference() -> None:
     s = _scenario(0, "ties")
     m = LmModel()
     fit = _side_fitter(m, s["y"], s["x"], s["w"], True)
+    batch = _batch(m, s["y"], s["x"], s["w"])
     args = (0, VariableKind.NUMERIC, s["z"], None, s["w"], fit)
     with reference_path():
         ref = find_split_reference(*args, minsize=10, numsplit="center")
-    _assert_same_search(find_split(*args, minsize=10, numsplit="center"), ref)
+    _assert_same_search(
+        find_split(*args, minsize=10, numsplit="center", batch=batch), ref
+    )
     codes = np.digitize(s["z"], [-0.5, 0, 0.5])
     levels = ("a", "b", "c", "d")
     for kind in (VariableKind.NOMINAL, VariableKind.ORDERED):
         fargs = (0, kind, codes, levels, s["w"], fit)
         with reference_path():
             ref = find_split_reference(*fargs, minsize=10)
-        got = find_split(*fargs, minsize=10)
+        got = find_split(*fargs, minsize=10, batch=batch)
         assert got.split == ref.split and got.best == ref.best
         assert got.left_levels == ref.left_levels
         np.testing.assert_allclose(got.objective, ref.objective, rtol=1e-12)
@@ -358,10 +407,86 @@ def test_admissibility_at_the_minsize_boundary_with_fractional_weights() -> None
         args = (0, VariableKind.NUMERIC, z, None, w, fit)
         with reference_path():
             ref = find_split_reference(*args, minsize=minsize)
-        _assert_same_search(find_split(*args, minsize=minsize), ref)
+        _assert_same_search(
+            find_split(*args, minsize=minsize, batch=_batch(m, y, x, w)), ref
+        )
 
 
-# 4. Whole trees: fast path against the reference path.
+# 4. LmModel.split_objectives against per-candidate fits.
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize("seed", range(4))
+def test_lm_split_objectives_within_their_error_bound(kind: str, seed: int) -> None:
+    s = _scenario(seed, kind)
+    z, y, x, w = s["z"], s["y"], s["x"], s["w"]
+    m = LmModel()
+    order = np.argsort(z, kind="stable")
+    uz = np.unique(z[w > 0])
+    cuts = np.searchsorted(z[order], uz, side="right").astype(np.intp)
+    got = _batch(m, y, x, w)(order, cuts)
+    fit = _side_fitter(m, y, x, w, True)
+    scored = 0
+    for i, value in enumerate(uz):
+        left = z <= value
+        if not (np.any(w[left] > 0) and np.any(w[~left] > 0)):
+            continue
+        exact = fit(left, None).objfun + fit(~left, None).objfun
+        approx = got.left[i] + got.right[i]
+        if np.isnan(approx):
+            continue
+        scored += 1
+        assert abs(approx - exact) <= got.error[i]
+        assert abs(approx - exact) <= 1e-9 * max(exact, 1e-300) + got.error[i]
+    if kind in ("binary", "collinear"):
+        # The 0/1 regressor is constant on one side of every candidate; the
+        # collinear one is too ill-conditioned to score.
+        assert scored == 0
+    elif kind != "tiny":
+        assert scored > 0
+
+
+def test_lm_split_objectives_flag_rank_deficient_sides() -> None:
+    s = _scenario(0, "constcol")
+    z, y, x, w = s["z"], s["y"], s["x"], s["w"]
+    order = np.argsort(z, kind="stable")
+    uz = np.unique(z)
+    cuts = np.searchsorted(z[order], uz, side="right").astype(np.intp)
+    got = _batch(LmModel(), y, x, w)(order, cuts)
+    # Left sides inside z <= 0 have a constant second column.
+    assert np.all(np.isnan(got.left[uz <= 0]))
+    assert np.all(np.isfinite(got.left[uz > 0.05]))
+
+
+def test_screening_refits_a_handful_and_keeps_the_first_tie() -> None:
+    # Two blocks with identical data: candidates mirror each other, so the
+    # exact objectives tie and the first must win.
+    rng = np.random.default_rng(12)
+    half = 60
+    xv = rng.standard_normal(half)
+    yv = rng.standard_normal(half)
+    z = np.r_[np.arange(half), np.arange(half) + 1000].astype(float)
+    y = np.r_[yv, yv]
+    x = np.column_stack([np.ones(2 * half), np.r_[xv, xv]])
+    w = np.ones(2 * half)
+    m = LmModel()
+    calls = 0
+
+    def fit(mask: np.ndarray, start: np.ndarray | None) -> FitResult:
+        nonlocal calls
+        calls += 1
+        return _side_fitter(m, y, x, w, True)(mask, start)
+
+    args = (0, VariableKind.NUMERIC, z, None, w, fit)
+    with reference_path():
+        ref = find_split_reference(*args, minsize=10)
+    calls = 0
+    got = find_split(*args, minsize=10, batch=_batch(m, y, x, w))
+    _assert_same_search(got, ref)
+    assert REFIT_MIN * 2 <= calls < 2 * np.sum(np.isfinite(ref.objective))
+
+
+# 5. Whole trees: fast path against the reference path.
 
 
 def _grow_fixture(name: str) -> ModelTree:

@@ -444,6 +444,75 @@ Design notes:
 - Core MOB code depends only on `NodeModel`. Prediction and log-likelihood are
   separate protocols so a minimal model stays small.
 
+### 4.1 Optional: scoring all numeric split candidates at once
+
+Refitting both sides of every candidate makes split search quadratic in the
+node size (docs/performance.md). A model may provide a batch scorer, which
+`mob()` uses for numeric split variables when it exists and
+`restart = TRUE`:
+
+```python
+@dataclass(frozen=True)
+class SplitObjectives:              # modeltrees.split_search
+    left: FloatArray                # approximate objective of each left side
+    right: FloatArray               # ... and right side
+    error: FloatArray               # bound on |left + right - exact sum|
+
+
+class BatchSplitModel(NodeModel, Protocol):
+    def split_objectives(
+        self,
+        y: NDArray[np.generic],
+        x: FloatArray | None,
+        *,
+        weights: FloatArray,
+        offset: FloatArray | None,
+        cluster: NDArray[np.generic] | None,
+        caseweights: bool,
+        order: NDArray[np.intp],    # stable sort of the node's rows by z
+        cuts: NDArray[np.intp],     # candidate i sends order[:cuts[i]] left
+    ) -> SplitObjectives | None: ...
+```
+
+The arguments are the node's data, as `fit` receives it, plus the sort
+order of the split variable and one cut per admissible candidate. Rows with
+zero weight are included and ride along with their `z` value. Returning
+None declines, and every candidate is fitted as usual.
+
+The contract:
+
+- `left[i] + right[i]` approximates the summed objective that `fit` would
+  give, and `error[i]` bounds the absolute difference, including the
+  rounding of the exact fit itself. The bound must hold: split search relies
+  on it to decide which candidates cannot win.
+- NaN in any of the three for a candidate means "fit this one exactly".
+  Use it for anything doubtful: rank-deficient or ill-conditioned sides,
+  sides too small to estimate.
+
+How split search uses it (`split_search.find_split`): the candidates whose
+interval `approx ± error` reaches below the smallest upper bound
+`min(approx + error)`, widened by `REFIT_MARGIN = 1e-6` relative to the best
+approximation, plus at least the `REFIT_MIN = 5` smallest approximations,
+plus every NaN candidate, are refitted with `fit`. The winner is the first
+minimum of the resulting objective vector. Every candidate left unrefitted
+has an approximation above every refitted candidate's exact value, so the
+winner and the tie rule (first candidate) are those of the exact search.
+`SplitSearch.objective` holds exact values for refitted candidates and the
+approximations for the rest.
+
+The batch scorer is not used with `restart = FALSE`, where each fit starts
+from the previous candidate's coefficients, or for factor variables, which
+have few candidates. Under `modeltrees.reference_path()` it is never used.
+
+`LmModel` implements it with cumulative weighted cross-products
+(`models/lm.py`, `LmModel.split_objectives`): per side, the RSS is
+`r'Wr - b'A^-1 b` with `A = X'WX` and `b = X'Wr` from prefix sums (left) and
+suffix sums (right) over the sorted rows, where `r` is the residual of the
+node's own fit, so that the sums are on the scale of the RSS. `A` is scaled
+by its diagonal and solved by a symmetric eigendecomposition; sides with a
+condition number above 1e8 or a zero diagonal entry are NaN. `GlmModel` has
+no batch scorer (docs/performance.md, Step 3, lists the options).
+
 ## 5. Open questions
 
 1. **Raw p-values in fixtures.** partykit stores only the adjusted p-values in

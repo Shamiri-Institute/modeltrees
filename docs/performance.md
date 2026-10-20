@@ -204,7 +204,7 @@ inside the noise.
 
 **c. Node-local data and vectorised admissibility.** Split search now
 extracts the node's `y`, `x`, weights, offset and clusters once per node
-(`tree._Grower._node_fitter`) and masks those contiguous arrays per
+(`tree._Grower._node_fitters`) and masks those contiguous arrays per
 candidate, instead of indexing the full data with `rows[mask]`. Admissibility
 of all numeric candidates comes from one cumulative weight sum; candidates
 within 1e-8 of `minsize` (relative to the total weight) are rechecked with
@@ -264,6 +264,77 @@ The time is now the IRLS arithmetic itself: element-wise vector work on
 each side's rows (deviance residuals 21 %, link functions 15 %, the IRLS
 body 13 %) and the solve (19 %). Per-fit overhead outside the model is
 about 4 %.
+
+## Step 2: batch split objectives for lm
+
+A model may now score all numeric split candidates at once
+(`split_objectives`, docs/model-interface.md, section 4.1); `mob()` uses it
+when the model has it and `restart = TRUE`, and otherwise fits every
+candidate as before. `LmModel` implements it with prefix and suffix sums of
+the weighted cross-products over the rows sorted by the split variable.
+
+**Exactness.** The scorer returns an error bound with each approximation,
+and split search refits exactly every candidate whose interval could reach
+the best (widened by 1e-6 relative to the best), at least the 5 smallest,
+and every candidate the scorer declines (NaN). The winner is the first
+minimum over values in which every refitted candidate is exact and every
+other candidate is provably worse, so the chosen split and the
+first-candidate tie rule are the per-candidate search's. Sides that are
+rank-deficient, have a zero column, or whose diagonal-scaled cross-product
+matrix has a condition number above 1e8 are declined. The approximation
+works on the residuals of the node's own fit rather than on `y`, which
+leaves each side's RSS unchanged and keeps the sums on the RSS scale, so a
+large mean of `y` does not cancel digits. The bound per side is
+`64 eps (n + p) (cond r'Wr + sqrt(r'Wr y'Wy))`; the second term covers
+responses whose residuals are tiny next to `y`, where even two exact
+least-squares codes differ by about `eps sqrt(RSS y'Wy)`.
+
+**Results.** Median seconds (n = 20000: one run after a warm-up for the
+earlier columns, three for Step 2):
+
+| n | baseline | after Step 1 | after Step 2 | R partykit |
+| --- | --- | --- | --- | --- |
+| 1000 | 0.302 | 0.257 | 0.017 | 0.219 |
+| 5000 | 2.246 | 2.29 | 0.040 | 3.184 |
+| 20000 | 49.7 | not run | 0.101 | 43.45 |
+
+lm trees are 18 times faster at n = 1000, 56 times at 5000 and about 490
+times at 20000, and now grow 13 to 430 times faster than partykit. The cost
+of split search is now linear in n up to the sort.
+
+**How much is refitted.** At the benchmark's root (n = 5000, 4961
+candidates in `z1`) 5 candidates are refitted, 10 side fits instead of
+9922. In 600 randomized searches (`n` from 40 to 600, ties, heavy-tailed
+weights, `y` shifted by 1e8, exact fits, scales from 1e-6 to 1e6, and
+near-collinear `x`) the winner always equalled the reference's. About 5
+candidates were refitted per search, except with near-collinear `x` (`x`
+keeps 1e-6 of its norm against the intercept), where every side is declined
+and every candidate is fitted exactly, as before Step 2.
+
+**Agreement.** Every existing test passes at unchanged tolerances, and all
+31 oracle trees still match R. Grown under the fast and the reference
+path, every fixture tree has the same nodes, rows, splits and stop reasons,
+and the split-search objectives of the 13 lmtree fixtures agree to 2e-15
+relative at worst (`sim_gaussian_lmtree_zero_weights_deleted`, node 1),
+unrefitted approximations included. No fixture result changed, so there is
+no diverging quantity to record.
+
+Tests (`tests/test_fast_paths.py`): `find_split` with and without the batch
+scorer against `find_split_reference` (same candidates, admissible set,
+winner and split; objectives to 1e-10, plus the `eps sqrt(RSS y'Wy)` term)
+on random data with ties, fractional, integer, zero and heavy-tailed
+weights, a regressor constant on one side, a 0/1 regressor, tiny nodes
+(`minsize` 2), `y + 1e8`, exact fits and near-collinear `x`, with case
+weights on and off; every scored candidate within its error bound; declined
+sides; the minsize boundary with weights of 0.1; a tie between mirrored
+halves going to the first candidate with only a handful of refits;
+`numsplit = "center"` and factors; and every fixture tree and two
+simulated trees against `reference_path()`.
+
+**Profile now** (lm, n = 5000, 0.047 s under cProfile): split search
+0.024 s, of which 0.011 s is the two factor searches (19 candidates, fitted
+one by one) and 0.008 s the batch scorer (half of it the batched
+eigendecompositions); the instability tests 0.021 s; node fits the rest.
 
 ## Reproducing
 

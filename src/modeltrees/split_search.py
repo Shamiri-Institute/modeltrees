@@ -25,6 +25,33 @@ SideFit = Callable[[BoolArray, FloatArray | None], FitResult]
 
 
 @dataclass(frozen=True)
+class SplitObjectives:
+    """Approximate objectives of numeric split candidates, from a model.
+
+    ``left[i] + right[i]`` approximates the summed objective of candidate
+    ``i`` and ``error[i]`` bounds its absolute error. A NaN in any of the
+    three marks a candidate the model cannot score reliably (for example a
+    rank-deficient side); split search fits it exactly.
+    """
+
+    left: FloatArray
+    right: FloatArray
+    error: FloatArray
+
+
+# Scores numeric candidates at once: ``order`` sorts the node's rows by the
+# variable (stable) and candidate i sends the rows order[:cuts[i]] left. None
+# means the model declines and every candidate is fitted.
+BatchObjectives = Callable[[IntArray, IntArray], SplitObjectives | None]
+
+# Candidates refitted exactly after screening: every one that could be within
+# REFIT_MARGIN (relative) of the best given the error bounds, and at least
+# REFIT_MIN of the smallest approximations.
+REFIT_MARGIN = 1e-6
+REFIT_MIN = 5
+
+
+@dataclass(frozen=True)
 class Split:
     """A binary split, as partykit's ``partysplit`` with ``right = TRUE``.
 
@@ -215,6 +242,7 @@ def find_split(
     caseweights: bool = True,
     restart: bool = True,
     numsplit: str = "left",
+    batch: BatchObjectives | None = None,
 ) -> SplitSearch:
     """Search the best binary split, as :func:`find_split_reference`, faster.
 
@@ -223,6 +251,15 @@ def find_split(
     cumulative weights. Candidates within rounding of ``minsize`` are
     rechecked with the reference's masked sums, so the admissible set is
     the reference's.
+
+    With ``batch`` (a model's ``split_objectives``) and ``restart = True``,
+    every admissible candidate is first scored approximately. Candidates
+    that could be the best given the error bounds, within ``REFIT_MARGIN``,
+    and at least the ``REFIT_MIN`` smallest, are refitted with ``fit``, as
+    are candidates the model could not score. The winner is the first
+    minimum of those exact values, which no unrefitted candidate can reach,
+    so the chosen split is the reference's. ``objective`` holds exact values
+    for refitted candidates and the approximations for the others.
     """
     if kind is not VariableKind.NUMERIC:
         return find_split_reference(
@@ -254,13 +291,26 @@ def find_split(
         left = zv <= uz[i]
         return fit(left, start[0]), fit(~left, start[1])
 
-    starts: tuple[FloatArray | None, FloatArray | None] = (None, None)
-    for i in candidates:
-        # restart = FALSE: the previous admissible candidate's coefficients
-        # are the starting values (:417-438).
-        fl, fr = exact(int(i), (None, None) if restart else starts)
-        starts = (fl.coefficients, fr.coefficients)
-        dev[i] = fl.objfun + fr.objfun
+    scores = None
+    if batch is not None and restart and candidates.shape[0] > 0:
+        order = np.argsort(zv, kind="stable")
+        cuts = np.searchsorted(zv[order], uz[candidates], side="right")
+        scores = batch(order, cuts.astype(np.intp))
+    if scores is not None:
+        approx = scores.left + scores.right
+        refit = _refit_set(approx, scores.error)
+        dev[candidates] = approx
+        for i in candidates[refit]:
+            fl, fr = exact(int(i), (None, None))
+            dev[i] = fl.objfun + fr.objfun
+    else:
+        starts: tuple[FloatArray | None, FloatArray | None] = (None, None)
+        for i in candidates:
+            # restart = FALSE: the previous admissible candidate's
+            # coefficients are the starting values (:417-438).
+            fl, fr = exact(int(i), (None, None) if restart else starts)
+            starts = (fl.coefficients, fr.coefficients)
+            dev[i] = fl.objfun + fr.objfun
     if not np.any(np.isfinite(dev)):
         return SplitSearch(variable, kind, minsize, uz, None, None, dev, None, None)
     best = _which_min(dev)
@@ -307,6 +357,21 @@ def _admissible_numeric(
                 or w2n(weights[~left], caseweights) < minsize
             )
     return ok
+
+
+def _refit_set(approx: FloatArray, error: FloatArray) -> BoolArray:
+    """Candidates to fit exactly after screening (see :func:`find_split`)."""
+    scored = np.isfinite(approx) & np.isfinite(error)
+    refit = ~scored
+    if not np.any(scored):
+        return refit
+    a, e = approx[scored], error[scored]
+    best_hi = float(np.min(a + e))
+    close = a - e <= best_hi + REFIT_MARGIN * abs(float(np.min(a)))
+    k = min(REFIT_MIN, a.shape[0])
+    close[np.argpartition(a, k - 1)[:k]] = True
+    refit[np.flatnonzero(scored)[close]] = True
+    return refit
 
 
 def kid_ids(split: Split, z: NDArray[np.generic]) -> NDArray[np.intp]:

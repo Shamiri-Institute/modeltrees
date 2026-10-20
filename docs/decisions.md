@@ -55,6 +55,16 @@ notes/phase1-questions.md. Match R unless a decision says otherwise.
   node's own arrays. The fast and reference paths agree to rounding (about
   1e-15 relative), not bit for bit, because LAPACK and the port round
   differently. docs/performance.md has the details.
+- Batch split objectives (docs/model-interface.md, section 4.1): a model may
+  score all numeric candidates at once with an error bound. Split search
+  refits exactly every candidate that could be the best given the bounds
+  (within a relative margin of 1e-6, and at least 5), and NaN candidates,
+  then takes the first minimum. The winner and its tie rule are the exact
+  search's. The other candidates' objectives in `SplitSearch.objective` are
+  approximations within their error bound. `LmModel` implements it, with
+  rank-deficient or ill-conditioned sides (condition number of the scaled
+  cross-products above 1e8) fitted exactly. Not used with
+  `restart = FALSE` or for factors.
 
 ## Interface
 

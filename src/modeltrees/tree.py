@@ -28,8 +28,10 @@ from modeltrees.instability import (
 from modeltrees.node_model import FitResult, NodeModel
 from modeltrees.pruning import PruneRule, mob_prune_rule
 from modeltrees.split_search import (
+    BatchObjectives,
     SideFit,
     Split,
+    SplitObjectives,
     SplitSearch,
     find_split,
     find_split_reference,
@@ -320,13 +322,14 @@ class _Grower:
             vcov=False,
         )
 
-    def _node_fitter(self, rows: IntArray) -> SideFit:
+    def _node_fitters(self, rows: IntArray) -> tuple[SideFit, BatchObjectives | None]:
         """Side fits on the node's rows, extracted once per node.
 
         Masking the node's contiguous arrays selects the same rows in the
         same order as indexing the full data with ``rows[mask]``, so the
         fits are those of the reference path, without a fancy-indexed copy
-        of the full data per candidate.
+        of the full data per candidate. The batch scorer is the model's
+        ``split_objectives``, if it has one (docs/model-interface.md).
         """
         y = self.y[rows]
         x = None if self.x is None else self.x[rows]
@@ -349,7 +352,25 @@ class _Grower:
                 vcov=False,
             )
 
-        return side_fit
+        scorer = getattr(model, "split_objectives", None)
+        if not callable(scorer):
+            return side_fit, None
+
+        def batch(order: IntArray, cuts: IntArray) -> SplitObjectives | None:
+            assert callable(scorer)
+            result: SplitObjectives | None = scorer(
+                y,
+                x,
+                weights=w,
+                offset=off,
+                cluster=cl,
+                caseweights=caseweights,
+                order=order,
+                cuts=cuts,
+            )
+            return result
+
+        return side_fit, batch
 
     def grow(self, rows: IntArray, node_id: int, depth: int) -> Node:
         control = self.control
@@ -422,7 +443,7 @@ class _Grower:
                 numsplit=control.numsplit,
             )
         else:
-            node_fit = self._node_fitter(rows)
+            node_fit, batch = self._node_fitters(rows)
             search = find_split(
                 best,
                 var.kind,
@@ -434,6 +455,7 @@ class _Grower:
                 caseweights=control.caseweights,
                 restart=control.restart,
                 numsplit=control.numsplit,
+                batch=batch,
             )
         if search.split is None:
             return terminal(
