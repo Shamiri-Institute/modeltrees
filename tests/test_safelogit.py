@@ -28,7 +28,7 @@ from modeltrees.models.glm import GlmModel
 from modeltrees.models.safelogit import SafeLogitModel, classify_separation
 from modeltrees.node_model import FitResult, FitStatus
 from modeltrees.split_search import find_split
-from modeltrees.tree import MobControl, ModelTree, StopReason, mob
+from modeltrees.tree import GrownTree, MobControl, StopReason, mob
 
 RTOL = 1e-8
 ATOL = 1e-10
@@ -204,7 +204,7 @@ def _control(fixture: dict[str, Any]) -> MobControl:
 
 def _grow(
     fixture: dict[str, Any], model: Any, response: str | None = None
-) -> ModelTree:
+) -> GrownTree:
     if response is not None:
         fixture = {**fixture, "response": response}
     y, x, w, off = inputs(fixture)
@@ -220,7 +220,7 @@ def _grow(
 
 
 @cache
-def _grown(name: str) -> ModelTree:
+def _grown(name: str) -> GrownTree:
     fixture = _tree_fixture(name)
     with warnings.catch_warnings():
         warnings.simplefilter("error")  # no warnings, as in R

@@ -25,7 +25,7 @@ means `reference/partykit/R/modelparty.R`.
 | `mob_prune()` (`:625-676`) | `tree._prune`, `tree._renumber` |
 | `mob()` prune rules "aic", "bic" (`:101-119`) | `pruning.mob_prune_rule` |
 | `lmtree()` prune rules (`lmtree.R:12-29`) | `pruning.lm_prune_rule`, `LmModel.prune_rule` |
-| terminal node per row, `fitted_node()` (`mob()`, `:126-131`) | `ModelTree.fitted_node` |
+| terminal node per row, `fitted_node()` (`mob()`, `:126-131`) | `GrownTree.fitted_node` |
 | `mob_control()` (`:726-778`) | `tree.MobControl` |
 
 The entry point is
@@ -41,7 +41,7 @@ its values. It accepts a `Variable`, a dict, or a tuple `(kind, values)` or
 `(kind, values, levels)`. Factors are given either as integer codes with
 `levels`, or as labels, which are mapped through `levels` or else through the
 sorted unique values. There is no formula or dataframe layer. `mob` returns a
-`ModelTree` holding the root `Node`, the nodes in id order, the `minsize`
+`GrownTree` holding the root `Node`, the nodes in id order, the `minsize`
 used, and the terminal node id of every row.
 
 Each `Node` keeps its rows, `nobs`, the `FitResult`, the instability tests,

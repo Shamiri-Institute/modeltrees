@@ -35,7 +35,7 @@ from modeltrees.split_search import (
     find_split,
     find_split_reference,
 )
-from modeltrees.tree import ModelTree, mob
+from modeltrees.tree import GrownTree, mob
 
 QR_RTOL = 1e-10
 
@@ -647,7 +647,7 @@ def test_screening_refits_a_handful_and_keeps_the_first_tie() -> None:
 # 5. Whole trees: fast path against the reference path.
 
 
-def _grow_fixture(name: str) -> ModelTree:
+def _grow_fixture(name: str) -> GrownTree:
     fixture = tree(name)
     y, x, w, off = inputs(fixture)
     with warnings.catch_warnings():
@@ -665,7 +665,7 @@ def _grow_fixture(name: str) -> ModelTree:
         )
 
 
-def _assert_same_tree(fast: ModelTree, ref: ModelTree) -> None:
+def _assert_same_tree(fast: GrownTree, ref: GrownTree) -> None:
     assert len(fast.nodes) == len(ref.nodes)
     np.testing.assert_array_equal(fast.fitted_node, ref.fitted_node)
     for a, b in zip(fast.nodes, ref.nodes, strict=True):

@@ -20,7 +20,7 @@ from modeltrees.models.multinom import MultinomModel
 from modeltrees.models.negbin import NegBinModel
 from modeltrees.models.safelogit import SafeLogitModel
 from modeltrees.node_model import NodeModel
-from modeltrees.tree import MobControl, ModelTree, mob
+from modeltrees.tree import GrownTree, MobControl, mob
 
 TREES = sorted(p.stem for p in (FIXTURES / "trees").glob("*.json"))
 EXTENSION_TREES = sorted(p.stem for p in (FIXTURES / "extension_trees").glob("*.json"))
@@ -85,7 +85,7 @@ def control(f: dict[str, Any]) -> MobControl:
 
 
 @cache
-def grow(directory: str, name: str) -> ModelTree:
+def grow(directory: str, name: str) -> GrownTree:
     f = fixture(directory, name)
     y, x, w, off = tree_inputs(f)
     with warnings.catch_warnings():

@@ -35,7 +35,7 @@ from modeltrees.models.negbin import (
 )
 from modeltrees.node_model import FitResult, FitStatus, extra_df
 from modeltrees.split_search import find_split
-from modeltrees.tree import MobControl, ModelTree, StopReason, mob
+from modeltrees.tree import GrownTree, MobControl, StopReason, mob
 
 RTOL = 1e-8
 ATOL = 1e-10
@@ -192,7 +192,7 @@ def _control(fixture: dict[str, Any]) -> MobControl:
 
 
 @cache
-def _grown(name: str) -> ModelTree:
+def _grown(name: str) -> GrownTree:
     fixture = _tree_fixture(name)
     y, x, w, off = inputs(fixture)
     with warnings.catch_warnings():

@@ -32,7 +32,7 @@ import numpy as np
 from modeltrees.instability import VariableKind
 from modeltrees.models.glm import GlmModel
 from modeltrees.models.lm import LmModel
-from modeltrees.tree import ModelTree, Variable, mob
+from modeltrees.tree import GrownTree, Variable, mob
 
 SEED = 20261101
 ORDERED_LEVELS = tuple(f"o{i}" for i in range(1, 6))
@@ -93,8 +93,8 @@ def write_csv(d: Data, path: str) -> None:
         )
 
 
-def runner(name: str, d: Data) -> Callable[[], ModelTree]:
-    def run() -> ModelTree:
+def runner(name: str, d: Data) -> Callable[[], GrownTree]:
+    def run() -> GrownTree:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             if name == "lm":
@@ -104,7 +104,7 @@ def runner(name: str, d: Data) -> Callable[[], ModelTree]:
     return run
 
 
-def time_runs(run: Callable[[], ModelTree], runs: int) -> tuple[list[float], ModelTree]:
+def time_runs(run: Callable[[], GrownTree], runs: int) -> tuple[list[float], GrownTree]:
     times = []
     tree = run()  # warm-up, not timed
     for _ in range(runs):
@@ -114,7 +114,7 @@ def time_runs(run: Callable[[], ModelTree], runs: int) -> tuple[list[float], Mod
     return times, tree
 
 
-def profile(run: Callable[[], ModelTree], top: int) -> str:
+def profile(run: Callable[[], GrownTree], top: int) -> str:
     prof = cProfile.Profile()
     prof.enable()
     run()

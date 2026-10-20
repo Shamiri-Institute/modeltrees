@@ -37,7 +37,7 @@ from modeltrees.models.lm import LmModel
 from modeltrees.node_model import FitResult
 from modeltrees.pruning import lm_prune_rule, mob_prune_rule
 from modeltrees.split_search import Split, SplitSearch, find_split, getlevels
-from modeltrees.tree import MobControl, ModelTree, Node, StopReason, mob
+from modeltrees.tree import GrownTree, MobControl, Node, StopReason, mob
 
 RTOL = 1e-8
 ATOL = 1e-10
@@ -68,7 +68,7 @@ def _control(fixture: dict[str, Any]) -> MobControl:
     )
 
 
-def _grow(name: str, *, quiet: bool = True) -> ModelTree:
+def _grow(name: str, *, quiet: bool = True) -> GrownTree:
     fixture = tree(name)
     y, x, w, off = inputs(fixture)
     with warnings.catch_warnings():
@@ -88,7 +88,7 @@ def _grow(name: str, *, quiet: bool = True) -> ModelTree:
 
 
 @cache
-def _grown(name: str) -> ModelTree:
+def _grown(name: str) -> GrownTree:
     return _grow(name)
 
 

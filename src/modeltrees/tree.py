@@ -160,7 +160,9 @@ class Node:
 
 
 @dataclass
-class ModelTree:
+class GrownTree:
+    """The tree mob() grows (internal; the public ModelTree will wrap it)."""
+
     root: Node
     variables: tuple[Variable, ...]
     control: MobControl
@@ -228,7 +230,7 @@ def mob(
     offset: ArrayLike | None = None,
     cluster: ArrayLike | None = None,
     control: MobControl | None = None,
-) -> ModelTree:
+) -> GrownTree:
     """Grow (and optionally prune) a model-based tree, as ``partykit::mob``.
 
     ``z`` maps each partitioning variable's name to its kind ("numeric",
@@ -279,7 +281,7 @@ def mob(
     for node in root.walk():
         if node.terminal:
             fitted[node.rows] = node.id
-    return ModelTree(root, variables, control, grower.minsize, fitted)
+    return GrownTree(root, variables, control, grower.minsize, fitted)
 
 
 def _prune_rule(prune: str | PruneRule | None, model: NodeModel) -> PruneRule | None:
