@@ -103,3 +103,27 @@ coefficients) and `linear_predictor(result, x, offset)`. The tree sum is
 6. **`kind="response"` for multinomial** raises `ValueError` naming
    `"prob"` and `"class"` (design section 13, decision 8). Other models
    raise `ValueError` for `"prob"` and `"class"`.
+
+## 4. Formulas
+
+Task 6c, `modeltrees/_formula.py`, `parse_formula(formula) -> ParsedFormula`.
+
+1. **Conflicting intercept tokens.** Section 1.2 says the regressor part
+   has an intercept unless it contains `0`, `-1` or `+ 0`; it does not say
+   what `y ~ 0 + 1 + x | z` means. The parser follows R's `terms()`: the
+   last intercept token wins (`0 + 1 + x` has an intercept, `1 + 0 + x` and
+   `1 - 1` do not), checked with R 4.6.1.
+2. **A leading sign** is accepted in either part (`y ~ -1 + x | z`,
+   `y ~ +x | z`), as R accepts it; the grammar of 1.2 has no leading sign.
+3. **`- 0`** raises, as "`-` of anything but `1`" (R reads it as `+ 1`).
+4. **One part with only intercept tokens** (`y ~ 1`) raises: it has no
+   partitioning variables.
+5. **Positions** are 0-based indices into the formula string, of the
+   offending token (a call's name, a backtick, an operator). Messages
+   repeat the position and the formula.
+6. **`expanded`** is the two-part form for every formula, written with
+   `- 1` for a part without an intercept (`y ~ x - 1 | z`), `1` for an
+   intercept-only part, and backticks around names that are not
+   identifiers.
+7. **Numbers.** A digit sequence other than `0` and `1`, including a name
+   that starts with a digit (`1x`), raises with a hint to use backticks.
