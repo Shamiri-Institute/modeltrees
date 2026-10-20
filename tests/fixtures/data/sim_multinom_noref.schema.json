@@ -1,0 +1,34 @@
+{
+  "dataset": "sim_multinom_noref",
+  "description": "Simulated three-class responses (lo, mid, hi) where the reference class lo never occurs for z1 > 0.7.",
+  "source": "simulated",
+  "seed": 20261034,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 600,
+  "csv": "sim_multinom_noref.csv",
+  "columns": [
+    {
+      "name": "x",
+      "type": "double"
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "z2",
+      "type": "factor",
+      "levels": ["a", "b", "c"]
+    },
+    {
+      "name": "z3",
+      "type": "double"
+    },
+    {
+      "name": "y",
+      "type": "factor",
+      "levels": ["lo", "mid", "hi"]
+    }
+  ],
+  "generator_code": "{\n    n <- 600L\n    d <- data.frame(x = rnorm(n), z1 = runif(n), z2 = factor(sample(c(\"a\", \"b\", \"c\"), n, replace = TRUE)), \n        z3 = rnorm(n))\n    lev <- c(\"lo\", \"mid\", \"hi\")\n    right <- d$z1 > 0.7\n    em <- ifelse(right, 0.4 + 0.6 * d$x, 0.2 + 0.7 * d$x)\n    eh <- ifelse(right, -0.3 - 0.8 * d$x, -0.1 - 0.5 * d$x)\n    p <- cbind(ifelse(right, 0, 1), exp(em), exp(eh))\n    p <- p/rowSums(p)\n    u <- runif(n)\n    d$y <- factor(lev[1L + (u > p[, 1L]) + (u > p[, 1L] + p[, 2L])], levels = lev)\n    d\n}"
+}

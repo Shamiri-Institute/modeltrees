@@ -104,6 +104,30 @@ build_sim_multinom <- function() {
   d
 }
 
+# Three classes lo < mid < hi (lo the reference) where the reference class is
+# absent beyond z1 = 0.7: there only mid and hi occur, with their own
+# coefficients. Below 0.7 all three classes occur. z2 nominal and z3 numeric
+# noise. A split on z1 at or above the last lo observation gives a right
+# child without the reference class.
+build_sim_multinom_noref <- function() {
+  n <- 600L
+  d <- data.frame(
+    x = rnorm(n),
+    z1 = runif(n),
+    z2 = factor(sample(c("a", "b", "c"), n, replace = TRUE)),
+    z3 = rnorm(n)
+  )
+  lev <- c("lo", "mid", "hi")
+  right <- d$z1 > 0.7
+  em <- ifelse(right, 0.4 + 0.6 * d$x, 0.2 + 0.7 * d$x)
+  eh <- ifelse(right, -0.3 - 0.8 * d$x, -0.1 - 0.5 * d$x)
+  p <- cbind(ifelse(right, 0, 1), exp(em), exp(eh))
+  p <- p / rowSums(p)
+  u <- runif(n)
+  d$y <- factor(lev[1L + (u > p[, 1L]) + (u > p[, 1L] + p[, 2L])], levels = lev)
+  d
+}
+
 extension_datasets <- function() {
   list(
     make_dataset("quine",
@@ -117,7 +141,10 @@ extension_datasets <- function() {
       "simulated", 20261032L, build_sim_separation),
     make_dataset("sim_multinom",
       "Simulated three-class responses (lo, mid, hi): no instability, a planted split at z1 = 0.5, and a school-clustered version. Weights w0 in 0 to 3.",
-      "simulated", 20261033L, build_sim_multinom)
+      "simulated", 20261033L, build_sim_multinom),
+    make_dataset("sim_multinom_noref",
+      "Simulated three-class responses (lo, mid, hi) where the reference class lo never occurs for z1 > 0.7.",
+      "simulated", 20261034L, build_sim_multinom_noref)
   )
 }
 
@@ -487,4 +514,81 @@ check_safelogit_matches_glmtree <- function(spec, ds, instrumented) {
     stop(spec$name, ": safelogitfit and glmtree grow different trees")
   }
   invisible(TRUE)
+}
+
+# The multinomial tree with a leaf without the reference class. It is written
+# to tests/fixtures/reference_absent_trees/ in the extension tree format, not
+# to extension_trees/: some Python tests assume no such leaf (see
+# docs/sandwich-fixtures.md, section 3).
+reference_absent_tree_specs <- function() {
+  mn_args <- list(maxit = 1000L, reltol = 1e-16, abstol = 1e-4)
+  zn <- "z1 + z2 + z3"
+  list(
+    tree_spec("sim_multinom_noref_onesplit", "sim_multinom_noref", "mob", paste("y ~ x |", zn),
+      "Multinomial logit where the reference class lo is absent for z1 > 0.7. Split-search candidates at or above the last lo observation have a right child without lo, fitted with mid as reference (objective only, no coefficients or scores). The tree splits there, and that leaf stops with stop_reason no_estfun (model_info status reference_absent). See reference_absent.",
+      "one", fit = "multinomfit", fit_args = mn_args, control = list(minsize = 60L))
+  )
+}
+
+# For sim_multinom_noref_onesplit: every root split-search candidate refitted
+# on its two sides with multinomfit, recording the classes present, which side
+# lacks the reference class and each side's objective. The sum must equal the
+# instrumented split-search objective (partykit fits the subsets the same
+# way); the generator stops otherwise. Also checks that the tree has a leaf
+# without the reference class.
+reference_absent_check <- function(spec, fx, ds) {
+  d <- ds$data
+  root <- fx$nodes[[1L]]
+  ss <- root$split_search
+  z <- d[[ss$variable]][root$rows + 1L]
+  y <- d[[fx$response]][root$rows + 1L]
+  x <- stats::model.matrix(~ x, d[root$rows + 1L, , drop = FALSE])
+  ref <- levels(y)[1L]
+  fit_side <- function(rows) {
+    do.call(multinomfit, c(list(y = y[rows], x = x[rows, , drop = FALSE]), spec$fit_args))
+  }
+  cands <- as.numeric(ss$candidates)
+  obj <- as.numeric(ss$objective)
+  out <- lapply(seq_along(cands), function(i) {
+    left <- z <= cands[i]
+    present <- function(rows) as.character(levels(y)[levels(y) %in% as.character(y[rows])])
+    base <- list(candidate = cands[i], objective = if (is.na(obj[i])) NULL else obj[i],
+      n_left = sum(left), n_right = sum(!left),
+      classes_left = arr(present(left)), classes_right = arr(present(!left)))
+    if (is.na(obj[i])) return(base)
+    fl <- fit_side(left)
+    fr <- fit_side(!left)
+    c(base, list(
+      status_left = fl$status, status_right = fr$status,
+      objective_left = fl$objfun, objective_right = fr$objfun))
+  })
+  adm <- Filter(function(o) !is.null(o$objective), out)
+  diffs <- vapply(adm, function(o) abs(o$objective_left + o$objective_right - o$objective) /
+    max(1, abs(o$objective)), 0)
+  if (max(diffs) > 1e-10) stop(spec$name, ": candidate side objectives do not add up to the split-search objective")
+  noref <- Filter(function(o) identical(o$status_right, "reference_absent") ||
+    identical(o$status_left, "reference_absent"), adm)
+  leaves <- Filter(function(nd) nd$terminal && identical(nd$model_info$status, "reference_absent"), fx$nodes)
+  if (!length(noref) || !length(leaves)) stop(spec$name, ": no reference-absent candidate or leaf")
+  chosen <- root$split$breaks
+  list(
+    description = paste("Root split search on", ss$variable, "refitted side by side with multinomfit.",
+      "candidates lists every candidate in split_search order; admissible ones (objective not null)",
+      "have each side's status and objective, whose sum equals the split-search objective",
+      "(max relative difference in sides_vs_split_search_max_rel). status reference_absent",
+      "means the side has no", ref, "observation: its objective is that of multinom fitted with",
+      "the first present class as reference, and it has no coefficients or scores."),
+    reference_class = ref,
+    variable = ss$variable,
+    n_admissible = length(adm),
+    n_reference_absent_candidates = length(noref),
+    first_reference_absent_candidate = noref[[1L]]$candidate,
+    chosen_break = chosen,
+    chosen_is_reference_absent = any(vapply(noref, function(o) o$candidate == chosen, TRUE)),
+    sides_vs_split_search_max_rel = max(diffs),
+    leaves_without_reference = lapply(leaves, function(nd) list(id = nd$id, n = nd$nobs,
+      classes_present = arr(as.character(nd$model_info$classes_present)),
+      objfun = nd$objfun, stop_reason = nd$stop_reason)),
+    candidates = out
+  )
 }

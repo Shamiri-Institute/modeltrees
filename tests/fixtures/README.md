@@ -60,6 +60,7 @@ Generated with R 4.6.1, partykit 1.3-0, strucchange 1.6-0, sandwich 3.1-3, mlben
 | `data/sim_negbin.csv` | 600 | 20261031 | Simulated overdispersed counts (theta = 2) with an exposure offset: no instability, a planted split at z1 = 0.5, a theta-only change, and a school-clustered version. Integer case weights w. |
 | `data/sim_separation.csv` | 500 | 20261032 | Simulated binary data with a constant-response group (z2 = g4) and a region completely separated by x (z1 > 0.65); y_plain has no separation. |
 | `data/sim_multinom.csv` | 900 | 20261033 | Simulated three-class responses (lo, mid, hi): no instability, a planted split at z1 = 0.5, and a school-clustered version. Weights w0 in 0 to 3. |
+| `data/sim_multinom_noref.csv` | 600 | 20261034 | Simulated three-class responses (lo, mid, hi) where the reference class lo never occurs for z1 > 0.7. |
 | `data/sim_cluster_models.csv` | 830 | 20261041 | Simulated grouped data for the cluster-robust leaf covariances: 36 schools of 8 to 40 pupils with school-level random intercepts, a planted split at z1 = 5, and responses for poisson (y_pois, offset log(exposure)), negative binomial (y_nb), multinomial (y_mn) and safe logit without separation (y_sl). The column school holds the cluster id. |
 
 The glm.fit fixtures each have their own `data/glm_<case>.csv`, listed with
@@ -529,6 +530,27 @@ Data `data/sim_multinom.csv`. 1 inner and 2 terminal nodes.
 
 ```r
 partykit::mob(formula = y_cluster ~ x | z1 + z2 + z3, data = sim_multinom, cluster = school, fit = multinomfit, maxit = 1000L, reltol = 1e-16, abstol = 1e-04, control = partykit::mob_control(alpha = 0.05, bonferroni = TRUE, minsize = 60L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL))
+```
+
+## Reference-absent multinomial tree
+
+Generator: `r/fixtures/extensions.R`. Extension tree format, in its own
+directory `reference_absent_trees/` because some Python tests of
+`extension_trees/` assume every multinomial node has scores (see
+docs/sandwich-fixtures.md, section 3). The extra field `reference_absent`
+has every root split-search candidate refitted side by side (classes
+present, status and objective of each side, which add up to the
+split-search objective) and the leaf without the reference class with its
+objective.
+
+### `reference_absent_trees/sim_multinom_noref_onesplit.json`
+
+Multinomial logit where the reference class lo is absent for z1 > 0.7. Split-search candidates at or above the last lo observation have a right child without lo, fitted with mid as reference (objective only, no coefficients or scores). The tree splits there, and that leaf stops with stop_reason no_estfun (model_info status reference_absent). See reference_absent.
+
+Data `data/sim_multinom_noref.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::mob(formula = y ~ x | z1 + z2 + z3, data = sim_multinom_noref, fit = multinomfit, maxit = 1000L, reltol = 1e-16, abstol = 1e-04, control = partykit::mob_control(alpha = 0.05, bonferroni = TRUE, minsize = 60L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL))
 ```
 
 ## Clustered tree fixtures

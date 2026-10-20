@@ -68,6 +68,15 @@ for (spec in all_extension_tree_specs()) {
     thesis <- thesis_quine_crosscheck(fx)
   }
 }
+# The multinomial tree with a leaf without the reference class.
+noref_tree_index <- list()
+for (spec in reference_absent_tree_specs()) {
+  fx <- tree_fixture(spec, datasets[[spec$dataset]], instrumented)
+  fx$reference_absent <- reference_absent_check(spec, fx, datasets[[spec$dataset]])
+  rel <- file.path("reference_absent_trees", paste0(spec$name, ".json"))
+  emit(fx, rel)
+  noref_tree_index[[length(noref_tree_index) + 1L]] <- list(file = rel, fixture = fx)
+}
 emit(c(list(
   fixture = "thesis_quine_crosscheck",
   description = paste("The thesis' negative binomial quine tree (trusch.md:1356-1368, summaries",
@@ -241,6 +250,27 @@ readme <- c(readme,
   "with `binomial()` on the same data and settings.",
   "")
 for (entry in ext_tree_index) {
+  fx <- entry$fixture
+  readme <- c(readme,
+    sprintf("### `%s`", entry$file), "",
+    fx$description, "",
+    sprintf("Data `%s`. %d inner and %d terminal nodes.", fx$data_csv,
+      fx$summary$n_inner, fx$summary$n_terminal), "",
+    "```r", fx$r_call, "```", "")
+}
+readme <- c(readme,
+  "## Reference-absent multinomial tree",
+  "",
+  "Generator: `r/fixtures/extensions.R`. Extension tree format, in its own",
+  "directory `reference_absent_trees/` because some Python tests of",
+  "`extension_trees/` assume every multinomial node has scores (see",
+  "docs/sandwich-fixtures.md, section 3). The extra field `reference_absent`",
+  "has every root split-search candidate refitted side by side (classes",
+  "present, status and objective of each side, which add up to the",
+  "split-search objective) and the leaf without the reference class with its",
+  "objective.",
+  "")
+for (entry in noref_tree_index) {
   fx <- entry$fixture
   readme <- c(readme,
     sprintf("### `%s`", entry$file), "",

@@ -222,3 +222,60 @@ generator reconstructs it with the unexported `kidids_split`. Newdata must
 have the training factor levels and column classes exactly, or partykit
 goes through `model.frame` with the default `na.action`, which would drop
 rows with missing values and misalign the result; every fixture keeps both.
+
+## 3. A multinomial tree with a reference-absent leaf
+
+`reference_absent_trees/sim_multinom_noref_onesplit.json`, in the
+extension tree format, on the new dataset
+`sim_multinom_noref` (seed 20261034, 600 rows): classes lo < mid < hi with
+lo the reference, and no lo at all for z1 > 0.7 (mid and hi there have
+their own coefficients). Grown by `partykit::mob` with `multinomfit`
+(multinomfit's usual settings, minsize 60) and partitioning variables z1,
+z2 (noise) and z3 (noise).
+
+- **Split search.** Every z1 candidate at or above the last lo observation
+  has a right child without lo. multinomfit fits such a child with the
+  first present class (mid) as reference and returns its objective only
+  (status `reference_absent`, all coefficients NA, no estfun). The
+  candidate stays admissible, as docs/decisions.md says.
+- **The tree.** The root splits on z1 exactly at the last lo observation
+  (0.683...), the first reference-absent candidate. The right leaf (node 3,
+  185 rows, mid and hi only) has no coefficients and no scores, so partykit
+  skips its tests: `stop_reason` `no_estfun`, `model_info.status`
+  `reference_absent`, objective 93.95. The left leaf is not significant.
+- **`reference_absent`**, a field added to this fixture only: the root's
+  split-search candidates (all z1 values; partykit records objectives for
+  the chosen variable only) refitted side by side with multinomfit, with
+  each side's classes, status and objective. The generator stops unless the
+  two sides add up to the instrumented split-search objective to 1e-10
+  relative; they agree exactly, since partykit fits the same subsets. The
+  field also lists the reference-absent leaves with their objective.
+
+**Why not in `extension_trees/`.** With the file there, the port agrees
+with R on everything the suite compares that the fixture can feed: the
+public tree equals the array path, structure and splits, every
+split-search objective (the 126 reference-absent candidates included), the
+instability tests, the fitted nodes, logLik and the leaf coefficient table.
+Five tests fail on assumptions about the fixtures, not on a difference from
+R:
+
+- `tests/test_multinom.py::test_fixture_lists` lists the multinomial
+  trees by name.
+- `tests/test_multinom.py::test_tree_nodes` and
+  `tests/test_api_fixtures.py::test_coef_table_matches_the_fixture` call
+  `_r_offset` with R's `estfun`, which is null for the reference-absent
+  leaf (the first asserts `estfun is not None` for every node).
+- `tests/test_api_fixtures.py::test_predict_equals_hand_computed_leaf_fits`
+  and `tests/test_model_protocols.py::test_predict_matches_the_hand_computed_leaf_fit`
+  compute an all-NaN leaf as if every non-reference class were absent
+  (probability 1 for lo), while the port returns NaN for a fit without the
+  reference class (docs/api-port.md 3.3, item 5).
+
+The task does not allow changing the tests, so the tree is in its own
+directory and the suite stays green. Once those tests skip `estfun` checks
+for `no_estfun` nodes and handle the reference-absent leaf, the file can
+move to `extension_trees/` (one line in r/generate_all.R).
+
+partykit does not expose the per-side objectives of a candidate, only
+their sum (and only through the instrumented copy of `mob_partynode`), so
+the side objectives come from separate fits.
