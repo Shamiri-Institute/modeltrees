@@ -4,6 +4,7 @@ Port of ``glmfit`` from partykit 1.3-0 (reference/partykit/R/glmtree.R:57-133)
 on top of the glm.fit port in :mod:`modeltrees.models.glm_fit`.
 """
 
+import math
 from collections.abc import Sequence
 from typing import Any
 
@@ -14,7 +15,7 @@ from modeltrees._reference import reference_active
 from modeltrees.models._common import check_vcov, numeric_response, regressor_matrix
 from modeltrees.models.families import Family, get_family
 from modeltrees.models.glm_fit import glm_fit, glm_objective
-from modeltrees.node_model import FitResult
+from modeltrees.node_model import FitResult, Report, linear_predictor, rank
 
 FloatArray = NDArray[np.float64]
 
@@ -134,6 +135,32 @@ class GlmModel:
 
     def n_response_columns(self, y: NDArray[np.generic]) -> int:
         return 1 if np.ndim(y) <= 1 else int(np.shape(y)[1])
+
+    def loglik(self, result: FitResult) -> tuple[float, int]:
+        """``logLik.glm``: ``df - aic / 2``, which is minus the objective,
+        with df the rank, plus one for gaussian."""
+        k = len(result.coefficients) if result.failed else rank(result)
+        df = k + (1 if self.family.family in _DISPERSION_IN_DF else 0)
+        if result.failed:
+            return math.nan, df
+        return -result.objfun, df
+
+    def report(self, result: FitResult) -> Report:
+        return {"converged": result.converged}
+
+    def predict(
+        self,
+        result: FitResult,
+        x: FloatArray | None,
+        offset: FloatArray | None,
+        kind: str,
+    ) -> FloatArray:
+        """``predict.glm``: the linear predictor for "link", the family's
+        inverse link of it (with R's bounds) for "response"."""
+        if kind not in ("link", "response"):
+            raise ValueError(f"glmtree predicts 'link' or 'response', not {kind!r}")
+        eta = linear_predictor(result, x, offset)
+        return eta if kind == "link" else self.family.linkinv(eta)
 
 
 def binomial_response(
