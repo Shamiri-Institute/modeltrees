@@ -10,9 +10,10 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from modeltrees._reference import reference_active
 from modeltrees.models._common import check_vcov, numeric_response, regressor_matrix
 from modeltrees.models.families import Family, get_family
-from modeltrees.models.glm_fit import glm_fit
+from modeltrees.models.glm_fit import glm_fit, glm_objective
 from modeltrees.node_model import FitResult
 
 FloatArray = NDArray[np.float64]
@@ -78,6 +79,27 @@ class GlmModel:
             off_fit = None if off is None else off[keep]
         else:
             xm_fit, y_fit, w_fit, off_fit = xm, yv, w, off
+        if not estfun and not reference_active():
+            # Split search needs only the objective (and the coefficients for
+            # restart = FALSE): no warnings, null deviance or residuals.
+            o = glm_objective(
+                xm_fit,
+                y_fit,
+                self.family,
+                weights=w_fit,
+                start=start,
+                offset=off_fit,
+                epsilon=self.epsilon,
+                maxit=self.maxit,
+            )
+            df = o.rank + (1 if self.family.family in _DISPERSION_IN_DF else 0)
+            return FitResult(
+                coefficients=o.coefficients,
+                coef_names=names,
+                objfun=float(o.aic / 2 - df),
+                estfun=None,
+                converged=o.converged,
+            )
         z = glm_fit(
             xm_fit,
             y_fit,

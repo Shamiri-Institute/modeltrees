@@ -1,8 +1,12 @@
 # Performance of `mob()`
 
-Baseline timings and profiles of the tree-growing loop as it is. Nothing was
-optimized or tuned for this document. Script: `scripts/bench_tree.py`
-(`uv run python scripts/bench_tree.py`).
+Timings and profiles of the tree-growing loop: first the baseline, measured
+before any optimization, then the speedups (Step 1, per-fit overhead; Step 2,
+batch split objectives; Step 3, results and options for glm). Script:
+`scripts/bench_tree.py` (`uv run python scripts/bench_tree.py`). The rule
+for every speedup is that results do not change: the code it replaces stays
+as the reference path (`modeltrees.reference_path()`, docs/decisions.md) and
+the tests compare both paths with each other and with the R fixtures.
 
 ## Setup
 
@@ -21,7 +25,7 @@ optimized or tuned for this document. Script: `scripts/bench_tree.py`
   run for n = 20000 (the glm run takes 9 minutes). Profiles are from one extra
   run under `cProfile`, which adds 15 to 30 % overhead.
 
-## Wall time
+## Baseline wall time
 
 | model | n | nodes | leaves | depth | min s | median s | max s |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -60,7 +64,7 @@ Scaling: lm grows 7.5x from n = 1000 to 5000 and 22x from 5000 to 20000 (n
 grows 5x and 4x). glm grows 8.9x and 24x. That is roughly quadratic in n. The
 glm tree costs about 8 to 11 times the lm tree at every size.
 
-## Where the time goes
+## Baseline profile
 
 All of it is in the split search. At every size `find_split` accounts for 99.9
 % of `mob()`'s time; the instability tests, routing and pruning are below the
@@ -127,7 +131,7 @@ cumulative over 9967 fits, `dqrls` 6.0 s, `dev_resids` 5.4 s own,
 profiles are in the script's output and look the same, with proportionally
 less time.
 
-## Observations (not acted on)
+## Baseline observations
 
 - The split search refits from scratch for every candidate on the full node
   data, so the cost is quadratic in the node size. The Python overhead per fit
@@ -141,8 +145,125 @@ less time.
   attempt showed about 1000 % CPU); the timings above are with the default
   thread settings, not pinned.
 
-These are measurements, not changes: no code in `src/` was touched for this
-document.
+These were measurements only; Steps 1 and 2 below act on them.
+
+## Step 1: per-fit overhead
+
+Measured after each change with `bench_tree.py`'s data and settings, at the
+default sizes (n = 1000 and 5000), one warm-up and 3 timed runs per cell,
+each configuration in a fresh process. The changes are cumulative in the
+order a to d. Run-to-run noise between processes is about 5 to 10 %, so
+differences below that are not effects.
+
+### a. BLAS threads
+
+The unchanged code (the reference path) with the thread variables set
+before numpy is imported. Median seconds:
+
+| setting | lm 1000 | lm 5000 | glm 1000 | glm 5000 |
+| --- | --- | --- | --- | --- |
+| default (12 threads) | 0.367 | 2.43 | 2.19 | 19.96 |
+| `OMP_NUM_THREADS=1` | 0.324 | 2.62 | 2.20 | 19.34 |
+| `OPENBLAS_NUM_THREADS=1` | 0.375 | 2.38 | 2.34 | 20.61 |
+| both 1 | 0.340 | 2.70 | 2.52 | 22.29 |
+| `OPENBLAS_NUM_THREADS=4` | 0.350 | 2.66 | 2.53 | 23.10 |
+
+No setting is faster beyond the noise. The matrices in a node fit are n by
+2, so OpenBLAS runs its products on one thread anyway, and process CPU use
+stays near 100 to 120 % with the default (the 1000 % seen in the baseline
+was at n = 20000). Decision: no change and no recommendation to pin threads.
+Setting `OPENBLAS_NUM_THREADS=1` is harmless if mob runs inside a
+multiprocess job.
+
+### b to d. Changes and their effect
+
+Median seconds, cumulative (`base` is the reference path):
+
+| config | lm 1000 | lm 5000 | glm 1000 | glm 5000 |
+| --- | --- | --- | --- | --- |
+| base | 0.310 | 2.77 | 2.52 | 22.73 |
+| + b, objective-only glm fits | 0.317 | 2.89 | 2.58 | 23.10 |
+| + c, node-local data, vectorised admissibility | 0.300 | 3.05 | 2.63 | 22.60 |
+| + d, LAPACK least squares | 0.257 | 2.29 | 2.16 | 21.24 |
+
+Every configuration grows the same tree (same splits and breaks).
+
+**b. Objective-only fits.** `GlmModel.fit` with `estfun=False` (split
+search) calls `glm_objective`, which runs the same IRLS code as `glm_fit`
+(`models/glm_fit.py`, `_irls`) in quiet mode: no warnings, no null deviance,
+no working residuals or weights. The AIC is computed exactly as before,
+since the objective is `aic / 2 - df`. Coefficient names stay, because
+`FitResult` carries them and they cost a tuple. `LmModel` already skipped
+the scores and has nothing else to skip. Tests check that the objective-only
+fit equals the full fit bit for bit. The IRLS core also skips the copies
+`x[good]` and friends when every row is good, which leaves every value
+unchanged. Effect: none measurable. The skipped work (one deviance
+evaluation and a few vector operations per fit, against about 4 IRLS
+iterations of 6 to 8 vector operations and a solve each) is a few percent,
+inside the noise.
+
+**c. Node-local data and vectorised admissibility.** Split search now
+extracts the node's `y`, `x`, weights, offset and clusters once per node
+(`tree._Grower._node_fitter`) and masks those contiguous arrays per
+candidate, instead of indexing the full data with `rows[mask]`. Admissibility
+of all numeric candidates comes from one cumulative weight sum; candidates
+within 1e-8 of `minsize` (relative to the total weight) are rechecked with
+the reference's masked sums, so fractional weights cannot flip a candidate.
+Effect: none measurable at these sizes; the fancy indexing and per-candidate
+`w2n` were 15 to 25 % of the lm profile only at n = 20000.
+
+*Ambiguity, decided: masks, not sorted views.* The task suggested sorting
+once per variable and fitting on prefix and suffix slices (views). The data
+is sorted once per variable (for Step 2), but the side fits still use masks
+in the original row order. Measured on the root node at n = 5000 (4961
+candidates, per-candidate fits): lm 2.28 s with masks, 1.30 s with views;
+glm 23.0 to 26.6 s with masks, 23.9 to 25.9 s with views (no difference).
+Views change the row order inside each fit, and with it the rounding: 27 %
+of the candidate objectives differ in the last bits (up to 4e-16 relative)
+from the reference. The lm gain disappears in Step 2, which replaces the
+per-candidate lm fits, and glm does not gain, so the bit-identical masks
+were kept.
+
+**d. LAPACK least squares.** `_qr.dqrls` first tries `dgeqrf`, `dormqr`
+and `dtrtrs` through `scipy.linalg.lapack` (`dqrls_lapack`) and keeps the
+result only if every column keeps at least 1e-4 of its norm after the
+earlier columns are projected out (`|R[j, j]| >= 1e-4 ||x_j||`, or 1000
+times `tol` if that is larger). That ratio is exactly the quantity dqrdc2
+compares with `tol` (1e-7 in `lm.fit`, 1e-11 in `glm.fit`), so the fast
+path is taken only where dqrdc2 would certainly keep full rank and the
+column order. Without pivoting dqrdc2 is Householder QR with LAPACK's sign
+convention, so both compute the same factorisation, the residuals are formed
+the same way (`Q (0, Q'y[p:])`), and they differ only in rounding. Anything
+doubtful (rank deficiency, near-collinearity, a zero column, `n <= p`) goes
+to the port. Per solve the fast path is 3 to 8 times faster (80 to 210 us
+for the port at n = 40 to 10000, 10 to 73 us for LAPACK). Effect on the
+trees: 15 to 20 % for lm and 7 to 15 % for glm.
+
+Tests (`tests/test_fast_paths.py`): the fast path equals the port to 1e-10
+(coefficients relative, residuals and effects relative to `||y||`) on random
+data with scaled columns, weighted data (`sqrt(w)` scaling), tied values,
+a duplicated column, collinear and near-collinear columns (offsets 0, 1e-9,
+1e-6 decline the fast path, 1e-2 takes it), a column keeping 1e-5 of its
+norm (dqrdc2 keeps it, the fast path declines and the port decides),
+degenerate shapes, and `reference_path()` turning it off. The observed
+agreement is about 1e-16 relative for coefficients.
+
+### Profile after Step 1, glm, n = 5000 (25.4 s under cProfile)
+
+| function | calls | own s | cumulative s |
+| --- | --- | --- | --- |
+| `glm_fit._irls` | 9967 | 3.4 | 21.7 |
+| `families.dev_resids` | 49847 | 5.3 | 5.5 |
+| `_qr.dqrls` (LAPACK path) | 39873 | 0.4 | 4.8 |
+| `families.linkinv` | 49840 | 2.0 | 2.2 |
+| `families.mu_eta` | 39880 | 1.4 | 1.6 |
+| `families._log_dbinom` (AIC) | 9967 | 1.4 | 1.4 |
+| `tree.side_fit` (masking) | 9960 | 1.0 | 25.4 |
+
+The time is now the IRLS arithmetic itself: element-wise vector work on
+each side's rows (deviance residuals 21 %, link functions 15 %, the IRLS
+body 13 %) and the solve (19 %). Per-fit overhead outside the model is
+about 4 %.
 
 ## Reproducing
 

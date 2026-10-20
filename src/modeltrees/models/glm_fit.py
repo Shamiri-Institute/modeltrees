@@ -63,28 +63,38 @@ def _warn(messages: list[str], message: str) -> None:
     warnings.warn(message, GlmFitWarning, stacklevel=3)
 
 
-def glm_fit(
+@dataclass
+class _Irls:
+    """The state glm.fit has after its IRLS loop and final checks."""
+
+    coef: FloatArray
+    fit: QRLeastSquares | None
+    eta: FloatArray
+    mu: FloatArray
+    dev: float
+    w: FloatArray
+    good: NDArray[np.bool_]
+    residuals: FloatArray | None  # None when skipped (objective only)
+    conv: bool
+    boundary: bool
+    iteration: int
+    y: FloatArray
+    n_trials: FloatArray
+
+
+def _prepare(
     x: ArrayLike,
     y: ArrayLike,
-    family: Family,
-    *,
-    weights: ArrayLike | None = None,
-    start: ArrayLike | None = None,
-    offset: ArrayLike | None = None,
-    epsilon: float = 1e-8,
-    maxit: int = 25,
-    intercept: bool = True,
-) -> GlmFit:
-    """Fit a GLM by IRLS exactly as ``glm.fit`` does."""
+    weights: ArrayLike | None,
+    offset: ArrayLike | None,
+) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
     xm = np.asarray(x, dtype=np.float64)
     if xm.ndim == 1:
         xm = xm[:, None]
     yv = np.asarray(y, dtype=np.float64).reshape(-1)
     nobs = yv.shape[0]
-    nvars = xm.shape[1]
     if xm.shape[0] != nobs:
         raise ValueError(f"x has {xm.shape[0]} rows but y has {nobs} values")
-    empty = nvars == 0
     prior = (
         np.ones(nobs)
         if weights is None
@@ -93,14 +103,44 @@ def glm_fit(
     off = np.zeros(nobs) if offset is None else np.asarray(offset, dtype=np.float64)
     if prior.shape != (nobs,) or off.shape != (nobs,):
         raise ValueError("weights and offset need one value per observation")
-    messages: list[str] = []
+    return xm, yv, prior, off
 
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always", GlmFitWarning)
-        init = family.initialize(yv, prior)
-    for w_ in caught:
-        _warn(messages, str(w_.message))
+
+def _irls(
+    xm: FloatArray,
+    yv: FloatArray,
+    family: Family,
+    prior: FloatArray,
+    start: ArrayLike | None,
+    off: FloatArray,
+    epsilon: float,
+    maxit: int,
+    messages: list[str] | None,
+) -> _Irls:
+    """glm.fit up to its final warnings. ``messages = None`` is quiet mode:
+    no warnings and no working residuals, with the same arithmetic otherwise.
+    """
+    quiet = messages is None
+    nobs = yv.shape[0]
+    nvars = xm.shape[1]
+    empty = nvars == 0
+
+    if quiet:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", GlmFitWarning)
+            init = family.initialize(yv, prior)
+    else:
+        assert messages is not None
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", GlmFitWarning)
+            init = family.initialize(yv, prior)
+        for w_ in caught:
+            _warn(messages, str(w_.message))
     yv, n_trials, mustart = init.y, init.n, init.mustart
+
+    def warn(message: str) -> None:
+        if messages is not None:
+            _warn(messages, message)
 
     linkinv, mu_eta, variance = family.linkinv, family.mu_eta, family.variance
 
@@ -111,6 +151,7 @@ def glm_fit(
     w = np.zeros(0)
     fit: QRLeastSquares | None = None
     coef: FloatArray | None = None
+    residuals: FloatArray | None = None
     if empty:
         eta = np.zeros(nobs) + off
         if not family.valideta(eta):
@@ -147,27 +188,37 @@ def glm_fit(
         boundary = conv = False
         tol = min(1e-7, epsilon / 1000)
         iteration = 0
+        positive = prior > 0
+        all_positive = bool(np.all(positive))
         for iteration in range(1, maxit + 1):
-            good = prior > 0
-            varmu = variance(mu)[good]
+            good = positive
+            var_all = variance(mu)
+            varmu = var_all if all_positive else var_all[good]
             if np.any(np.isnan(varmu)):
                 raise GlmFitError("NAs in V(mu)")
             if np.any(varmu == 0):
                 raise GlmFitError("0s in V(mu)")
             mu_eta_val = mu_eta(eta)
-            if np.any(np.isnan(mu_eta_val[good])):
+            if np.any(np.isnan(mu_eta_val if all_positive else mu_eta_val[good])):
                 raise GlmFitError("NAs in d(mu)/d(eta)")
-            good = (prior > 0) & (mu_eta_val != 0)
+            good = positive & (mu_eta_val != 0)
             if not np.any(good):
                 conv = False
-                _warn(messages, f"no observations informative at iteration {iteration}")
+                warn(f"no observations informative at iteration {iteration}")
                 break
-            z = (eta - off)[good] + (yv - mu)[good] / mu_eta_val[good]
-            w = np.sqrt((prior[good] * mu_eta_val[good] ** 2) / variance(mu)[good])
-            fit = dqrls(xm[good] * w[:, None], z * w, tol)
+            # Indexing with an all-true mask copies without changing a value,
+            # so it is skipped when every row is good.
+            if bool(np.all(good)):
+                z = (eta - off) + (yv - mu) / mu_eta_val
+                w = np.sqrt((prior * mu_eta_val**2) / var_all)
+                fit = dqrls(xm * w[:, None], z * w, tol)
+            else:
+                z = (eta - off)[good] + (yv - mu)[good] / mu_eta_val[good]
+                w = np.sqrt((prior[good] * mu_eta_val[good] ** 2) / var_all[good])
+                fit = dqrls(xm[good] * w[:, None], z * w, tol)
             if not np.all(np.isfinite(fit.coefficients)):
                 conv = False
-                _warn(messages, f"non-finite coefficients at iteration {iteration}")
+                warn(f"non-finite coefficients at iteration {iteration}")
                 break
             if nobs < fit.rank:
                 raise GlmFitError(
@@ -187,7 +238,7 @@ def glm_fit(
                         "no valid set of coefficients has been found: please "
                         "supply starting values"
                     )
-                _warn(messages, "step size truncated due to divergence")
+                warn("step size truncated due to divergence")
                 ii = 1
                 while not np.isfinite(dev):
                     if ii > maxit:
@@ -204,7 +255,7 @@ def glm_fit(
                         "no valid set of coefficients has been found: please "
                         "supply starting values"
                     )
-                _warn(messages, "step size truncated: out of bounds")
+                warn("step size truncated: out of bounds")
                 ii = 1
                 while not (family.valideta(eta) and family.validmu(mu)):
                     if ii > maxit:
@@ -224,24 +275,66 @@ def glm_fit(
         if coef is None or fit is None:
             # R fails here with "object 'coef' not found".
             raise GlmFitError("no coefficients: the first iteration failed")
-        if not conv:
-            _warn(messages, "glm.fit: algorithm did not converge")
-        if boundary:
-            _warn(messages, "glm.fit: algorithm stopped at boundary value")
-        eps = 10 * DBL_EPSILON
-        if family.family == "binomial" and (np.any(mu > 1 - eps) or np.any(mu < eps)):
-            _warn(messages, "glm.fit: fitted probabilities numerically 0 or 1 occurred")
-        if family.family == "poisson" and np.any(mu < eps):
-            _warn(messages, "glm.fit: fitted rates numerically 0 occurred")
+        if not quiet:
+            if not conv:
+                warn("glm.fit: algorithm did not converge")
+            if boundary:
+                warn("glm.fit: algorithm stopped at boundary value")
+            eps = 10 * DBL_EPSILON
+            if family.family == "binomial" and (
+                np.any(mu > 1 - eps) or np.any(mu < eps)
+            ):
+                warn("glm.fit: fitted probabilities numerically 0 or 1 occurred")
+            if family.family == "poisson" and np.any(mu < eps):
+                warn("glm.fit: fitted rates numerically 0 occurred")
         coef = coef.copy()
         if fit.rank < nvars:
             coef[fit.pivot[fit.rank :]] = np.nan
-        residuals = (yv - mu) / mu_eta(eta)
+        if not quiet:
+            residuals = (yv - mu) / mu_eta(eta)
 
     if coef is None:
         raise GlmFitError("no coefficients")  # unreachable; narrows the type
+    return _Irls(
+        coef,
+        fit,
+        eta,
+        mu,
+        dev,
+        w,
+        good,
+        residuals,
+        conv,
+        boundary,
+        iteration,
+        yv,
+        n_trials,
+    )
+
+
+def glm_fit(
+    x: ArrayLike,
+    y: ArrayLike,
+    family: Family,
+    *,
+    weights: ArrayLike | None = None,
+    start: ArrayLike | None = None,
+    offset: ArrayLike | None = None,
+    epsilon: float = 1e-8,
+    maxit: int = 25,
+    intercept: bool = True,
+) -> GlmFit:
+    """Fit a GLM by IRLS exactly as ``glm.fit`` does."""
+    xm, yv, prior, off = _prepare(x, y, weights, offset)
+    nobs = yv.shape[0]
+    nvars = xm.shape[1]
+    messages: list[str] = []
+    r = _irls(xm, yv, family, prior, start, off, epsilon, maxit, messages)
+    yv, mu, fit = r.y, r.mu, r.fit
+    assert r.residuals is not None
+    linkinv = family.linkinv
     wt = np.zeros(nobs)
-    wt[good] = w**2
+    wt[r.good] = r.w**2
     if intercept:
         wtdmu: float | FloatArray = float(np.sum(prior * yv) / np.sum(prior))
     else:
@@ -251,27 +344,62 @@ def glm_fit(
     )
     n_ok = nobs - int(np.sum(prior == 0))
     nulldf = n_ok - int(intercept)
-    rank = 0 if empty or fit is None else fit.rank
+    rank = 0 if nvars == 0 or fit is None else fit.rank
     resdf = n_ok - rank
-    aic_model = family.aic(yv, n_trials, mu, prior, dev) + 2 * rank
+    aic_model = family.aic(yv, r.n_trials, mu, prior, r.dev) + 2 * rank
     return GlmFit(
-        coefficients=coef,
-        residuals=residuals,
+        coefficients=r.coef,
+        residuals=r.residuals,
         fitted_values=mu,
-        linear_predictors=eta,
-        deviance=float(dev),
+        linear_predictors=r.eta,
+        deviance=float(r.dev),
         aic=float(aic_model),
         null_deviance=nulldev,
-        iter=iteration,
+        iter=r.iteration,
         weights=wt,
         prior_weights=prior,
         df_residual=resdf,
         df_null=nulldf,
         y=yv,
-        converged=conv,
-        boundary=boundary,
+        converged=r.conv,
+        boundary=r.boundary,
         rank=rank,
         pivot=np.arange(nvars, dtype=np.intp) if fit is None else fit.pivot,
         family=family,
         warnings=tuple(messages),
     )
+
+
+@dataclass(frozen=True)
+class GlmObjective:
+    """What split search needs from glm.fit: the fit's AIC and rank."""
+
+    coefficients: FloatArray  # NaN for aliased columns
+    aic: float
+    rank: int
+    converged: bool
+
+
+def glm_objective(
+    x: ArrayLike,
+    y: ArrayLike,
+    family: Family,
+    *,
+    weights: ArrayLike | None = None,
+    start: ArrayLike | None = None,
+    offset: ArrayLike | None = None,
+    epsilon: float = 1e-8,
+    maxit: int = 25,
+) -> GlmObjective:
+    """``glm_fit`` without warnings, null deviance, residuals and weights.
+
+    The coefficients, AIC and rank are computed by the same arithmetic as in
+    :func:`glm_fit`, so they are identical to its result. R's errors still
+    raise :class:`GlmFitError`.
+    """
+    xm, yv, prior, off = _prepare(x, y, weights, offset)
+    nvars = xm.shape[1]
+    r = _irls(xm, yv, family, prior, start, off, epsilon, maxit, None)
+    rank = 0 if nvars == 0 or r.fit is None else r.fit.rank
+    aic_model = family.aic(r.y, r.n_trials, r.mu, prior, r.dev) + 2 * rank
+    return GlmObjective(r.coef, float(aic_model), rank, r.conv)

@@ -18,7 +18,7 @@ means `reference/partykit/R/modelparty.R`.
 | stopping rules: `minsize`, `maxdepth` (`:536-547`) | same |
 | `try(mob_grow_fluctests(...))` and failure handling (`:550`, `:569-573`) | `instability.fluctuation_tests`, `InstabilityTestError` caught |
 | Bonferroni/Sidak adjustment, `alpha` decision, `p.value` (`:552-561`) | `pvalues.adjust_pvalues`, `tree._Grower.grow` |
-| `mob_grow_findsplit()` (`:384-511`) | `split_search.find_split` |
+| `mob_grow_findsplit()` (`:384-511`) | `split_search.find_split_reference`, and `find_split`, the faster equivalent used by `mob()` (docs/performance.md) |
 | `mob_grow_getlevels()` (`:701-723`) | `split_search.getlevels` |
 | `kidids_split()` (`split.R:132-160`) | `split_search.kid_ids`, `tree._route` |
 | preorder node ids (`:600-615`) | `tree._Grower.grow` |

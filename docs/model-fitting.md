@@ -46,7 +46,11 @@ R sources are R 4.6.1 (`src/library/stats/R/glm.R`, `lm.R`, `family.R`,
    `binomial()$initialize` becomes a `GlmFitWarning` with R's message, also
    kept in `GlmFit.warnings` in R's order. The fixture warning lists match
    exactly. R's `stop()` raises `GlmFitError` (a `ValueError`), and family
-   input checks raise `ValueError`.
+   input checks raise `ValueError`. The fits in split search are quiet: `GlmModel.fit` with
+   `estfun=False` uses `glm_objective`, the same IRLS without warnings, null
+   deviance or residuals (docs/performance.md, Step 1b), so a candidate whose
+   fit does not converge no longer warns. Node fits still warn. Under
+   `modeltrees.reference_path()` split search uses `glm_fit` as before.
 5. **Not ported.** `etastart`, `mustart`, `trace`, `singular.ok = FALSE`,
    two-column binomial responses and non-canonical links. `intercept` is
    kept, defaulting to `TRUE` as in `glmfit`, which never sets it.

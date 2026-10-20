@@ -18,6 +18,7 @@ from modeltrees.node_model import FitResult
 
 FloatArray = NDArray[np.float64]
 BoolArray = NDArray[np.bool_]
+IntArray = NDArray[np.intp]
 
 # Fits the model on the node rows selected by the mask, from the given start.
 SideFit = Callable[[BoolArray, FloatArray | None], FitResult]
@@ -89,7 +90,7 @@ def _effective_minsize(minsize: float, nobs: float) -> float:
     return minsize
 
 
-def find_split(
+def find_split_reference(
     variable: int,
     kind: VariableKind,
     z: NDArray[np.generic],
@@ -103,6 +104,11 @@ def find_split(
     numsplit: str = "left",
 ) -> SplitSearch:
     """Search the best binary split of the node in one variable.
+
+    This is the exact reference implementation: every admissible candidate
+    is fitted on both sides, with ``w2n`` summed over each side's mask.
+    :func:`find_split` gives the same result faster and is compared with
+    this function in the tests (docs/decisions.md).
 
     ``z`` holds the node's values of the variable: floats for numeric
     variables, 0-based level codes for factors. ``level_names`` are the
@@ -195,6 +201,112 @@ def find_split(
     return SplitSearch(
         variable, kind, minsize, None, left_levels, labels, dev, best, split
     )
+
+
+def find_split(
+    variable: int,
+    kind: VariableKind,
+    z: NDArray[np.generic],
+    level_names: Sequence[str] | None,
+    weights: FloatArray,
+    fit: SideFit,
+    *,
+    minsize: float,
+    caseweights: bool = True,
+    restart: bool = True,
+    numsplit: str = "left",
+) -> SplitSearch:
+    """Search the best binary split, as :func:`find_split_reference`, faster.
+
+    Factors have few candidates and use the reference code. For a numeric
+    variable, admissibility is computed for all candidates at once from
+    cumulative weights. Candidates within rounding of ``minsize`` are
+    rechecked with the reference's masked sums, so the admissible set is
+    the reference's.
+    """
+    if kind is not VariableKind.NUMERIC:
+        return find_split_reference(
+            variable,
+            kind,
+            z,
+            level_names,
+            weights,
+            fit,
+            minsize=minsize,
+            caseweights=caseweights,
+            restart=restart,
+            numsplit=numsplit,
+        )
+    minsize = _effective_minsize(minsize, w2n(weights, caseweights))
+    zv = np.asarray(z, dtype=np.float64)
+    positive = weights > 0
+    uz, inv = np.unique(zv[positive], return_inverse=True)
+    if uz.shape[0] == 0:
+        raise ValueError("Cannot find admissible split point in partitioning variable")
+    candidates = np.flatnonzero(
+        _admissible_numeric(zv, uz, inv, weights, minsize, caseweights)
+    )
+    dev = np.full(uz.shape[0], np.inf)
+
+    def exact(
+        i: int, start: tuple[FloatArray | None, FloatArray | None]
+    ) -> tuple[FitResult, FitResult]:
+        left = zv <= uz[i]
+        return fit(left, start[0]), fit(~left, start[1])
+
+    starts: tuple[FloatArray | None, FloatArray | None] = (None, None)
+    for i in candidates:
+        # restart = FALSE: the previous admissible candidate's coefficients
+        # are the starting values (:417-438).
+        fl, fr = exact(int(i), (None, None) if restart else starts)
+        starts = (fl.coefficients, fr.coefficients)
+        dev[i] = fl.objfun + fr.objfun
+    if not np.any(np.isfinite(dev)):
+        return SplitSearch(variable, kind, minsize, uz, None, None, dev, None, None)
+    best = _which_min(dev)
+    if numsplit == "center":
+        # mean(uz[best + 0:1]); NaN past the last value, as R's NA.
+        upper = uz[best + 1] if best + 1 < uz.shape[0] else np.nan
+        breaks = float((uz[best] + upper) / 2)
+    else:
+        breaks = float(uz[best])
+    split = Split(variable, kind, breaks, None)
+    return SplitSearch(variable, kind, minsize, uz, None, None, dev, best, split)
+
+
+def _admissible_numeric(
+    zv: FloatArray,
+    uz: FloatArray,
+    inv: IntArray,
+    weights: FloatArray,
+    minsize: float,
+    caseweights: bool,
+) -> BoolArray:
+    """Both sides have ``w2n >= minsize``, for every candidate ``z <= uz[i]``.
+
+    Without case weights the counts are exact. With them, the cumulative
+    sums can differ from the reference's masked sums in the last bits, so
+    candidates within 1e-8 of the total of ``minsize`` are rechecked with
+    the reference's sums.
+    """
+    positive = weights > 0
+    per = np.bincount(
+        inv, weights=weights[positive] if caseweights else None, minlength=uz.shape[0]
+    )
+    total = w2n(weights, caseweights)
+    n_left = np.cumsum(per)
+    n_right = total - n_left
+    ok = (n_left >= minsize) & (n_right >= minsize)
+    if caseweights:
+        tol = 1e-8 * abs(total)
+        near = (np.abs(n_left - minsize) <= tol) | (np.abs(n_right - minsize) <= tol)
+        for i in np.flatnonzero(near):
+            left = zv <= uz[i]
+            ok[i] = not (
+                w2n(weights[left], caseweights) < minsize
+                or w2n(weights[~left], caseweights) < minsize
+            )
+    return ok
 
 
 def kid_ids(split: Split, z: NDArray[np.generic]) -> NDArray[np.intp]:

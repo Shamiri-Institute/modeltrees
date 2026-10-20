@@ -12,12 +12,26 @@ scipy's QR use different pivoting, which is why this is ported.
 Column operations are vectorised over the remaining columns; the result is
 the same factorisation, with rounding that can differ from the Fortran
 loops in the last bits.
+
+``dqrls`` first tries a LAPACK fast path (``dgeqrf``, ``dormqr``,
+``dtrtrs``) and keeps it only when dqrdc2 would certainly not pivot: every
+column must keep at least ``FAST_PATH_RATIO`` (or 1000 times ``tol``, if
+larger) of its norm after the earlier columns are projected out, which is
+1000 times stricter than R's ``1e-7``.
+Without pivoting dqrdc2 is plain Householder QR with LAPACK's sign
+convention, so both paths compute the same factorisation and differ only in
+rounding. Anything doubtful (rank deficiency, near-collinearity, zero
+columns, ``n <= p``) goes to the port. ``reference_path()`` turns the fast
+path off. docs/performance.md, Step 1d, has the measurements.
 """
 
 from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.linalg import lapack
+
+from modeltrees._reference import reference_active
 
 FloatArray = NDArray[np.float64]
 IntArray = NDArray[np.intp]
@@ -32,8 +46,8 @@ class QRLeastSquares:
     effects: FloatArray  # Q'y
     rank: int
     pivot: IntArray  # 0-based; R's pivot minus 1
-    qr: FloatArray
-    qraux: FloatArray
+    qr: FloatArray | None  # None from the LAPACK fast path
+    qraux: FloatArray | None
 
     @property
     def pivoted(self) -> bool:
@@ -101,10 +115,19 @@ def _apply_householder(
     v[j:] += t * h
 
 
+# A column must keep this share of its norm after projecting out the earlier
+# columns for the fast path. dqrdc2 pivots below tol <= 1e-7 (lm.fit) or
+# 1e-11 (glm.fit), so a ratio of 1e-4 leaves a margin of 1000 or more, far
+# beyond the rounding in dqrdc2's downdated column norms.
+FAST_PATH_RATIO = 1e-4
+
+
 def dqrls(x: FloatArray, y: FloatArray, tol: float) -> QRLeastSquares:
     """Least squares as Cdqrls does: dqrdc2, then dqrsl with job 1110.
 
-    Raises ValueError for non-finite input, as Cdqrls does.
+    Uses LAPACK when the matrix is clearly of full rank (module docstring)
+    and the port otherwise. Raises ValueError for non-finite input, as
+    Cdqrls does.
     """
     x = np.asarray(x, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64)
@@ -112,6 +135,64 @@ def dqrls(x: FloatArray, y: FloatArray, tol: float) -> QRLeastSquares:
         raise ValueError("NA/NaN/Inf in 'x'")
     if not np.all(np.isfinite(y)):
         raise ValueError("NA/NaN/Inf in 'y'")
+    if not reference_active():
+        fast = dqrls_lapack(x, y, max(FAST_PATH_RATIO, 1000 * tol))
+        if fast is not None:
+            return fast
+    return dqrls_reference(x, y, tol)
+
+
+def dqrls_lapack(
+    x: FloatArray, y: FloatArray, ratio: float = FAST_PATH_RATIO
+) -> QRLeastSquares | None:
+    """Householder least squares through LAPACK, or None if rank is doubtful.
+
+    Returns None unless ``n > p > 0`` and every ``|R[j, j]|`` is at least
+    ``ratio`` times the norm of column ``j``. That ratio is the
+    remaining column norm dqrdc2 compares with ``tol``, so a None-free
+    result is one where dqrdc2 keeps the column order and full rank.
+    Residuals are ``Q (0, Q'y[p:])`` as dqrsl forms them.
+    """
+    n, p = x.shape
+    if not n > p > 0:
+        return None
+    norms = np.sqrt(np.einsum("ij,ij->j", x, x))
+    if not np.all(norms > 0):
+        return None
+    qr, tau, _, info = lapack.dgeqrf(np.asfortranarray(x))
+    if info != 0:
+        return None
+    diag = np.abs(np.diagonal(qr)[:p])
+    if not np.all(diag >= ratio * norms):
+        return None
+    qty_c, _, info = lapack.dormqr(
+        "L", "T", qr, tau, y[:, None].copy(), n, overwrite_c=1
+    )
+    if info != 0:
+        return None
+    qty = qty_c[:, 0]
+    coef, info = lapack.dtrtrs(qr[:p, :p], qty[:p, None])
+    if info != 0:
+        return None
+    coef = coef[:, 0]
+    c = np.zeros((n, 1))
+    c[p:, 0] = qty[p:]
+    rsd_c, _, info = lapack.dormqr("L", "N", qr, tau, c, n, overwrite_c=1)
+    if info != 0:
+        return None
+    return QRLeastSquares(
+        coefficients=coef,
+        residuals=rsd_c[:, 0],
+        effects=qty,
+        rank=p,
+        pivot=np.arange(p, dtype=np.intp),
+        qr=None,
+        qraux=None,
+    )
+
+
+def dqrls_reference(x: FloatArray, y: FloatArray, tol: float) -> QRLeastSquares:
+    """The dqrdc2 and dqrsl port, without the fast path. Inputs are finite."""
     n, p = x.shape
     qr, k, qraux, pivot = dqrdc2(x, tol)
     coef = np.zeros(p)

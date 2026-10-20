@@ -17,6 +17,7 @@ from typing import Any, Literal
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from modeltrees._reference import reference_active
 from modeltrees.instability import (
     FluctuationTests,
     InstabilityTestError,
@@ -26,7 +27,15 @@ from modeltrees.instability import (
 )
 from modeltrees.node_model import FitResult, NodeModel
 from modeltrees.pruning import PruneRule, mob_prune_rule
-from modeltrees.split_search import Split, SplitSearch, find_split, kid_ids, w2n
+from modeltrees.split_search import (
+    SideFit,
+    Split,
+    SplitSearch,
+    find_split,
+    find_split_reference,
+    kid_ids,
+    w2n,
+)
 
 FloatArray = NDArray[np.float64]
 IntArray = NDArray[np.intp]
@@ -311,6 +320,37 @@ class _Grower:
             vcov=False,
         )
 
+    def _node_fitter(self, rows: IntArray) -> SideFit:
+        """Side fits on the node's rows, extracted once per node.
+
+        Masking the node's contiguous arrays selects the same rows in the
+        same order as indexing the full data with ``rows[mask]``, so the
+        fits are those of the reference path, without a fancy-indexed copy
+        of the full data per candidate.
+        """
+        y = self.y[rows]
+        x = None if self.x is None else self.x[rows]
+        w = self.weights[rows]
+        off = None if self.offset is None else self.offset[rows]
+        cl = None if self.cluster is None else self.cluster[rows]
+        caseweights = self.control.caseweights
+        model = self.model
+
+        def side_fit(mask: NDArray[np.bool_], start: FloatArray | None) -> FitResult:
+            return model.fit(
+                y[mask],
+                None if x is None else x[mask],
+                start=start,
+                weights=w[mask],
+                offset=None if off is None else off[mask],
+                cluster=None if cl is None else cl[mask],
+                caseweights=caseweights,
+                estfun=False,
+                vcov=False,
+            )
+
+        return side_fit
+
     def grow(self, rows: IntArray, node_id: int, depth: int) -> Node:
         control = self.control
         w = self.weights[rows]
@@ -362,22 +402,39 @@ class _Grower:
             return terminal(StopReason.NOT_SIGNIFICANT, test=test, p_value=p_value)
 
         var = self.variables[best]
+        if reference_active():
 
-        def side_fit(mask: NDArray[np.bool_], start: FloatArray | None) -> FitResult:
-            return self.fit(rows[mask], start=start)
+            def side_fit(
+                mask: NDArray[np.bool_], start: FloatArray | None
+            ) -> FitResult:
+                return self.fit(rows[mask], start=start)
 
-        search = find_split(
-            best,
-            var.kind,
-            var.values[rows],
-            var.levels,
-            w,
-            side_fit,
-            minsize=minsize,
-            caseweights=control.caseweights,
-            restart=control.restart,
-            numsplit=control.numsplit,
-        )
+            search = find_split_reference(
+                best,
+                var.kind,
+                var.values[rows],
+                var.levels,
+                w,
+                side_fit,
+                minsize=minsize,
+                caseweights=control.caseweights,
+                restart=control.restart,
+                numsplit=control.numsplit,
+            )
+        else:
+            node_fit = self._node_fitter(rows)
+            search = find_split(
+                best,
+                var.kind,
+                var.values[rows],
+                var.levels,
+                w,
+                node_fit,
+                minsize=minsize,
+                caseweights=control.caseweights,
+                restart=control.restart,
+                numsplit=control.numsplit,
+            )
         if search.split is None:
             return terminal(
                 StopReason.NO_ADMISSIBLE_SPLIT,
