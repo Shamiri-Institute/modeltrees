@@ -60,6 +60,7 @@ Generated with R 4.6.1, partykit 1.3-0, strucchange 1.6-0, sandwich 3.1-3, mlben
 | `data/sim_negbin.csv` | 600 | 20261031 | Simulated overdispersed counts (theta = 2) with an exposure offset: no instability, a planted split at z1 = 0.5, a theta-only change, and a school-clustered version. Integer case weights w. |
 | `data/sim_separation.csv` | 500 | 20261032 | Simulated binary data with a constant-response group (z2 = g4) and a region completely separated by x (z1 > 0.65); y_plain has no separation. |
 | `data/sim_multinom.csv` | 900 | 20261033 | Simulated three-class responses (lo, mid, hi): no instability, a planted split at z1 = 0.5, and a school-clustered version. Weights w0 in 0 to 3. |
+| `data/sim_cluster_models.csv` | 830 | 20261041 | Simulated grouped data for the cluster-robust leaf covariances: 36 schools of 8 to 40 pupils with school-level random intercepts, a planted split at z1 = 5, and responses for poisson (y_pois, offset log(exposure)), negative binomial (y_nb), multinomial (y_mn) and safe logit without separation (y_sl). The column school holds the cluster id. |
 
 The glm.fit fixtures each have their own `data/glm_<case>.csv`, listed with
 the fixture below.
@@ -529,6 +530,78 @@ Data `data/sim_multinom.csv`. 1 inner and 2 terminal nodes.
 ```r
 partykit::mob(formula = y_cluster ~ x | z1 + z2 + z3, data = sim_multinom, cluster = school, fit = multinomfit, maxit = 1000L, reltol = 1e-16, abstol = 1e-04, control = partykit::mob_control(alpha = 0.05, bonferroni = TRUE, minsize = 60L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL))
 ```
+
+## Clustered tree fixtures
+
+Generator: `r/fixtures/sandwich.R` (specs) and `r/fixtures/trees.R`. Same
+format as the tree fixtures, grown with `cluster = school` on
+`sim_cluster_models` for the cluster-robust covariance fixtures below. They
+are kept out of `trees/` and `extension_trees/` so that the suites globbing
+those directories keep their fixture counts.
+
+### `cluster_trees/sim_cluster_models_glmtree_poisson_cluster.json`
+
+Poisson counts with an offset, a school-level random intercept and cluster = school.
+
+Data `data/sim_cluster_models.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::glmtree(formula = y_pois ~ x | zs + zt + z1 + z2 + z3, data = sim_cluster_models, family = poisson(link = "log"), offset = log(exposure), cluster = school, epsilon = 1e-08, maxit = 25, alpha = 0.05, bonferroni = TRUE, minsize = 40L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `cluster_trees/sim_cluster_models_negbin_cluster.json`
+
+Negative binomial counts with an offset, a school-level random intercept and cluster = school.
+
+Data `data/sim_cluster_models.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::mob(formula = y_nb ~ x | zs + zt + z1 + z2 + z3, data = sim_cluster_models, offset = log(exposure), cluster = school, fit = negbinfit, epsilon = 1e-08, maxit = 25L, control = partykit::mob_control(alpha = 0.05, bonferroni = TRUE, minsize = 40L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL))
+```
+
+### `cluster_trees/sim_cluster_models_safelogit_cluster.json`
+
+Safe logit without separation, a school-level random intercept and cluster = school.
+
+Data `data/sim_cluster_models.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::mob(formula = y_sl ~ x | zs + zt + z1 + z2 + z3, data = sim_cluster_models, cluster = school, fit = safelogitfit, epsilon = 1e-08, maxit = 25L, separation_tol = 1e-06, control = partykit::mob_control(alpha = 0.05, bonferroni = TRUE, minsize = 40L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL))
+```
+
+### `cluster_trees/sim_cluster_models_multinom_cluster.json`
+
+Multinomial logit with school-level random intercepts per class and cluster = school.
+
+Data `data/sim_cluster_models.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::mob(formula = y_mn ~ x | zs + zt + z1 + z2 + z3, data = sim_cluster_models, cluster = school, fit = multinomfit, maxit = 1000L, reltol = 1e-16, abstol = 1e-04, control = partykit::mob_control(alpha = 0.05, bonferroni = TRUE, minsize = 60L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL))
+```
+
+## Cluster-robust covariance fixtures
+
+Generator: `r/fixtures/sandwich.R`. One file per clustered tree, with every
+leaf: `rows` (0-based), `n`, `k`, `n_clusters` (G), the tree's
+coefficients, the refit used for sandwich (`refit_call`, evaluated with
+`leaf` the data frame of the leaf's rows; its coefficients equal the tree's
+and the difference is recorded), `vcov_model` (`stats::vcov` of the refit),
+`bread` (`sandwich::bread`, n times the inverse Hessian), `hessian` (by
+hand, see `hessian_definition`) and `vcovcl`: `sandwich::vcovCL` with
+`type` HC0 and HC1 crossed with `cadjust` TRUE and FALSE, with the
+school clusters and with `cluster = NULL` (each row its own cluster). Every
+matrix is checked against the sandwich written by hand from the tree's
+`estfun` (docs/api-design.md 5.1); the generator stops on a relative
+difference above 1e-8. Matrices are row-major. All trees are unweighted.
+docs/sandwich-fixtures.md records the decisions.
+
+- `vcovcl/sim_cluster_lmtree_cluster.json`: sandwich::vcovCL on every leaf of trees/sim_cluster_lmtree_cluster.json. Model `lm`, 2 leaves, clusters per leaf 30, 30.
+- `vcovcl/sim_cluster_glmtree_binomial_cluster.json`: sandwich::vcovCL on every leaf of trees/sim_cluster_glmtree_binomial_cluster.json. Model `glm_binomial`, 4 leaves, clusters per leaf 30, 25, 22, 30.
+- `vcovcl/sim_cluster_few_lmtree_cluster.json`: sandwich::vcovCL on every leaf of trees/sim_cluster_few_lmtree_cluster.json. Model `lm`, 2 leaves, clusters per leaf 21, 3.
+- `vcovcl/sim_cluster_models_glmtree_poisson_cluster.json`: sandwich::vcovCL on every leaf of cluster_trees/sim_cluster_models_glmtree_poisson_cluster.json. Model `glm_poisson`, 2 leaves, clusters per leaf 36, 36.
+- `vcovcl/sim_cluster_models_negbin_cluster.json`: sandwich::vcovCL on every leaf of cluster_trees/sim_cluster_models_negbin_cluster.json. Model `negbin`, 2 leaves, clusters per leaf 36, 36.
+- `vcovcl/sim_cluster_models_safelogit_cluster.json`: sandwich::vcovCL on every leaf of cluster_trees/sim_cluster_models_safelogit_cluster.json. Model `safelogit`, 2 leaves, clusters per leaf 36, 36.
+- `vcovcl/sim_cluster_models_multinom_cluster.json`: sandwich::vcovCL on every leaf of cluster_trees/sim_cluster_models_multinom_cluster.json. Model `multinom`, 2 leaves, clusters per leaf 36, 36.
 
 ## Node-level fit fixtures
 

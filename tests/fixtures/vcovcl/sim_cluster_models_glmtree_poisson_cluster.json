@@ -1,0 +1,294 @@
+{
+  "fixture": "vcovcl_sim_cluster_models_glmtree_poisson_cluster",
+  "description": "sandwich::vcovCL on every leaf of cluster_trees/sim_cluster_models_glmtree_poisson_cluster.json.",
+  "generator": "r/fixtures/sandwich.R",
+  "versions": {
+    "R": "4.6.1",
+    "partykit": "1.3-0",
+    "strucchange": "1.6-0",
+    "sandwich": "3.1-3",
+    "Formula": "1.2-6",
+    "mlbench": "2.1-11",
+    "jsonlite": "2.0.0",
+    "MASS": "7.3-66",
+    "nnet": "7.3-21"
+  },
+  "tree_fixture": "cluster_trees/sim_cluster_models_glmtree_poisson_cluster.json",
+  "dataset": "sim_cluster_models",
+  "data_csv": "data/sim_cluster_models.csv",
+  "model": "glm_poisson",
+  "cluster": "school",
+  "object_construction": "The tree's leaf object is partykit's glm.fit result with a patched class; the leaf is refitted with stats::glm on the leaf's rows instead.",
+  "weights": "none: every tree here is grown without case weights, so the refits have unit weights and no zero-weight rows",
+  "estfun_source": "the tree fixture's node estfun (partykit's or the extension fit function's scores), used for the check by hand",
+  "hessian_definition": "-d(sum estfun)/d theta by hand: X'X (lm), X' diag(working weights of the last IRLS iteration) X (glm, negbin at the refit's theta, safe logit), the multinomial information sum_i w_i (diag(p_i) - p_i p_i') kron x_i x_i' over the non-reference classes, class-major",
+  "check": "every vcovCL matrix equals H^-1 (c sum_g s_g s_g') H^-1 with the tree's estfun and the Hessian by hand (docs/api-design.md 5.1) to 1e-8 relative to the largest entry; the generator stops otherwise",
+  "leaves": [
+    {
+      "id": 2,
+      "rows": [0, 1, 2, 5, 7, 8, 11, 13, 14, 15, 16, 19, 20, 22, 24, 26, 27, 28, 29, 34, 36, 39, 42, 43, 44, 47, 48, 50, 54, 55, 56, 57, 59, 60, 64, 65, 66, 67, 69, 70, 74, 77, 80, 82, 83, 84, 85, 88, 90, 93, 94, 95, 96, 97, 99, 101, 102, 104, 106, 107, 109, 113, 114, 115, 116, 118, 120, 121, 122, 125, 126, 131, 135, 136, 137, 138, 140, 146, 149, 151, 153, 155, 156, 157, 158, 161, 164, 166, 169, 172, 174, 177, 179, 180, 181, 184, 185, 186, 188, 190, 192, 193, 196, 198, 199, 200, 201, 206, 207, 210, 212, 213, 216, 218, 219, 220, 222, 224, 225, 226, 230, 231, 232, 233, 235, 236, 240, 242, 244, 245, 246, 248, 249, 250, 251, 252, 253, 259, 261, 267, 268, 275, 276, 278, 279, 282, 283, 284, 285, 287, 290, 292, 295, 296, 297, 298, 299, 304, 305, 306, 307, 308, 310, 312, 315, 317, 319, 321, 327, 328, 332, 334, 337, 344, 345, 346, 348, 349, 350, 352, 357, 360, 363, 364, 365, 371, 373, 376, 378, 380, 383, 385, 387, 389, 390, 394, 395, 396, 398, 400, 402, 403, 404, 409, 410, 411, 414, 417, 418, 419, 420, 421, 424, 426, 427, 429, 430, 431, 434, 437, 438, 439, 440, 445, 446, 448, 453, 455, 456, 459, 460, 462, 463, 470, 472, 473, 475, 479, 482, 483, 484, 485, 486, 487, 488, 490, 492, 493, 496, 497, 498, 504, 505, 508, 512, 513, 514, 517, 518, 520, 526, 529, 530, 531, 532, 536, 537, 538, 540, 543, 545, 547, 548, 553, 555, 556, 557, 558, 559, 560, 562, 563, 564, 565, 566, 568, 569, 570, 572, 576, 577, 580, 581, 583, 584, 587, 588, 589, 592, 594, 597, 598, 602, 609, 612, 613, 614, 615, 616, 618, 619, 621, 622, 624, 626, 629, 630, 631, 633, 636, 637, 639, 640, 643, 644, 645, 646, 647, 649, 650, 651, 658, 659, 661, 668, 669, 672, 673, 674, 676, 677, 680, 682, 685, 687, 690, 691, 692, 693, 694, 695, 699, 701, 702, 703, 709, 711, 712, 714, 718, 720, 722, 725, 733, 735, 736, 738, 740, 743, 744, 747, 749, 750, 758, 760, 761, 762, 763, 764, 765, 766, 767, 769, 770, 773, 774, 775, 779, 784, 785, 786, 788, 789, 790, 791, 792, 795, 797, 804, 807, 809, 810, 811, 813, 815, 816, 822, 825, 827, 828, 829],
+      "n": 411,
+      "k": 2,
+      "n_clusters": 36,
+      "clusters_le_k": false,
+      "coefficient_names": ["(Intercept)", "x"],
+      "coefficients": [0.2574828654518615, 0.67661562790271368],
+      "refit_call": "stats::glm(y_pois ~ x, family = poisson(link = \"log\"), offset = log(exposure), data = leaf, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_coefficients": [0.2574828654518615, 0.67661562790271368],
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "refit_estfun_vs_tree_estfun_max_rel": 0,
+      "vcov_model": [
+        [0.0016903127125046751, -0.00070600108574561779],
+        [-0.00070600108574561779, 0.0010266586935375964]
+      ],
+      "bread": [
+        [0.69471852483942143, -0.29016644624144894],
+        [-0.29016644624144894, 0.42195672304395215]
+      ],
+      "hessian": [
+        [830.00099106467508, 570.76573212706182],
+        [570.76573212706182, 1366.5312877776953]
+      ],
+      "bread_over_n_vs_hessian_inverse_max_rel": 1.2828421208273995e-15,
+      "vcovcl": [
+        {
+          "cluster": "school",
+          "type": "HC0",
+          "cadjust": true,
+          "n_clusters": 36,
+          "r_call": "sandwich::vcovCL(fit, cluster = leaf$school, type = \"HC0\", cadjust = TRUE)",
+          "matrix": [
+            [0.0068861532045812485, -0.0011103829898670603],
+            [-0.0011103829898670603, 0.0013959429123506144]
+          ],
+          "eigenvalues": [0.0071022222592543463, 0.0011798738576775164],
+          "vs_by_hand_max_rel": 2.5191473736348581e-15
+        },
+        {
+          "cluster": "school",
+          "type": "HC1",
+          "cadjust": true,
+          "n_clusters": 36,
+          "r_call": "sandwich::vcovCL(fit, cluster = leaf$school, type = \"HC1\", cadjust = TRUE)",
+          "matrix": [
+            [0.0069029897649836493, -0.0011130978627029212],
+            [-0.0011130978627029214, 0.0013993559757059951]
+          ],
+          "eigenvalues": [0.0071195871058539924, 0.0011827586348356525],
+          "vs_by_hand_max_rel": 2.5130031117479432e-15
+        },
+        {
+          "cluster": "school",
+          "type": "HC0",
+          "cadjust": false,
+          "n_clusters": 36,
+          "r_call": "sandwich::vcovCL(fit, cluster = leaf$school, type = \"HC0\", cadjust = FALSE)",
+          "matrix": [
+            [0.0066948711711206609, -0.0010795390179263089],
+            [-0.0010795390179263087, 0.0013571667203408754]
+          ],
+          "eigenvalues": [0.0069049383076083947, 0.0011470995838531416],
+          "vs_by_hand_max_rel": 2.7206791635256462e-15
+        },
+        {
+          "cluster": "school",
+          "type": "HC1",
+          "cadjust": false,
+          "n_clusters": 36,
+          "r_call": "sandwich::vcovCL(fit, cluster = leaf$school, type = \"HC1\", cadjust = FALSE)",
+          "matrix": [
+            [0.0067112400492896586, -0.0010821784776278399],
+            [-0.0010821784776278403, 0.001360484976380829]
+          ],
+          "eigenvalues": [0.006921820797358048, 0.0011499042283124399],
+          "vs_by_hand_max_rel": 2.4555630406222762e-15
+        },
+        {
+          "cluster": null,
+          "type": "HC0",
+          "cadjust": true,
+          "n_clusters": 411,
+          "r_call": "sandwich::vcovCL(fit, cluster = NULL, type = \"HC0\", cadjust = TRUE)",
+          "matrix": [
+            [0.0020605341459855519, -0.0007412579418431569],
+            [-0.00074125794184315733, 0.0014288604317225664]
+          ],
+          "eigenvalues": [0.0025504368600979275, 0.00093895771761019092],
+          "vs_by_hand_max_rel": 2.5256414401428342e-15
+        },
+        {
+          "cluster": null,
+          "type": "HC1",
+          "cadjust": true,
+          "n_clusters": 411,
+          "r_call": "sandwich::vcovCL(fit, cluster = NULL, type = \"HC1\", cadjust = TRUE)",
+          "matrix": [
+            [0.002065572126782583, -0.00074307030844913068],
+            [-0.00074307030844913068, 0.0014323539780103968]
+          ],
+          "eigenvalues": [0.0025566726470419325, 0.00094125345775104732],
+          "vs_by_hand_max_rel": 2.9393948955808684e-15
+        },
+        {
+          "cluster": null,
+          "type": "HC0",
+          "cadjust": false,
+          "n_clusters": 411,
+          "r_call": "sandwich::vcovCL(fit, cluster = NULL, type = \"HC0\", cadjust = FALSE)",
+          "matrix": [
+            [0.0020555206809101615, -0.00073945439453940252],
+            [-0.00073945439453940252, 0.0014253838856599808]
+          ],
+          "eigenvalues": [0.0025442314176159372, 0.00093667314895420515],
+          "vs_by_hand_max_rel": 2.9537684647524134e-15
+        },
+        {
+          "cluster": null,
+          "type": "HC1",
+          "cadjust": false,
+          "n_clusters": 411,
+          "r_call": "sandwich::vcovCL(fit, cluster = NULL, type = \"HC1\", cadjust = FALSE)",
+          "matrix": [
+            [0.0020605464038463725, -0.00074126235149426665],
+            [-0.00074126235149426655, 0.0014288689318351889]
+          ],
+          "eigenvalues": [0.002550452032328935, 0.00093896330335262656],
+          "vs_by_hand_max_rel": 3.1570330193825879e-15
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "rows": [3, 4, 6, 9, 10, 12, 17, 18, 21, 23, 25, 30, 31, 32, 33, 35, 37, 38, 40, 41, 45, 46, 49, 51, 52, 53, 58, 61, 62, 63, 68, 71, 72, 73, 75, 76, 78, 79, 81, 86, 87, 89, 91, 92, 98, 100, 103, 105, 108, 110, 111, 112, 117, 119, 123, 124, 127, 128, 129, 130, 132, 133, 134, 139, 141, 142, 143, 144, 145, 147, 148, 150, 152, 154, 159, 160, 162, 163, 165, 167, 168, 170, 171, 173, 175, 176, 178, 182, 183, 187, 189, 191, 194, 195, 197, 202, 203, 204, 205, 208, 209, 211, 214, 215, 217, 221, 223, 227, 228, 229, 234, 237, 238, 239, 241, 243, 247, 254, 255, 256, 257, 258, 260, 262, 263, 264, 265, 266, 269, 270, 271, 272, 273, 274, 277, 280, 281, 286, 288, 289, 291, 293, 294, 300, 301, 302, 303, 309, 311, 313, 314, 316, 318, 320, 322, 323, 324, 325, 326, 329, 330, 331, 333, 335, 336, 338, 339, 340, 341, 342, 343, 347, 351, 353, 354, 355, 356, 358, 359, 361, 362, 366, 367, 368, 369, 370, 372, 374, 375, 377, 379, 381, 382, 384, 386, 388, 391, 392, 393, 397, 399, 401, 405, 406, 407, 408, 412, 413, 415, 416, 422, 423, 425, 428, 432, 433, 435, 436, 441, 442, 443, 444, 447, 449, 450, 451, 452, 454, 457, 458, 461, 464, 465, 466, 467, 468, 469, 471, 474, 476, 477, 478, 480, 481, 489, 491, 494, 495, 499, 500, 501, 502, 503, 506, 507, 509, 510, 511, 515, 516, 519, 521, 522, 523, 524, 525, 527, 528, 533, 534, 535, 539, 541, 542, 544, 546, 549, 550, 551, 552, 554, 561, 567, 571, 573, 574, 575, 578, 579, 582, 585, 586, 590, 591, 593, 595, 596, 599, 600, 601, 603, 604, 605, 606, 607, 608, 610, 611, 617, 620, 623, 625, 627, 628, 632, 634, 635, 638, 641, 642, 648, 652, 653, 654, 655, 656, 657, 660, 662, 663, 664, 665, 666, 667, 670, 671, 675, 678, 679, 681, 683, 684, 686, 688, 689, 696, 697, 698, 700, 704, 705, 706, 707, 708, 710, 713, 715, 716, 717, 719, 721, 723, 724, 726, 727, 728, 729, 730, 731, 732, 734, 737, 739, 741, 742, 745, 746, 748, 751, 752, 753, 754, 755, 756, 757, 759, 768, 771, 772, 776, 777, 778, 780, 781, 782, 783, 787, 793, 794, 796, 798, 799, 800, 801, 802, 803, 805, 806, 808, 812, 814, 817, 818, 819, 820, 821, 823, 824, 826],
+      "n": 419,
+      "k": 2,
+      "n_clusters": 36,
+      "clusters_le_k": false,
+      "coefficient_names": ["(Intercept)", "x"],
+      "coefficients": [1.0213125354360706, -0.36682495608387833],
+      "refit_call": "stats::glm(y_pois ~ x, family = poisson(link = \"log\"), offset = log(exposure), data = leaf, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_coefficients": [1.0213125354360706, -0.36682495608387833],
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "refit_estfun_vs_tree_estfun_max_rel": 0,
+      "vcov_model": [
+        [0.00072454800414547378, 0.00020687799739790356],
+        [0.00020687799739790356, 0.00068701362489863294]
+      ],
+      "bread": [
+        [0.30358561373695353, 0.086681880909721593],
+        [0.086681880909721593, 0.28785870883252718]
+      ],
+      "hessian": [
+        [1510.0002177011595, -454.70105655401773],
+        [-454.70105655401773, 1592.4977385361628]
+      ],
+      "bread_over_n_vs_hessian_inverse_max_rel": 1.4963841819759117e-15,
+      "vcovcl": [
+        {
+          "cluster": "school",
+          "type": "HC0",
+          "cadjust": true,
+          "n_clusters": 36,
+          "r_call": "sandwich::vcovCL(fit, cluster = leaf$school, type = \"HC0\", cadjust = TRUE)",
+          "matrix": [
+            [0.006902491542173826, 0.000102968095206182],
+            [0.00010296809520618196, 0.0010386448102159055]
+          ],
+          "eigenvalues": [0.0069042990862484424, 0.0010368372661412894],
+          "vs_by_hand_max_rel": 5.0263690013316079e-16
+        },
+        {
+          "cluster": "school",
+          "type": "HC1",
+          "cadjust": true,
+          "n_clusters": 36,
+          "r_call": "sandwich::vcovCL(fit, cluster = leaf$school, type = \"HC1\", cadjust = TRUE)",
+          "matrix": [
+            [0.0069190442796850339, 0.00010321502109396606],
+            [0.00010321502109396652, 0.0010411355651564714]
+          ],
+          "eigenvalues": [0.006920856158397719, 0.0010393236864437868],
+          "vs_by_hand_max_rel": 5.0143441951083271e-16
+        },
+        {
+          "cluster": "school",
+          "type": "HC0",
+          "cadjust": false,
+          "n_clusters": 36,
+          "r_call": "sandwich::vcovCL(fit, cluster = leaf$school, type = \"HC0\", cadjust = FALSE)",
+          "matrix": [
+            [0.0067107556660023293, 0.00010010787033934306],
+            [0.00010010787033934296, 0.0010097935654876857]
+          ],
+          "eigenvalues": [0.006712513000519317, 0.001008036230970698],
+          "vs_by_hand_max_rel": 9.0474642023968929e-16
+        },
+        {
+          "cluster": "school",
+          "type": "HC1",
+          "cadjust": false,
+          "n_clusters": 36,
+          "r_call": "sandwich::vcovCL(fit, cluster = leaf$school, type = \"HC1\", cadjust = FALSE)",
+          "matrix": [
+            [0.006726848605249339, 0.00010034793717468946],
+            [0.00010034793717468939, 0.0010122151327910138]
+          ],
+          "eigenvalues": [0.0067286101539977827, 0.0010104535840425703],
+          "vs_by_hand_max_rel": 6.4470139651392757e-16
+        },
+        {
+          "cluster": null,
+          "type": "HC0",
+          "cadjust": true,
+          "n_clusters": 419,
+          "r_call": "sandwich::vcovCL(fit, cluster = NULL, type = \"HC0\", cadjust = TRUE)",
+          "matrix": [
+            [0.0013258055123480084, 0.0002783663805041127],
+            [0.0002783663805041127, 0.0014832637762062654]
+          ],
+          "eigenvalues": [0.0016938201745223854, 0.0011152491140318885],
+          "vs_by_hand_max_rel": 3.0700197749627143e-15
+        },
+        {
+          "cluster": null,
+          "type": "HC1",
+          "cadjust": true,
+          "n_clusters": 419,
+          "r_call": "sandwich::vcovCL(fit, cluster = NULL, type = \"HC1\", cadjust = TRUE)",
+          "matrix": [
+            [0.0013289849020658693, 0.00027903392578110107],
+            [0.00027903392578110101, 0.0014868207636791818]
+          ],
+          "eigenvalues": [0.001697882093406132, 0.0011179235723389191],
+          "vs_by_hand_max_rel": 3.2085169076677995e-15
+        },
+        {
+          "cluster": null,
+          "type": "HC0",
+          "cadjust": false,
+          "n_clusters": 419,
+          "r_call": "sandwich::vcovCL(fit, cluster = NULL, type = \"HC0\", cadjust = FALSE)",
+          "matrix": [
+            [0.0013226412987147195, 0.00027770202160076166],
+            [0.00027770202160076171, 0.00147972376719384]
+          ],
+          "eigenvalues": [0.0016897776442729286, 0.0011125874216356309],
+          "vs_by_hand_max_rel": 2.9308231617894221e-15
+        },
+        {
+          "cluster": null,
+          "type": "HC1",
+          "cadjust": false,
+          "n_clusters": 419,
+          "r_call": "sandwich::vcovCL(fit, cluster = NULL, type = \"HC1\", cadjust = FALSE)",
+          "matrix": [
+            [0.0013258131003902947, 0.00027836797369093144],
+            [0.00027836797369093144, 0.001483272265436511]
+          ],
+          "eigenvalues": [0.0016938298688395307, 0.001115255496987275],
+          "vs_by_hand_max_rel": 3.2161927854373388e-15
+        }
+      ]
+    }
+  ]
+}

@@ -22,7 +22,7 @@ setwd(original_dir)
 for (f in sort(list.files(file.path(r_dir, "extensions"), pattern = "[.]R$", full.names = TRUE))) {
   source(f)
 }
-for (f in c("common.R", "datasets.R", "trees.R", "glm.R", "pvalues.R", "extensions.R")) {
+for (f in c("common.R", "datasets.R", "trees.R", "glm.R", "pvalues.R", "extensions.R", "sandwich.R")) {
   source(file.path(r_dir, "fixtures", f))
 }
 
@@ -36,7 +36,7 @@ emit <- function(x, rel_path) {
 }
 
 # Datasets.
-datasets <- c(all_datasets(), extension_datasets())
+datasets <- c(all_datasets(), extension_datasets(), sandwich_datasets())
 names(datasets) <- vapply(datasets, `[[`, "", "name")
 for (ds in datasets) {
   write_dataset(ds, data_dir)
@@ -78,6 +78,28 @@ emit(c(list(
   generator = "r/fixtures/extensions.R",
   tree_fixture = "extension_trees/quine_negbin_intercept_deviance.json"), thesis),
   "thesis_quine_crosscheck.json")
+
+# Clustered trees for the cluster-robust covariances, and sandwich::vcovCL on
+# their leaves and on the leaves of the clustered trees above.
+cluster_tree_index <- list()
+for (spec in all_cluster_tree_specs()) {
+  fx <- tree_fixture(spec, datasets[[spec$dataset]], instrumented)
+  rel <- file.path("cluster_trees", paste0(spec$name, ".json"))
+  emit(fx, rel)
+  cluster_tree_index[[length(cluster_tree_index) + 1L]] <- list(file = rel, fixture = fx, spec = spec)
+}
+vcovcl_index <- list()
+grown <- c(tree_index, cluster_tree_index)
+names(grown) <- vapply(grown, function(e) e$fixture$fixture, "")
+specs_by_name <- c(tree_specs, all_cluster_tree_specs())
+names(specs_by_name) <- vapply(specs_by_name, `[[`, "", "name")
+for (nm in names(VCOVCL_MODELS)) {
+  spec <- specs_by_name[[nm]]
+  fx <- vcovcl_fixture(spec, grown[[nm]]$fixture, datasets[[spec$dataset]])
+  rel <- file.path("vcovcl", paste0(nm, ".json"))
+  emit(fx, rel)
+  vcovcl_index[[length(vcovcl_index) + 1L]] <- list(file = rel, fixture = fx)
+}
 
 # Node-level fits of the extension models.
 node_fit_index <- list()
@@ -218,6 +240,48 @@ for (entry in ext_tree_index) {
     "```r", fx$r_call, "```", "")
 }
 readme <- c(readme,
+  "## Clustered tree fixtures",
+  "",
+  "Generator: `r/fixtures/sandwich.R` (specs) and `r/fixtures/trees.R`. Same",
+  "format as the tree fixtures, grown with `cluster = school` on",
+  "`sim_cluster_models` for the cluster-robust covariance fixtures below. They",
+  "are kept out of `trees/` and `extension_trees/` so that the suites globbing",
+  "those directories keep their fixture counts.",
+  "")
+for (entry in cluster_tree_index) {
+  fx <- entry$fixture
+  readme <- c(readme,
+    sprintf("### `%s`", entry$file), "",
+    fx$description, "",
+    sprintf("Data `%s`. %d inner and %d terminal nodes.", fx$data_csv,
+      fx$summary$n_inner, fx$summary$n_terminal), "",
+    "```r", fx$r_call, "```", "")
+}
+readme <- c(readme,
+  "## Cluster-robust covariance fixtures",
+  "",
+  "Generator: `r/fixtures/sandwich.R`. One file per clustered tree, with every",
+  "leaf: `rows` (0-based), `n`, `k`, `n_clusters` (G), the tree's",
+  "coefficients, the refit used for sandwich (`refit_call`, evaluated with",
+  "`leaf` the data frame of the leaf's rows; its coefficients equal the tree's",
+  "and the difference is recorded), `vcov_model` (`stats::vcov` of the refit),",
+  "`bread` (`sandwich::bread`, n times the inverse Hessian), `hessian` (by",
+  "hand, see `hessian_definition`) and `vcovcl`: `sandwich::vcovCL` with",
+  "`type` HC0 and HC1 crossed with `cadjust` TRUE and FALSE, with the",
+  "school clusters and with `cluster = NULL` (each row its own cluster). Every",
+  "matrix is checked against the sandwich written by hand from the tree's",
+  "`estfun` (docs/api-design.md 5.1); the generator stops on a relative",
+  "difference above 1e-8. Matrices are row-major. All trees are unweighted.",
+  "docs/sandwich-fixtures.md records the decisions.",
+  "")
+for (entry in vcovcl_index) {
+  fx <- entry$fixture
+  readme <- c(readme,
+    sprintf("- `%s`: %s Model `%s`, %d leaves, clusters per leaf %s.", entry$file,
+      fx$description, fx$model, length(fx$leaves),
+      paste(vapply(fx$leaves, function(l) as.character(l$n_clusters), ""), collapse = ", ")))
+}
+readme <- c(readme, "",
   "## Node-level fit fixtures",
   "",
   "Generator: `r/fixtures/extensions.R`. One fit of an extension model on a",

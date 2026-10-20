@@ -1,0 +1,63 @@
+{
+  "dataset": "sim_cluster_models",
+  "description": "Simulated grouped data for the cluster-robust leaf covariances: 36 schools of 8 to 40 pupils with school-level random intercepts, a planted split at z1 = 5, and responses for poisson (y_pois, offset log(exposure)), negative binomial (y_nb), multinomial (y_mn) and safe logit without separation (y_sl). The column school holds the cluster id.",
+  "source": "simulated",
+  "seed": 20261041,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 830,
+  "csv": "sim_cluster_models.csv",
+  "columns": [
+    {
+      "name": "school",
+      "type": "integer"
+    },
+    {
+      "name": "x",
+      "type": "double"
+    },
+    {
+      "name": "zs",
+      "type": "double"
+    },
+    {
+      "name": "zt",
+      "type": "factor",
+      "levels": ["peri", "rural", "urban"]
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "z2",
+      "type": "factor",
+      "levels": ["a", "b", "c"]
+    },
+    {
+      "name": "z3",
+      "type": "double"
+    },
+    {
+      "name": "exposure",
+      "type": "double"
+    },
+    {
+      "name": "y_pois",
+      "type": "integer"
+    },
+    {
+      "name": "y_nb",
+      "type": "double"
+    },
+    {
+      "name": "y_mn",
+      "type": "factor",
+      "levels": ["lo", "mid", "hi"]
+    },
+    {
+      "name": "y_sl",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "{\n    g <- 36L\n    school <- rep(seq_len(g), sample(8:40, g, replace = TRUE))\n    n <- length(school)\n    zs <- runif(g, 0, 10)\n    zt <- factor(sample(c(\"urban\", \"rural\", \"peri\"), g, replace = TRUE))\n    u <- rnorm(g, 0, 0.5)[school]\n    um <- rnorm(g, 0, 0.5)[school]\n    uh <- rnorm(g, 0, 0.5)[school]\n    d <- data.frame(school = school, x = rnorm(n), zs = zs[school], zt = zt[school], z1 = runif(n, 0, \n        10), z2 = factor(sample(c(\"a\", \"b\", \"c\"), n, replace = TRUE)), z3 = rnorm(n), exposure = runif(n, \n        0.5, 2))\n    left <- d$z1 <= 5\n    eta <- u + ifelse(left, 0.2 + 0.7 * d$x, 0.9 - 0.4 * d$x)\n    d$y_pois <- rpois(n, d$exposure * exp(eta))\n    d$y_nb <- rnbinom(n, mu = d$exposure * exp(eta), size = 2)\n    em <- um + ifelse(left, 0.3 + 0.8 * d$x, -0.5 - 0.5 * d$x)\n    eh <- uh + ifelse(left, -0.2 - 0.6 * d$x, 0.6 + 1 * d$x)\n    p <- cbind(1, exp(em), exp(eh))\n    p <- p/rowSums(p)\n    v <- runif(n)\n    lev <- c(\"lo\", \"mid\", \"hi\")\n    d$y_mn <- factor(lev[1L + (v > p[, 1L]) + (v > p[, 1L] + p[, 2L])], levels = lev)\n    d$y_sl <- as.integer(runif(n) < plogis(u + ifelse(left, -0.5 + 1.2 * d$x, 0.5 - 0.8 * d$x)))\n    d[sample(n), ]\n}"
+}
