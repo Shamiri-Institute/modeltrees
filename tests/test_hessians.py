@@ -27,15 +27,19 @@ import statsmodels.api as sm  # type: ignore[import-untyped]
 from fixtures_io import FIXTURES, load_dataset, load_json, nan_array
 from grown_trees import fixture, model, tree_inputs
 
+from modeltrees.models._common import weighted_crossprod
 from modeltrees.models.families import (
+    Binomial,
     Family,
     GlmFitWarning,
     NegativeBinomial,
 )
 from modeltrees.models.glm import GlmModel
+from modeltrees.models.glm_fit import glm_fit
 from modeltrees.models.lm import LmModel
 from modeltrees.models.negbin import NegBinModel, glm_nb
-from modeltrees.node_model import FitResult
+from modeltrees.models.safelogit import SafeLogitModel
+from modeltrees.node_model import FitResult, FitStatus
 
 FloatArray = np.ndarray
 IntArray = np.ndarray
@@ -596,4 +600,129 @@ def test_negbin_hessian_against_r(name: str, node_id: int) -> None:
 def test_negbin_failed_fit_has_no_hessian() -> None:
     # y = 0 everywhere: theta.ml fails, and so does the fit.
     got = NegBinModel().fit(np.zeros(20), None, weights=np.ones(20), vcov=True)
+    assert got.failed and got.hessian is None
+
+
+# 4. SafeLogitModel: binomial, None under complete separation.
+
+SAFELOGIT_FITS = sorted(
+    p.stem for p in (FIXTURES / "node_fits").glob("safelogit_*.json")
+)
+
+
+@cache
+def _safelogit_fit(name: str) -> FitResult:
+    f = _node_fixture(name)
+    y, x, w, off, start = _node_arrays(name)
+    return SafeLogitModel(coef_names=f["x_names"], **f["fit_args"]).fit(
+        y, x, start=start, weights=w, offset=off, estfun=True, vcov=True
+    )
+
+
+def test_safelogit_files() -> None:
+    assert SAFELOGIT_FITS == [
+        "safelogit_complete",
+        "safelogit_constant",
+        "safelogit_none",
+        "safelogit_quasi",
+    ]
+
+
+@pytest.mark.parametrize("name", ["safelogit_none", "safelogit_quasi"])
+def test_safelogit_hessian_is_minus_the_score_derivative(name: str) -> None:
+    f = _node_fixture(name)
+    y, x, w, off, start = _node_arrays(name)
+    got = _safelogit_fit(name)
+    assert got.status is FitStatus.OK
+    assert got.hessian is not None and got.estfun is not None
+    assert got.hessian.shape == (got.estfun.shape[1],) * 2
+    symmetric(got.hessian)
+    family = Binomial()
+    keep = w > 0
+    xk, yk, wk = x[keep], y[keep], w[keep]
+    ok = None if off is None else off[keep]
+    z = glm_fit(
+        xk,
+        yk,
+        family,
+        weights=wk,
+        start=start,
+        offset=ok,
+        epsilon=f["fit_args"]["epsilon"],
+        maxit=f["fit_args"]["maxit"],
+        emit_warnings=False,
+    )
+    np.testing.assert_array_equal(z.coefficients, got.coefficients)
+    np.testing.assert_array_equal(got.hessian, weighted_crossprod(xk, z.weights))
+    beta = got.coefficients
+    lag = lag_bound(z.weights, exact_weights(family, beta, xk, wk, ok), xk, 1.0)
+    fd = central_difference(glm_score_sum(family, yk, xk, wk, ok, 1.0), beta)
+    assert_fd(got.hessian, fd, lag)
+    assert np.max(lag) <= 1e-4 * np.max(np.abs(fd))
+
+
+def test_safelogit_quasi_separation_is_near_singular() -> None:
+    # The d4 coefficient diverges, so its information is near zero: the
+    # Hessian is near singular, but only through its scale. Its d4 row is
+    # nearly uncorrelated with the others, so the Hessian scaled by its
+    # diagonal is well conditioned (docs/api-port.md, section 15).
+    got = _safelogit_fit("safelogit_quasi")
+    assert got.extras["separation"] == "quasi" and got.hessian is not None
+    h = got.hessian
+    assert h[2, 2] < 1e-6 * min(h[0, 0], h[1, 1])
+    assert np.linalg.cond(h) > 1e7
+    d = np.sqrt(np.diag(h))
+    assert np.linalg.cond(h / np.outer(d, d)) < 2
+
+
+def test_safelogit_inverse_against_statsmodels() -> None:
+    y, x, w, off, _ = _node_arrays("safelogit_none")
+    assert off is None and np.all(w == 1)
+    got = _safelogit_fit("safelogit_none")
+    assert got.hessian is not None
+    ref = sm.Logit(y, x).fit(method="newton", tol=1e-13, disp=False)
+    v = np.linalg.inv(got.hessian)
+    f = _node_fixture("safelogit_none")
+    z = glm_fit(
+        x,
+        y,
+        Binomial(),
+        weights=w,
+        epsilon=f["fit_args"]["epsilon"],
+        maxit=f["fit_args"]["maxit"],
+    )
+    lag = lag_bound(
+        z.weights, exact_weights(Binomial(), got.coefficients, x, w, None), x, 1.0
+    )
+    tol = 2 * np.abs(v) @ lag @ np.abs(v) + RTOL * np.max(np.abs(v))
+    assert np.all(np.abs(v - ref.cov_params()) <= tol)
+
+
+@pytest.mark.parametrize("name", ["safelogit_complete", "safelogit_constant"])
+def test_safelogit_complete_separation_has_no_hessian(name: str) -> None:
+    got = _safelogit_fit(name)
+    assert got.status is FitStatus.NO_ESTFUN
+    assert got.estfun is None and got.hessian is None
+
+
+@pytest.mark.parametrize(("name", "node_id"), vcovcl_leaves("safelogit"))
+def test_safelogit_hessian_against_r(name: str, node_id: int) -> None:
+    leaf = _leaf(name, node_id)
+    got = leaf_fit(name, node_id)
+    assert got.extras["separation"] == "none" and got.hessian is not None
+    np.testing.assert_allclose(got.hessian, np.array(leaf["hessian"]), rtol=RTOL)
+    np.testing.assert_allclose(
+        np.linalg.inv(got.hessian), np.array(leaf["vcov_model"]), rtol=RTOL
+    )
+
+
+def test_safelogit_failed_fit_has_no_hessian() -> None:
+    # glm.fit stops on a start of the wrong length: a failed fit.
+    got = SafeLogitModel().fit(
+        np.array([0.0, 1.0, 1.0, 0.0]),
+        None,
+        start=np.zeros(3),
+        weights=np.ones(4),
+        vcov=True,
+    )
     assert got.failed and got.hessian is None

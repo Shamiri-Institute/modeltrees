@@ -24,7 +24,11 @@ import numpy as np
 from numpy.typing import NDArray
 
 from modeltrees._reference import reference_active
-from modeltrees.models._common import check_vcov, numeric_response, regressor_matrix
+from modeltrees.models._common import (
+    numeric_response,
+    regressor_matrix,
+    weighted_crossprod,
+)
 from modeltrees.models.families import Binomial
 from modeltrees.models.glm_fit import GlmFitError, glm_fit, glm_objective
 from modeltrees.node_model import (
@@ -70,7 +74,9 @@ class SafeLogitModel:
     ``objfun`` is the negative log-likelihood ``aic / 2 - rank`` and the
     scores are ``estfun.glm``'s, as in :class:`GlmModel` with
     ``"binomial"``. Rows with zero weight are left out of the fit and get
-    zero scores. ``extras`` holds ``status`` ("ok" or "error"),
+    zero scores. With ``vcov=True`` the Hessian is binomial GlmModel's,
+    ``X' diag(working weights) X``; under quasi-separation it is near
+    singular. ``extras`` holds ``status`` ("ok" or "error"),
     ``separation``, ``n_boundary``, ``converged``, ``boundary`` and
     ``warnings``, as the R fit function returns them, plus ``error`` for a
     failed fit.
@@ -107,7 +113,6 @@ class SafeLogitModel:
         estfun: bool = False,
         vcov: bool = False,
     ) -> FitResult:
-        check_vcov(vcov)
         yv = numeric_response(y)
         if not np.all((yv == 0) | (yv == 1)):
             raise ValueError("safelogitfit needs a binary response")
@@ -128,7 +133,7 @@ class SafeLogitModel:
             "epsilon": self.epsilon,
             "maxit": self.maxit,
         }
-        objective_only = not estfun and not reference_active()
+        objective_only = not estfun and not vcov and not reference_active()
         try:
             if objective_only:
                 # Split search: the same arithmetic as glm_fit, without the
@@ -175,12 +180,15 @@ class SafeLogitModel:
                 reason="complete separation: the ML estimator does not exist",
                 extras=extras,
             )
+        cols = ~np.isnan(coef)
         scores = None
         if estfun:
             wres = z.residuals * z.weights
-            cols = ~np.isnan(coef)
             scores = np.zeros((n, int(cols.sum())))
             scores[keep] = wres[:, None] * xm_fit[:, cols]
+        hessian = None
+        if vcov:
+            hessian = weighted_crossprod(xm_fit[:, cols], z.weights)
         return FitResult(
             coefficients=coef,
             coef_names=names,
@@ -188,6 +196,7 @@ class SafeLogitModel:
             estfun=scores,
             converged=converged,
             extras=extras,
+            hessian=hessian,
         )
 
     def n_response_columns(self, y: NDArray[np.generic]) -> int:
