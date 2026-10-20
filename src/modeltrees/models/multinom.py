@@ -28,7 +28,7 @@ import scipy.linalg
 from numpy.typing import ArrayLike, NDArray
 from scipy.special import logsumexp
 
-from modeltrees.models._common import check_vcov, regressor_matrix
+from modeltrees.models._common import regressor_matrix
 from modeltrees.models._qr import dqrdc2
 from modeltrees.node_model import FitResult, FitStatus, Report, failed_fit
 
@@ -216,6 +216,10 @@ class MultinomModel:
       tolerance 1e-7): a failed fit (decisions Q9).
     - An offset raises ``ValueError``.
 
+    With ``vcov=True`` the Hessian is Newton's, ``multinom_hessian`` at the
+    estimate, over the present classes and non-NaN columns in the scores'
+    order (made exactly symmetric); None without scores.
+
     Rows with zero weight are left out of the fit and get zero scores.
     ``extras`` holds ``status``, ``classes_present`` (labels),
     ``converged``, ``iterations``, ``value`` and ``max_rel_gradient``.
@@ -253,7 +257,6 @@ class MultinomModel:
         estfun: bool = False,
         vcov: bool = False,
     ) -> FitResult:
-        check_vcov(vcov)
         if offset is not None:
             raise ValueError("multinomfit does not support an offset")
         n_levels = len(self.levels)
@@ -340,6 +343,10 @@ class MultinomModel:
         if estfun:
             scores = np.zeros((n, (present.shape[0] - 1) * p))
             scores[keep] = multinom_scores(z.probabilities, x_fit, recode[y_fit], w_fit)
+        hessian = None
+        if vcov:
+            h = multinom_hessian(z.probabilities, x_fit, w_fit)
+            hessian = (h + h.T) / 2
         return FitResult(
             coefficients=coef.reshape(-1),
             coef_names=names,
@@ -347,6 +354,7 @@ class MultinomModel:
             estfun=scores,
             converged=z.converged,
             extras=extras,
+            hessian=hessian,
         )
 
     def n_response_columns(self, y: NDArray[np.generic]) -> int:

@@ -50,11 +50,3 @@ def weighted_crossprod(x: FloatArray, w: FloatArray) -> FloatArray:
     only to rounding), as the Hessians of ``fit(..., vcov=True)``."""
     h: FloatArray = x.T @ (w[:, None] * x)
     return (h + h.T) / 2
-
-
-def check_vcov(vcov: bool) -> None:
-    if vcov:
-        raise NotImplementedError(
-            'vcov = "info" and "sandwich" are not in the v0.1 scope '
-            '(docs/decisions.md); only the default "opg" is supported'
-        )

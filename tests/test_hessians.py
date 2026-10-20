@@ -26,6 +26,7 @@ import pytest
 import statsmodels.api as sm  # type: ignore[import-untyped]
 from fixtures_io import FIXTURES, load_dataset, load_json, nan_array
 from grown_trees import fixture, model, tree_inputs
+from test_multinom import _r_offset
 
 from modeltrees.models._common import weighted_crossprod
 from modeltrees.models.families import (
@@ -37,6 +38,12 @@ from modeltrees.models.families import (
 from modeltrees.models.glm import GlmModel
 from modeltrees.models.glm_fit import glm_fit
 from modeltrees.models.lm import LmModel
+from modeltrees.models.multinom import (
+    MultinomModel,
+    multinom_evaluate,
+    multinom_hessian,
+    multinom_response,
+)
 from modeltrees.models.negbin import NegBinModel, glm_nb
 from modeltrees.models.safelogit import SafeLogitModel
 from modeltrees.node_model import FitResult, FitStatus
@@ -726,3 +733,149 @@ def test_safelogit_failed_fit_has_no_hessian() -> None:
         vcov=True,
     )
     assert got.failed and got.hessian is None
+
+
+# 5. MultinomModel: Newton's Hessian over present classes.
+
+MULTINOM_FITS = sorted(p.stem for p in (FIXTURES / "node_fits").glob("multinom_*.json"))
+
+
+@cache
+def _multinom_fit(name: str) -> FitResult:
+    f = _node_fixture(name)
+    y, x, w, _, start = _node_arrays(name)
+    model = MultinomModel(f["response_levels"], coef_names=f["x_names"])
+    return model.fit(
+        multinom_response(y, f["response_levels"]),
+        x,
+        start=start,
+        weights=w,
+        estfun=True,
+        vcov=True,
+    )
+
+
+def multinom_score_sum(
+    x: FloatArray, y: IntArray, w: FloatArray, n_classes: int
+) -> Callable[[FloatArray], FloatArray]:
+    """The summed multinomial scores as a function of the flat coefficients
+    of the classes 1, ..., n_classes - 1 (class-major), written out."""
+    onehot = np.eye(n_classes)[y]
+
+    def score_sum(beta: FloatArray) -> FloatArray:
+        eta = np.zeros((x.shape[0], n_classes))
+        eta[:, 1:] = x @ beta.reshape(n_classes - 1, -1).T
+        prob = np.exp(eta - eta.max(axis=1, keepdims=True))
+        prob /= prob.sum(axis=1, keepdims=True)
+        out: FloatArray = ((w[:, None] * (onehot - prob))[:, 1:].T @ x).reshape(-1)
+        return out
+
+    return score_sum
+
+
+def test_multinom_files() -> None:
+    assert MULTINOM_FITS == [
+        "multinom_absent_class",
+        "multinom_full",
+        "multinom_reference_absent",
+        "multinom_single_class",
+        "multinom_start",
+        "multinom_weights_zero",
+    ]
+
+
+OK_MULTINOM = [
+    "multinom_absent_class",
+    "multinom_full",
+    "multinom_start",
+    "multinom_weights_zero",
+]
+
+
+@pytest.mark.parametrize("name", OK_MULTINOM)
+def test_multinom_hessian_is_minus_the_score_derivative(name: str) -> None:
+    f = _node_fixture(name)
+    y, x, w, _, _ = _node_arrays(name)
+    got = _multinom_fit(name)
+    assert got.status is FitStatus.OK
+    assert got.hessian is not None and got.estfun is not None
+    assert got.hessian.shape == (got.estfun.shape[1],) * 2
+    symmetric(got.hessian)
+    # Over the reference and the present classes, in the scores' order.
+    codes = multinom_response(y, f["response_levels"])
+    keep = w > 0
+    p = x.shape[1]
+    beta = got.coefficients.reshape(-1, p)
+    present = ~np.isnan(beta[:, 0])
+    classes = np.r_[0, np.flatnonzero(present) + 1]
+    recode = np.full(len(f["response_levels"]), -1)
+    recode[classes] = np.arange(classes.shape[0])
+    score_sum = multinom_score_sum(
+        x[keep], recode[codes[keep]], w[keep], classes.shape[0]
+    )
+    fd = central_difference(score_sum, beta[present].reshape(-1))
+    assert_fd(got.hessian, fd)
+
+
+@pytest.mark.parametrize("name", ["multinom_reference_absent", "multinom_single_class"])
+def test_multinom_no_estfun_has_no_hessian(name: str) -> None:
+    got = _multinom_fit(name)
+    assert got.status is FitStatus.NO_ESTFUN
+    assert got.estfun is None and got.hessian is None
+
+
+def test_multinom_inverse_against_statsmodels() -> None:
+    f = _node_fixture("multinom_full")
+    y, x, w, _, _ = _node_arrays("multinom_full")
+    assert np.all(w == 1)
+    got = _multinom_fit("multinom_full")
+    assert got.hessian is not None
+    ref = sm.MNLogit(multinom_response(y, f["response_levels"]), x).fit(
+        method="newton", maxiter=100, tol=1e-14, disp=False
+    )
+    # statsmodels' params are p by K - 1 and its covariance follows
+    # params.ravel(order="F"): class-major, as ours.
+    expected = np.asarray(ref.cov_params())
+    np.testing.assert_allclose(
+        np.asarray(ref.params).T.reshape(-1), got.coefficients, rtol=1e-10
+    )
+    np.testing.assert_allclose(np.linalg.inv(got.hessian), expected, rtol=RTOL)
+
+
+def test_multinom_rank_deficient_has_no_hessian() -> None:
+    x = np.column_stack([np.ones(6), np.arange(6.0), 2 * np.arange(6.0)])
+    y = np.array([0, 1, 2, 0, 1, 2])
+    got = MultinomModel(("a", "b", "c")).fit(y, x, weights=np.ones(6), vcov=True)
+    assert got.failed and got.hessian is None
+
+
+@pytest.mark.parametrize(("name", "node_id"), vcovcl_leaves("multinom"))
+def test_multinom_hessian_against_r(name: str, node_id: int) -> None:
+    """R's Hessian and ``vcov(multinom)`` are at nnet's coefficients, which
+    differ from the MLE by ``-H^-1 g_R`` to first order (g_R the column sums
+    of R's scores; docs/extensions-port.md, section 7). The tolerance is
+    twice the change of our Hessian, and of its inverse, when our
+    coefficients move by that offset, plus RTOL."""
+    leaf = _leaf(name, node_id)
+    got = leaf_fit(name, node_id)
+    assert got.hessian is not None
+    tree = fixture(*_tree_of(name))
+    node = next(n for n in tree["nodes"] if n["id"] == node_id)
+    y, x, w, _ = leaf_data(name, node_id)
+    offset = _r_offset(got, x, y, w, np.array(node["estfun"]))
+    p = x.shape[1]
+    beta = got.coefficients.reshape(-1, p) + offset.reshape(-1, p)
+    _, prob = multinom_evaluate(beta, x, y, w)
+    moved = multinom_hessian(prob, x, w)
+    h_r = np.array(leaf["hessian"])
+    tol = 2 * np.abs(moved - got.hessian) + RTOL * np.max(np.abs(h_r))
+    assert np.all(np.abs(got.hessian - h_r) <= tol)
+    v, v_moved = np.linalg.inv(got.hessian), np.linalg.inv(moved)
+    v_r = np.array(leaf["vcov_model"])
+    tol = 2 * np.abs(v_moved - v) + RTOL * np.max(np.abs(v_r))
+    assert np.all(np.abs(v - v_r) <= tol)
+    # And at R's coefficients the formula reproduces R's Hessian.
+    _, prob_r = multinom_evaluate(
+        nan_array(leaf["coefficients"]).reshape(-1, p), x, y, w
+    )
+    np.testing.assert_allclose(multinom_hessian(prob_r, x, w), h_r, rtol=RTOL)
