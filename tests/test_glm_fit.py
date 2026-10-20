@@ -5,6 +5,7 @@ Each fixture holds R's ``glm.fit`` result on its own data, plus partykit's
 same data.
 """
 
+import re
 import warnings
 from functools import cache
 from typing import Any
@@ -68,7 +69,7 @@ def _fit(name: str) -> GlmFit:
 
 
 def test_fixtures_cover_the_required_cases() -> None:
-    assert len(GLM_FILES) == 11
+    assert len(GLM_FILES) == 13
     results = [_fixture(n)["result"] for n in GLM_FILES]
     assert any(not r["converged"] for r in results)  # maxit
     assert any(None in r["coefficients"] for r in results)  # rank deficient
@@ -233,28 +234,33 @@ def test_rank_deficient_aliases_the_last_dependent_column() -> None:
     assert got.pivot.tolist() == [0, 1, 2, 3]
 
 
-# Step halving. No R fixture covers it (docs/decisions.md), so the converged
-# result is cross-checked against statsmodels' MLE. The data and start were
-# chosen so that the first IRLS step overflows exp() and glm.fit halves it.
-# The same call in R 4.6.1 (glm.fit, poisson, start = c(-5, -2),
-# maxit = 1000) also takes 267 iterations with one "step size truncated due
-# to divergence" warning; that was checked by hand and is not a fixture.
+# Step halving. glm_poisson_step_halving converges from the poor start
+# (-5, -2) only after halving the first step; glm_poisson_step_halving_maxit
+# has the same data and start with maxit = 27, the smallest value for which the
+# halving loop succeeds. The parametrized tests above compare both to R. The
+# tests below add the statsmodels cross-check and the error at a smaller maxit.
+
+STEP_HALVING = "glm_poisson_step_halving"
+STEP_HALVING_MAXIT = "glm_poisson_step_halving_maxit"
 
 
 def _step_halving_data() -> tuple[np.ndarray, np.ndarray]:
-    rng = np.random.default_rng(20261030)
-    x1 = np.linspace(0, 100, 40)
-    y = rng.poisson(np.exp(0.5 + 0.05 * x1)).astype(np.float64)
-    return np.column_stack([np.ones(40), x1]), y
+    x, y, _, _ = _inputs(_fixture(STEP_HALVING))
+    return x, y
+
+
+def test_step_halving_fixtures_exercise_halving() -> None:
+    for name in (STEP_HALVING, STEP_HALVING_MAXIT):
+        assert "step size truncated due to divergence" in _fixture(name)["warnings"]
+        assert _fixture(name)["start"] == [-5, -2]
+    assert _fixture(STEP_HALVING)["result"]["converged"]
+    assert not _fixture(STEP_HALVING_MAXIT)["result"]["converged"]
 
 
 def test_step_halving_converges_to_the_mle() -> None:
     x, y = _step_halving_data()
-    with pytest.warns(GlmFitWarning, match="step size truncated due to divergence"):
-        got = glm_fit(x, y, Poisson(), start=np.array([-5.0, -2.0]), maxit=1000)
+    got = _fit(STEP_HALVING)
     assert got.converged
-    assert got.iter == 267
-    assert got.warnings == ("step size truncated due to divergence",)
     # boundary is reset each iteration, so it reports only the last one.
     assert got.boundary is False
     reference = sm.GLM(y, x, family=sm.families.Poisson()).fit(tol=1e-12)
@@ -269,29 +275,19 @@ def test_step_halving_converges_to_the_mle() -> None:
 def test_step_halving_is_bounded_by_maxit() -> None:
     """The first full step from the start makes exp() overflow, so the
     deviance is Inf and glm.fit halves back towards the start until it is
-    finite. Its inner loop gives up after maxit halvings. Here that takes 26
-    halvings, so maxit = 26 fails and maxit = 27 gets through, as in R
-    4.6.1 (checked by hand: "inner loop 1; cannot correct step size" at 26,
-    and at 27 coefficients -31.0700693395219787, 2.7323154255466497)."""
+    finite. Its inner loop gives up after maxit halvings: R errors at the
+    maxit the fixture records, and the fixture's own maxit is the smallest
+    that gets through."""
+    g = _fixture(STEP_HALVING_MAXIT)
+    probe = g["error_at_smaller_maxit"]
+    assert probe["maxit"] == g["control"]["maxit"] - 1
     x, y = _step_halving_data()
-    start = np.array([-5.0, -2.0])
     with (
         warnings.catch_warnings(),
-        pytest.raises(GlmFitError, match="inner loop 1; cannot correct step size"),
+        pytest.raises(GlmFitError, match=re.escape(probe["message"])),
     ):
         warnings.simplefilter("ignore", GlmFitWarning)
-        glm_fit(x, y, Poisson(), start=start, maxit=26)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", GlmFitWarning)
-        got = glm_fit(x, y, Poisson(), start=start, maxit=27)
-    assert not got.converged
-    assert got.warnings == (
-        "step size truncated due to divergence",
-        "glm.fit: algorithm did not converge",
-    )
-    np.testing.assert_allclose(
-        got.coefficients, [-31.0700693395219787, 2.7323154255466497], rtol=1e-8
-    )
+        glm_fit(x, y, Poisson(), start=np.array(g["start"]), maxit=probe["maxit"])
 
 
 def test_wrong_start_length_raises() -> None:

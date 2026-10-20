@@ -113,15 +113,19 @@ scores and fit of every node, because it has no fitted R object to drop.
 9. **`caseweights = FALSE`.** The instability tests now accept
    `caseweights` (docs/instability-tests.md, section 3). `w2n` is the count
    of positive weights, and the node models receive the flag as before.
-   There is no R fixture. The tests check that unit weights give the same
-   tree as the default, and that `nobs` counts rows.
+   Oracle fixtures: `sim_gaussian_lmtree_weights_nocaseweights` and
+   `sim_gaussian_glmtree_gaussian_weights_nocaseweights`. Extra Python tests
+   check that unit weights give the same tree as the default, and that `nobs`
+   counts rows.
 10. **`restart = FALSE`** reuses the previous admissible candidate's
     coefficients as starting values in numeric split search (`:417-438`).
     R resets them when the names or lengths differ. With one model per tree
     they never do, so the reset is not ported. Factor search always starts
-    from `NULL`, as in R. There is no R fixture. The tests check that
-    binomial trees match the `restart = TRUE` tree and that the starts are
-    passed.
+    from `NULL`, as in R. Oracle fixture:
+    `sim_binomial_glmtree_multisplit_norestart`, whose split objectives differ
+    from the `restart = TRUE` fixture's at node 2. Extra Python tests check
+    that binomial trees match the `restart = TRUE` tree and that the starts
+    are passed.
 11. **`numsplit = "center"` past the last value.** R takes
     `mean(uz[i + 0:1])`, which is `NA` for the last candidate. The port gives
     `NaN`. The last candidate always leaves an empty right side, so it is
@@ -175,11 +179,11 @@ Deliberately not replicated:
 
 ## 5. Comparison with R
 
-All 26 oracle tree fixtures match R. `sim_gaussian_lmtree_zero_weights` is
+All 31 oracle tree fixtures match R. `sim_gaussian_lmtree_zero_weights` is
 not an oracle; see below. The tests ran in the order CLAUDE.md requires, and
 every level passed before the next one was run:
 
-1. Split search on each fixture node's rows in R's selected variable (114
+1. Split search on each fixture node's rows in R's selected variable (134
    searches): the candidates and the effective `minsize` match exactly, and
    the objectives to `rtol = 1e-8`, with R's `Inf` in the same places.
 2. The chosen split variable and break, or nominal index, match exactly.
@@ -216,19 +220,17 @@ zero-weight row reaches a leaf. The R fixture
 `sim_gaussian_lmtree_zero_weights` itself, one node with `test_failed`, is
 the documented divergence.
 
-**One fixture data defect, not a tree divergence.** In `sim_cluster.csv`,
-`z1` in row 551 (0-based) is written as `4.006174616515636`. R's value is
-`4.0061746165156364` (as in the JSON candidates), one ulp away.
-`format_double` in `r/fixtures/common.R` checks the round trip with R's
-`as.numeric`, which is not correctly rounded (the same issue as the Hansen
-table entry, docs/instability-tests.md, item 1). The string reads back as
-R's value in R but as its neighbour in Python. The value is not a split
-point and only orders the rows, so trees, tests and objectives are
-unaffected. The candidate-value test compares numeric candidates to within
-1 ulp because of this. Breaks are compared exactly. The fix belongs in the
-generator: check the round trip with a correctly rounded parser, or always
-write 17 digits. It was not changed in this task, which was limited to
-`src/` and `tests/`.
+**Fixture data defect, fixed.** `sim_cluster.csv` once had `z1` in row 551
+(0-based) one ulp away from R's value, because `format_double` checked the
+round trip with R's `as.numeric`, which is not correctly rounded. The CSVs now
+write every double with 17 significant digits, and the candidate-value test
+compares exactly. `sim_cluster` passes.
+
+**New fixtures.** `caseweights = FALSE` (lmtree and glmtree on weighted
+`sim_gaussian`), `restart = FALSE` (glmtree on `sim_binomial`), and positive
+weights with `cluster` (lmtree and glmtree on `sim_cluster`, which gained a
+weight column `w`). All match at the same tolerances as the other fixtures, so
+there is no first diverging quantity to report.
 
 ## 6. Tests
 
@@ -242,7 +244,8 @@ write 17 digits. It was not changed in this task, which was limited to
   the positive rows goes to the larger kid;
 - `getlevels` against R's enumeration for nominal and ordered factors;
 - the default `minsize` and its truncation, `restart = FALSE`,
-  `caseweights = FALSE`, `maxdepth`, `alpha`, `bonferroni = FALSE`,
+  `caseweights = FALSE` (Python consistency tests, plus oracle checks against
+  their fixtures), `maxdepth`, `alpha`, `bonferroni = FALSE`,
   `numsplit = "center"`, the one-candidate objective, labels versus codes;
 - the prune rules (mob and lmtree, AIC and BIC, `log(n)` of the full
   sample), lmtree's rules chosen through `LmModel.prune_rule`, `"none"`, a

@@ -79,7 +79,6 @@ def _tested_nodes(status: str) -> list[Any]:
     cases = []
     for name in TREE_FILES:
         tree = _tree(name)
-        assert tree["control"]["caseweights"] is True
         assert tree["control"]["vcov"] == "opg"
         assert tree["control"]["ordinal"] == "chisq"
         for node in tree["nodes"]:
@@ -131,6 +130,7 @@ def test_statistic(name: str, node_id: int) -> None:
         minsize=tree["root_minsize"],
         trim=tree["control"]["trim"],
         cluster=_node_cluster(tree, node),
+        caseweights=tree["control"]["caseweights"],
     )
     assert stats.nobs == test["nobs"]
     assert stats.k == test["k"]
@@ -188,6 +188,7 @@ def test_full_tests(name: str, node_id: int) -> None:
         trim=control["trim"],
         bonferroni=control["bonferroni"],
         cluster=_node_cluster(tree, node),
+        caseweights=control["caseweights"],
     )
     assert result.variables == tuple(test["variables"])
     np.testing.assert_allclose(
@@ -463,11 +464,13 @@ def test_cluster_fixtures_record_cluster_counts() -> None:
     assert [n.removesuffix(".json") for n in CLUSTER_TREES] == [
         "sim_cluster_few_lmtree_cluster",
         "sim_cluster_glmtree_binomial_cluster",
+        "sim_cluster_glmtree_binomial_cluster_weights",
         "sim_cluster_lmtree_cluster",
+        "sim_cluster_lmtree_cluster_weights",
     ]
     for name in CLUSTER_TREES:
         tree = _tree(name)
-        assert tree["weights"] is None
+        assert (tree["weights"] is not None) == name.endswith("_weights.json")
         for node in tree["nodes"]:
             ids = _node_cluster(tree, node)
             assert ids is not None

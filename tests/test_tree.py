@@ -12,6 +12,7 @@ The zero-weight fixture is grown with its zero weights and compared with
 the fixture grown on the data with those rows deleted (docs/decisions.md).
 """
 
+import dataclasses
 import math
 import warnings
 from functools import cache
@@ -170,7 +171,7 @@ def _assert_split(got: Split | None, expected: dict[str, Any] | None) -> None:
 
 
 def test_search_nodes_cover_every_fixture_split() -> None:
-    assert len(SEARCH_NODES) == 114
+    assert len(SEARCH_NODES) == 134
     for name in ORACLE_TREES:
         for node in tree(name)["nodes"]:
             if node["split"] is not None:
@@ -184,13 +185,7 @@ def test_split_candidates(name: str, node_id: int) -> None:
     assert got.minsize == expected["minsize"]
     if got.kind is VariableKind.NUMERIC:
         assert got.values is not None
-        # One ulp, not exact: the data CSVs were checked for round trips with
-        # R's parser, which is not correctly rounded, so z1 in row 551 of
-        # sim_cluster.csv reads one ulp away from R's value in Python. The
-        # JSON values are exact (docs/tree-growing.md).
-        np.testing.assert_array_max_ulp(
-            got.values, np.array(expected["candidates"]), maxulp=1
-        )
+        np.testing.assert_array_equal(got.values, np.array(expected["candidates"]))
     else:
         assert got.labels == tuple(expected["candidates"])
 
@@ -327,6 +322,72 @@ def test_summary_counts() -> None:
         assert max(n.depth for n in got.nodes) == summary["depth"]
         terminal_objfun = sum(n.fit.objfun for n in got.nodes if n.terminal)
         assert terminal_objfun == pytest.approx(summary["objfun"], rel=RTOL)
+
+
+# Oracle checks for the options that used to have only Python consistency
+# tests. The fixtures are in ORACLE_TREES, so the level 1 to 4 tests above grow
+# them with the fixture's own control settings. The tests below check that the
+# setting is really in force and matters, against the fixture of the default.
+
+NOCASEWEIGHTS = [
+    ("sim_gaussian_lmtree_weights_nocaseweights", "sim_gaussian_lmtree_weights"),
+    (
+        "sim_gaussian_glmtree_gaussian_weights_nocaseweights",
+        "sim_gaussian_glmtree_gaussian_weights",
+    ),
+]
+
+
+@pytest.mark.parametrize(("name", "default"), NOCASEWEIGHTS)
+def test_caseweights_false_oracle(name: str, default: str) -> None:
+    fixture = tree(name)
+    assert fixture["control"]["caseweights"] is False
+    assert fixture["weights"] == tree(default)["weights"] is not None
+    got = _grown(name)
+    # R counts rows, not the weight total, so nobs is the row count.
+    assert got.root.nobs == fixture["n"] == fixture["nodes"][0]["nobs"]
+    assert tree(default)["nodes"][0]["nobs"] > fixture["n"]
+    # The setting matters: the same call with caseweights = TRUE counts the
+    # weight total, as the default fixture does.
+    y, x, w, off = inputs(fixture)
+    grown_default = mob(
+        model(fixture),
+        y,
+        x,
+        variables(fixture),
+        weights=w,
+        offset=off,
+        control=dataclasses.replace(_control(fixture), caseweights=True),
+    )
+    assert grown_default.root.nobs == tree(default)["nodes"][0]["nobs"]
+    assert grown_default.root.nobs != got.root.nobs
+
+
+def test_restart_false_oracle() -> None:
+    name = "sim_binomial_glmtree_multisplit_norestart"
+    default = "sim_binomial_glmtree_multisplit"
+    fixture = tree(name)
+    assert fixture["control"]["restart"] is False
+    assert tree(default)["control"]["restart"] is True
+    # R's restart = FALSE searches change the split objectives in the grown
+    # tree, so the match in test_split_searches_in_grown_tree is not trivial.
+    objective = [
+        [n["split_search"]["objective"] for n in tree(f)["nodes"] if n["split_search"]]
+        for f in (name, default)
+    ]
+    assert objective[0] != objective[1]
+    got = _grown(name)
+    expected = [n for n in fixture["nodes"] if n["split_search"]]
+    for node in expected:
+        search = got.node(node["id"]).split_search
+        assert search is not None
+        np.testing.assert_allclose(
+            search.objective,
+            _objective(node["split_search"]["objective"]),
+            rtol=RTOL,
+            atol=ATOL,
+            equal_nan=True,
+        )
 
 
 def test_few_clusters_node_warns_and_is_terminal() -> None:

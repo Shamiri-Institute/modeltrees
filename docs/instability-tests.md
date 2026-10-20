@@ -237,10 +237,8 @@ can be added without changing existing calls.
 13. **Project setup.** `pyproject.toml` named a missing `README.md`, which
     stopped the package from building. That line was removed, and numpy and
     scipy were added as runtime dependencies, with pytest, mypy, ruff and
-    scipy-stubs in the dev group. This is outside `src/` and `tests/` but
-    needed to run the tests. The phase 2 commit covers only `src/`, `tests/`
-    and `docs/`, so `pyproject.toml` and `uv.lock` are left uncommitted for
-    review.
+    scipy-stubs in the dev group. `pyproject.toml` and `uv.lock` are
+    committed.
 14. **Clusters.** With `cluster`, the scaled scores (`process/sqrt(weights)`,
     already divided by `sqrt(nobs)`) are summed within clusters and the meat is
     the cross product of those sums (`:243-244`). Only the meat changes. The

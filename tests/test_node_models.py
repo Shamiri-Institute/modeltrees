@@ -67,8 +67,8 @@ def _node(name: str, node_id: int) -> dict[str, Any]:
 
 
 def test_every_tree_and_node_is_covered() -> None:
-    assert len(TREE_FILES) == 27
-    assert len(NODES) == 237
+    assert len(TREE_FILES) == 32
+    assert len(NODES) == 280
     assert all(_node(*p.values)["estfun"] is not None for p in NODES)
 
 
