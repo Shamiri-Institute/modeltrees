@@ -384,6 +384,9 @@ class FitResult:
     estfun: FloatArray | None         # shape (n, k_nonaliased), weights included
     vcov: FloatArray | None = None    # only needed for vcov "info" or "sandwich"
     converged: bool = True
+    status: FitStatus = FitStatus.OK  # ok, failed or no_estfun (section 4.2)
+    reason: str | None = None         # why the fit failed or has no scores
+    extras: Mapping[str, Any] = {}    # model-specific: theta, warnings, ...
 
 
 class NodeModel(Protocol):
@@ -512,6 +515,54 @@ node's own fit, so that the sums are on the scale of the RSS. `A` is scaled
 by its diagonal and solved by a symmetric eigendecomposition; sides with a
 condition number above 1e8 or a zero diagonal entry are NaN. `GlmModel` has
 no batch scorer (docs/performance.md, Step 3, lists the options).
+
+### 4.2 Fit status, failures and extra parameters
+
+partykit has no failure protocol: an error in the fit function stops
+`mob()`, and a fit function signals missing scores by returning
+`estfun = NULL`. The extension models (docs/extensions-spec.md) need more,
+and docs/decisions.md decides that a failed fit never stops the tree. So
+`FitResult` carries a status (`node_model.FitStatus`):
+
+| status | meaning | in split search | at a node |
+| --- | --- | --- | --- |
+| `ok` | an estimate with scores (when `estfun=True`) | objective used | tested as usual |
+| `failed` | no usable estimate | the candidate is inadmissible, objective Inf | terminal, `StopReason.FIT_FAILED`, `NodeFitFailedWarning` |
+| `no_estfun` | an estimate without scores, partykit's `estfun = NULL` | objective used | terminal, `StopReason.NO_ESTFUN`, `test_failed` set |
+
+Details:
+
+- A model reports a failure by returning `failed_fit(coef_names, reason,
+  **extras)`: NaN coefficients, objective Inf, no scores,
+  `converged = False`. Exceptions are not caught by `mob()`; a model that
+  wants a failure to be recoverable returns this result. `GlmModel` and
+  `LmModel` never do, so their trees stop on an error as partykit's do.
+- `reason` says why, and `extras` holds model-specific diagnostics (theta,
+  warnings, boundary counts). The core stores both and does not read them.
+- Split search: a candidate is inadmissible if either side's fit failed.
+  `SplitSearch.n_failed` counts such candidates. With `restart = FALSE` a
+  failed candidate's coefficients are not passed on as starting values; the
+  next candidate starts from the last successful one. The one-candidate
+  factor rule (objective 1 without fitting) fits nothing, so it cannot fail.
+- A failed node fit is checked right after the fit (and the root's default
+  `minsize`), before the stopping rules: the node is terminal, has no tests
+  and keeps the failed `FitResult`. A failed root gives a one-node tree.
+- `no_estfun` is checked where partykit checks for `NULL` scores, after
+  `minsize` and `maxdepth` (`mob_grow`, `:536-550`), and the node records
+  `test = NA` (`test_failed`) as partykit does (`:569-573`). A fit with
+  status `ok` but `estfun = None` stays `StopReason.TEST_FAILED`, as before.
+- Batch split objectives (section 4.1) cannot see failures. If a refitted
+  candidate fails, every other admissible candidate is fitted exactly, so
+  the winner is still the exact search's. A model whose fits can fail can
+  also opt out of the batch path entirely with the attribute
+  `batch_split = False` (`node_model.uses_batch_split`).
+- Extra parameters: a model that estimates parameters besides its
+  coefficients, which are not tested and have no score columns, declares
+  them in the attribute `extra_df` (default 0, `node_model.extra_df`). Pruning
+  then uses `k = len(root coefficients) + extra_df` per node, so `df =
+  (k, n_kids * k + dfsplit)`. The negative binomial model sets
+  `extra_df = 1` for theta (docs/decisions.md). `minsize` still counts the
+  coefficients only, as partykit does.
 
 ## 5. Open questions
 

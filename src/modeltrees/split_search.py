@@ -81,6 +81,8 @@ class SplitSearch:
     objective: FloatArray  # inf where a side has fewer than minsize
     best: int | None  # first minimum, None if no candidate is admissible
     split: Split | None
+    # Candidates whose fit failed on either side (objective inf).
+    n_failed: int = 0
 
 
 def w2n(weights: FloatArray, caseweights: bool) -> float:
@@ -101,6 +103,13 @@ def getlevels(n_levels: int, ordered: bool) -> BoolArray:
     rows = 2 ** (n_levels - 1) - 1
     bits = np.arange(1, rows + 1)[:, None] >> np.arange(n_levels)[None, :]
     return (bits % 2).astype(bool)
+
+
+def _pair_objective(left: FitResult, right: FitResult) -> float | None:
+    """The summed objective, or None if either side's fit failed."""
+    if left.failed or right.failed:
+        return None
+    return left.objfun + right.objfun
 
 
 def _which_min(values: FloatArray) -> int:
@@ -161,6 +170,7 @@ def find_split_reference(
                 "Cannot find admissible split point in partitioning variable"
             )
         dev = np.full(uz.shape[0], np.inf)
+        n_failed = 0
         start_left: FloatArray | None = None
         start_right: FloatArray | None = None
         for i, value in enumerate(uz):
@@ -172,10 +182,18 @@ def find_split_reference(
             # always have the same names and length, so R's reset never fires.
             fit_left = fit(left, None if restart else start_left)
             fit_right = fit(~left, None if restart else start_right)
+            pair = _pair_objective(fit_left, fit_right)
+            if pair is None:
+                # A failed fit makes the candidate inadmissible
+                # (docs/decisions.md). Its starts are not passed on.
+                n_failed += 1
+                continue
             start_left, start_right = fit_left.coefficients, fit_right.coefficients
-            dev[i] = fit_left.objfun + fit_right.objfun
+            dev[i] = pair
         if not np.any(np.isfinite(dev)):
-            return SplitSearch(variable, kind, minsize, uz, None, None, dev, None, None)
+            return SplitSearch(
+                variable, kind, minsize, uz, None, None, dev, None, None, n_failed
+            )
         best = _which_min(dev)
         if numsplit == "center":
             # mean(uz[best + 0:1]); NaN past the last value, as R's NA.
@@ -184,7 +202,9 @@ def find_split_reference(
         else:
             breaks = float(uz[best])
         split = Split(variable, kind, breaks, None)
-        return SplitSearch(variable, kind, minsize, uz, None, None, dev, best, split)
+        return SplitSearch(
+            variable, kind, minsize, uz, None, None, dev, best, split, n_failed
+        )
 
     if level_names is None:
         raise ValueError("a factor needs its level names")
@@ -199,6 +219,7 @@ def find_split_reference(
         labels = tuple("+".join(level_names[c] for c in present[row]) for row in al)
     left_levels = tuple(tuple(int(c) for c in present[row]) for row in al)
     dev = np.full(al.shape[0], np.inf)
+    n_failed = 0
     for i, row in enumerate(al):
         left = np.isin(codes, present[row])
         if not admissible(left):
@@ -211,10 +232,23 @@ def find_split_reference(
         # partykit passes cluster[zs] to the right-hand fit (:479), a bug that
         # docs/decisions.md says not to replicate; fit() always gets the
         # complement's rows, cluster included.
-        dev[i] = fit(left, None).objfun + fit(~left, None).objfun
+        pair = _pair_objective(fit(left, None), fit(~left, None))
+        if pair is None:
+            n_failed += 1
+            continue
+        dev[i] = pair
     if not np.any(np.isfinite(dev)):
         return SplitSearch(
-            variable, kind, minsize, None, left_levels, labels, dev, None, None
+            variable,
+            kind,
+            minsize,
+            None,
+            left_levels,
+            labels,
+            dev,
+            None,
+            None,
+            n_failed,
         )
     best = _which_min(dev)
     if kind is VariableKind.ORDERED:
@@ -226,7 +260,7 @@ def find_split_reference(
             index[c] = 1 if al[best, j] else 2
         split = Split(variable, kind, None, tuple(index))
     return SplitSearch(
-        variable, kind, minsize, None, left_levels, labels, dev, best, split
+        variable, kind, minsize, None, left_levels, labels, dev, best, split, n_failed
     )
 
 
@@ -260,6 +294,10 @@ def find_split(
     minimum of those exact values, which no unrefitted candidate can reach,
     so the chosen split is the reference's. ``objective`` holds exact values
     for refitted candidates and the approximations for the others.
+
+    A candidate with a failed fit on either side is inadmissible (Inf) and
+    counted in ``n_failed``. If a refitted candidate fails, every other
+    candidate is fitted exactly too (docs/model-interface.md, section 4.2).
     """
     if kind is not VariableKind.NUMERIC:
         return find_split_reference(
@@ -284,6 +322,7 @@ def find_split(
         _admissible_numeric(zv, uz, inv, weights, minsize, caseweights)
     )
     dev = np.full(uz.shape[0], np.inf)
+    n_failed = 0
 
     def exact(
         i: int, start: tuple[FloatArray | None, FloatArray | None]
@@ -301,18 +340,35 @@ def find_split(
         refit = _refit_set(approx, scores.error)
         dev[candidates] = approx
         for i in candidates[refit]:
-            fl, fr = exact(int(i), (None, None))
-            dev[i] = fl.objfun + fr.objfun
+            pair = _pair_objective(*exact(int(i), (None, None)))
+            if pair is None:
+                n_failed += 1
+            dev[i] = np.inf if pair is None else pair
+        if n_failed:
+            # A failed refit can remove the best candidate, and the bounds
+            # say nothing about the unrefitted ones then: fit them all.
+            for i in candidates[~refit]:
+                pair = _pair_objective(*exact(int(i), (None, None)))
+                if pair is None:
+                    n_failed += 1
+                dev[i] = np.inf if pair is None else pair
     else:
         starts: tuple[FloatArray | None, FloatArray | None] = (None, None)
         for i in candidates:
             # restart = FALSE: the previous admissible candidate's
             # coefficients are the starting values (:417-438).
             fl, fr = exact(int(i), (None, None) if restart else starts)
+            pair = _pair_objective(fl, fr)
+            if pair is None:
+                # Inadmissible, and its starts are not passed on.
+                n_failed += 1
+                continue
             starts = (fl.coefficients, fr.coefficients)
-            dev[i] = fl.objfun + fr.objfun
+            dev[i] = pair
     if not np.any(np.isfinite(dev)):
-        return SplitSearch(variable, kind, minsize, uz, None, None, dev, None, None)
+        return SplitSearch(
+            variable, kind, minsize, uz, None, None, dev, None, None, n_failed
+        )
     best = _which_min(dev)
     if numsplit == "center":
         # mean(uz[best + 0:1]); NaN past the last value, as R's NA.
@@ -321,7 +377,9 @@ def find_split(
     else:
         breaks = float(uz[best])
     split = Split(variable, kind, breaks, None)
-    return SplitSearch(variable, kind, minsize, uz, None, None, dev, best, split)
+    return SplitSearch(
+        variable, kind, minsize, uz, None, None, dev, best, split, n_failed
+    )
 
 
 def _admissible_numeric(

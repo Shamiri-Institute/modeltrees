@@ -9,6 +9,7 @@ formula or dataframe layer here.
 """
 
 import math
+import warnings
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
@@ -25,7 +26,13 @@ from modeltrees.instability import (
     VariableKind,
     fluctuation_tests,
 )
-from modeltrees.node_model import FitResult, NodeModel
+from modeltrees.node_model import (
+    FitResult,
+    FitStatus,
+    NodeModel,
+    extra_df,
+    uses_batch_split,
+)
 from modeltrees.pruning import PruneRule, mob_prune_rule
 from modeltrees.split_search import (
     BatchObjectives,
@@ -51,6 +58,12 @@ class StopReason(Enum):
     NOT_SIGNIFICANT = "not_significant"  # adjusted p-value above alpha
     NO_ADMISSIBLE_SPLIT = "no_admissible_split"
     PRUNED = "pruned"  # split found, then removed by post-pruning
+    NO_ESTFUN = "no_estfun"  # the fit has no scores, as partykit's NULL estfun
+    FIT_FAILED = "fit_failed"  # the node's own fit failed (not in partykit)
+
+
+class NodeFitFailedWarning(UserWarning):
+    """A node's model fit failed, so the node is terminal."""
 
 
 @dataclass(frozen=True)
@@ -255,7 +268,9 @@ def mob(
 
     rule = _prune_rule(control.prune, model)
     if rule is not None:
-        k = len(root.fit.coefficients)
+        # The root's coefficient count (:647), plus the parameters a model
+        # estimates besides its coefficients, such as negative binomial theta.
+        k = len(root.fit.coefficients) + extra_df(model)
         # R's n is nrow(Z). Rows with zero weight are not counted, so that
         # zero weights act as deleted rows (docs/decisions.md); without zero
         # weights this is R's n.
@@ -353,7 +368,7 @@ class _Grower:
             )
 
         scorer = getattr(model, "split_objectives", None)
-        if not callable(scorer):
+        if scorer is None or not uses_batch_split(model):
             return side_fit, None
 
         def batch(order: IntArray, cuts: IntArray) -> SplitObjectives | None:
@@ -387,6 +402,18 @@ class _Grower:
         def terminal(reason: StopReason, **kw: Any) -> Node:
             return Node(node_id, depth, rows, nobs, mod, reason, **kw)
 
+        # A failed node fit ends the branch with a warning instead of an
+        # error (docs/decisions.md). partykit has no counterpart: R's fit
+        # functions stop mob() with an error.
+        if mod.failed:
+            warnings.warn(
+                f"node {node_id}: the model fit failed ({mod.reason}); "
+                "the node is terminal",
+                NodeFitFailedWarning,
+                stacklevel=2,
+            )
+            return terminal(StopReason.FIT_FAILED)
+
         # Stopping rules (:536-547). minsize is checked first, so a node that
         # meets both is recorded as stopped by minsize.
         if nobs < 2 * minsize:
@@ -394,8 +421,11 @@ class _Grower:
         if depth >= control.maxdepth:
             return terminal(StopReason.MAXDEPTH)
 
-        # Instability tests (:550). partykit wraps them in try(); a failure
-        # makes the node terminal (:569-573).
+        # Instability tests (:550). partykit wraps them in try(); a failure,
+        # or a fit without scores, makes the node terminal with test = NA
+        # (:569-573).
+        if mod.status is FitStatus.NO_ESTFUN:
+            return terminal(StopReason.NO_ESTFUN, test_failed=True)
         if mod.estfun is None:
             return terminal(StopReason.TEST_FAILED, test_failed=True)
         z_node = [
@@ -520,7 +550,8 @@ def _prune(node: Node, rule: PruneRule, k: int, dfsplit: bool, n: float) -> None
     if not node.kids or not all(kid.terminal for kid in node.kids):
         return
     objfun = (node.fit.objfun, sum(kid.fit.objfun for kid in node.kids))
-    # k is the root's coefficient count, aliased ones included (:647).
+    # k is the root's coefficient count, aliased ones included (:647), plus
+    # the model's extra_df.
     df = (k, len(node.kids) * k + int(dfsplit))
     if rule(objfun, df, (node.nobs, n)):
         node.kids = []

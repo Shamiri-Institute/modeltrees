@@ -47,7 +47,9 @@ used, and the terminal node id of every row.
 Each `Node` keeps its rows, `nobs`, the `FitResult`, the instability tests,
 the adjusted p-value of the selected variable, the split search with every
 candidate and objective, the split, the kids and a `StopReason`. The stop
-reasons are the same as the fixtures' `stop_reason`.
+reasons are the same as the fixtures' `stop_reason`, plus `fit_failed`
+for a node whose own fit failed, which partykit cannot produce
+(docs/model-interface.md, section 4.2).
 
 ## 2. Options
 

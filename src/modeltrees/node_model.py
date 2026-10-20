@@ -6,13 +6,27 @@ only on :class:`NodeModel`; model implementations live in
 :mod:`modeltrees.models`.
 """
 
-from dataclasses import dataclass
-from typing import Protocol
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Protocol
 
 import numpy as np
 from numpy.typing import NDArray
 
 FloatArray = NDArray[np.float64]
+
+
+class FitStatus(Enum):
+    """How a fit ended (docs/model-interface.md, section 4.2)."""
+
+    OK = "ok"
+    # No usable estimate: in split search the candidate is inadmissible, at a
+    # node the node becomes terminal with a warning.
+    FAILED = "failed"
+    # An estimate, but no scores (partykit's estfun = NULL): the node is
+    # terminal without tests. In split search the fit counts as usual.
+    NO_ESTFUN = "no_estfun"
 
 
 @dataclass(frozen=True)
@@ -23,12 +37,59 @@ class FitResult:
     estfun: FloatArray | None  # shape (n, k_nonaliased), weights included
     vcov: FloatArray | None = None  # only needed for vcov "info" or "sandwich"
     converged: bool = True
+    status: FitStatus = FitStatus.OK
+    reason: str | None = None  # why the fit failed or has no scores
+    # Model-specific diagnostics, for example theta, warnings or boundary
+    # counts. The core stores them and does not read them.
+    extras: Mapping[str, Any] = field(default_factory=dict)
+
+    @property
+    def failed(self) -> bool:
+        return self.status is FitStatus.FAILED
+
+
+def failed_fit(coef_names: tuple[str, ...], reason: str, **extras: Any) -> FitResult:
+    """A failed fit: NaN coefficients, objective Inf and no scores."""
+    return FitResult(
+        coefficients=np.full(len(coef_names), np.nan),
+        coef_names=coef_names,
+        objfun=float("inf"),
+        estfun=None,
+        converged=False,
+        status=FitStatus.FAILED,
+        reason=reason,
+        extras=extras,
+    )
+
+
+def extra_df(model: object) -> int:
+    """Parameters a model estimates per node beyond its coefficients.
+
+    They count in the pruning df, as theta does for the negative binomial
+    model. Read from the optional attribute ``extra_df`` (default 0).
+    """
+    return int(getattr(model, "extra_df", 0))
+
+
+def uses_batch_split(model: object) -> bool:
+    """Whether split search may use the model's ``split_objectives``.
+
+    A model opts out with ``batch_split = False``, for example when a
+    candidate's fit can fail, which approximate objectives cannot detect.
+    """
+    return callable(getattr(model, "split_objectives", None)) and bool(
+        getattr(model, "batch_split", True)
+    )
 
 
 class NodeModel(Protocol):
     """A model that MOB fits in every node.
 
     Mirrors the type 1 fit interface of partykit::mob (modelparty.R, mob()).
+    A fit that cannot produce an estimate returns ``status = FAILED``
+    (see :func:`failed_fit`) instead of raising; one without scores returns
+    ``status = NO_ESTFUN``. Optional attributes: ``extra_df`` (int, default
+    0) and ``batch_split`` (bool, default True).
     """
 
     def fit(
