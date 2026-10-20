@@ -127,3 +127,31 @@ Task 6c, `modeltrees/_formula.py`, `parse_formula(formula) -> ParsedFormula`.
    identifiers.
 7. **Numbers.** A digit sequence other than `0` and `1`, including a name
    that starts with a digit (`1x`), raises with a hint to use backticks.
+
+## 5. The dataframe boundary
+
+Task 6c, `modeltrees/_frame.py`: `Frame(data)`, `Frame.column(name) ->
+Column`, `array_column(name, values)` (the mapping path, also used for
+arrays passed as weights, offset or cluster) and `read_columns`.
+
+1. **Storage types.** Every column becomes one of `float` (float64; floats
+   and decimals), `integer` (the native integer dtype), `boolean`,
+   `string` or `categorical` (Enum and Categorical). Other dtypes (dates,
+   lists, structs) raise `DataError` when the column is used; unused
+   columns are never converted.
+2. **Labels are strings.** Categorical values and categories are
+   converted with `str()`, so a pandas categorical of integers has levels
+   `"3"`, `"1"`. Object columns must hold only strings and None.
+3. **Null and NaN.** `Column.null` and `Column.nan` are separate masks.
+   pandas reports NaN as null (`is_null()` is true), so a pandas NaN is
+   under `null`; polars and numpy NaN are under `nan`. Missing data
+   (section 4.1) is their union.
+4. **Kind candidates.** A numeric storage type (float, integer, Boolean)
+   may be declared `nominal` or `ordered` in `kinds`; string and
+   categorical columns cannot be `numeric`.
+5. **A polars Categorical has no declared levels**, so its levels come
+   from the code-point sort (section 4.3, rule 4). An unordered pandas
+   categorical keeps its declared categories (section 13, decision 3).
+6. **Input types.** Anything that is not a `Mapping`, an eager narwhals
+   frame or a lazy frame raises `TypeError`. A mapping's values go through
+   `numpy.asarray`, so lists work; they must be 1-D and of equal length.
