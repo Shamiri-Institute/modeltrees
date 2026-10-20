@@ -407,3 +407,36 @@ Task 6d, `modeltrees/_report.py` and the `ModelTree` methods.
    every node with tests. `coefficients`: `coef_table()`. The text is
    the tree print followed by each tested node's test table, the dropped
    levels and the recorded warnings.
+
+## 13. Tests of the public layer
+
+Task 6d. `tests/test_api_fixtures.py` grows all 44 tree and extension
+tree fixtures through their entry point from a polars frame (the frame
+helpers moved from `tests/test_design_fixtures.py` to
+`tests/fixture_frames.py`).
+
+1. **Equal to the array path, bit for bit.** Every node's rows, nobs,
+   stop reason, p-value, the whole `FitResult` (coefficients, objective,
+   scores, extras), the instability tests, the split search and the
+   split, and the tree's minsize, variables and fitted nodes, compared
+   with exact equality (NaN equal to NaN), for all 44 fixtures including
+   `sim_gaussian_lmtree_zero_weights`.
+2. **Against R.** `fitted_node`, `predict(type="node")` and the routing of
+   the training frame as new data equal the fixture's `fitted_node`, and
+   `loglik()` its `summary.loglik` (rtol 1e-8) and `loglik_df`, for the
+   43 oracle fixtures. The zero-weights fixture's routing is compared with
+   the array path instead.
+3. **Predictions** equal the leaf model refitted on the leaf's rows and
+   the linear predictor and inverse link (softmax for multinomial)
+   written out, at rtol 1e-12, for every type the model has; the
+   prediction of the training rows equals that of the training frame bit
+   for bit.
+4. **Coefficient table.** Bit for bit the array-path leaf coefficients,
+   and against the fixture with the tolerances the model tests already
+   use for the same coefficients (no new ones): rtol 1e-8 with atol
+   1e-10, `SEPARATED_RTOL` from `tests/test_safelogit.py` for completely
+   separated safe logit leaves, and the convergence-offset bound of
+   `tests/test_multinom.py` for multinomial leaves.
+5. **Missing data** against the same frame with the rows deleted by hand:
+   the grown trees are identical, and the dropped rows have node 0 and NaN
+   predictions.

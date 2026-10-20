@@ -210,3 +210,49 @@ def test_warnings_before_an_error_are_still_emitted() -> None:
         with pytest.raises(mt.DataError, match="'f'.*categorical"):
             mt.lmtree("f ~ x | z", df)
     assert [w.category for w in caught] == [MissingDataWarning]
+
+
+# Exceptions from the frontend (section 7.1).
+
+
+def test_formula_error_with_position() -> None:
+    with pytest.raises(mt.FormulaError, match="log") as info:
+        mt.lmtree("y ~ log(x) | z", _gaussian())
+    assert info.value.position == 4
+    assert isinstance(info.value, ValueError)
+
+
+def test_data_errors() -> None:
+    df = _gaussian()
+    with pytest.raises(mt.DataError, match="'w'"):
+        mt.lmtree("y ~ x | z", df, weights="w")
+    with pytest.raises(mt.DataError, match="collect"):
+        mt.lmtree("y ~ x | z", df.lazy())  # type: ignore[arg-type]
+    with pytest.raises(mt.DataError, match="negative"):
+        mt.lmtree("y ~ x | z", df, weights=np.full(300, -1.0))
+    holes = df.with_columns(
+        pl.when(pl.int_range(pl.len()) < 2).then(None).otherwise(pl.col("z")).alias("z")
+    )
+    with pytest.raises(mt.DataError, match="na_action='fail'"):
+        mt.lmtree("y ~ x | z", holes, na_action="fail")
+    infinite = df.with_columns(pl.col("y").replace(df["y"][0], float("inf")))
+    with pytest.raises(mt.DataError, match="infinite"):
+        mt.lmtree("y ~ x | z", infinite)
+    counts = df.with_columns((pl.col("y") - 10).round().alias("y"))
+    with pytest.raises(mt.DataError, match="negative"):
+        mt.glmtree("y ~ x | z", counts, family="poisson")
+
+
+def test_fit_error_reaches_the_user_with_its_type() -> None:
+    rng = np.random.default_rng(0)
+    df = pl.DataFrame({"y": rng.poisson(2, 200), "z": rng.uniform(size=200)})
+    with pytest.raises(mt.FitError, match="first iteration failed") as info:
+        mt.glmtree("y ~ z", df, family="poisson", maxit=0)
+    assert type(info.value).__name__ == "GlmFitError"
+
+
+def test_type_errors() -> None:
+    with pytest.raises(TypeError, match="eager dataframe"):
+        mt.lmtree("y ~ x | z", [1, 2, 3])  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="offset"):
+        mt.multinomtree("y ~ x | z", _gaussian(), offset="x")

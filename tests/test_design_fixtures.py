@@ -10,15 +10,19 @@ is not the code-point sort). An offset ``log(exposure)`` cannot be written
 in the formula subset or as a column name, so it is a precomputed column.
 """
 
-import csv
 import warnings
 from typing import Any
 
 import numpy as np
-import pandas as pd  # type: ignore[import-untyped]
-import polars as pl
 import pytest
-from fixtures_io import FIXTURES, load_json
+from fixture_frames import (
+    dict_arrays,
+    offset_column,
+    ordered_kinds,
+    pandas_frame,
+    polars_frame,
+    schema,
+)
 from grown_trees import ALL_TREES, fixture, tree_inputs
 from tree_fixtures import cluster, data, variables
 
@@ -42,101 +46,6 @@ DICT_TREES = [
 ]
 
 
-def _schema(csv_relative: str) -> list[dict[str, Any]]:
-    columns: list[dict[str, Any]] = load_json(
-        csv_relative.replace(".csv", ".schema.json")
-    )["columns"]
-    return columns
-
-
-def _raw(csv_relative: str) -> dict[str, list[str]]:
-    with open(FIXTURES / csv_relative, newline="") as f:
-        rows = list(csv.DictReader(f))
-    return {name: [r[name] for r in rows] for name in rows[0]}
-
-
-def _offset_column(f: dict[str, Any]) -> tuple[str | None, str | None]:
-    """The offset as a column name, and the column to precompute it from."""
-    expr = f["offset"]
-    if expr is None:
-        return None, None
-    if expr.startswith("log(") and expr.endswith(")"):
-        return f"log_{expr[4:-1]}", expr[4:-1]
-    return expr, None
-
-
-def _polars(f: dict[str, Any]) -> pl.DataFrame:
-    raw = _raw(f["data_csv"])
-    series = []
-    for col in _schema(f["data_csv"]):
-        name, kind = col["name"], col["type"]
-        if kind in ("factor", "ordered"):
-            series.append(pl.Series(name, raw[name], dtype=pl.Enum(col["levels"])))
-        elif kind == "integer":
-            series.append(pl.Series(name, [int(v) for v in raw[name]], dtype=pl.Int64))
-        else:
-            assert kind == "double"
-            series.append(
-                pl.Series(name, [float(v) for v in raw[name]], dtype=pl.Float64)
-            )
-    df = pl.DataFrame(series)
-    name, source = _offset_column(f)
-    if name is not None and source is not None:
-        df = df.with_columns(pl.Series(name, np.log(df[source].to_numpy())))
-    return df
-
-
-def _pandas(f: dict[str, Any]) -> pd.DataFrame:
-    raw = _raw(f["data_csv"])
-    out: dict[str, Any] = {}
-    for col in _schema(f["data_csv"]):
-        name, kind = col["name"], col["type"]
-        if kind in ("factor", "ordered"):
-            out[name] = pd.Categorical(
-                raw[name], categories=col["levels"], ordered=kind == "ordered"
-            )
-        elif kind == "integer":
-            out[name] = np.array([int(v) for v in raw[name]], dtype=np.int64)
-        else:
-            out[name] = np.array([float(v) for v in raw[name]])
-    name, source = _offset_column(f)
-    if name is not None and source is not None:
-        out[name] = np.log(out[source])
-    return pd.DataFrame(out)
-
-
-def _dict(f: dict[str, Any]) -> tuple[dict[str, np.ndarray], dict[str, list[str]]]:
-    """Numpy arrays, and the levels= a factor needs when its schema order is
-    not the code-point sort."""
-    raw = _raw(f["data_csv"])
-    out: dict[str, np.ndarray] = {}
-    levels: dict[str, list[str]] = {}
-    for col in _schema(f["data_csv"]):
-        name, kind = col["name"], col["type"]
-        if kind in ("factor", "ordered"):
-            out[name] = np.array(raw[name])
-            if kind == "ordered" or col["levels"] != sorted(col["levels"]):
-                levels[name] = col["levels"]
-        elif kind == "integer":
-            out[name] = np.array([int(v) for v in raw[name]], dtype=np.int64)
-        else:
-            out[name] = np.array([float(v) for v in raw[name]])
-    name, source = _offset_column(f)
-    if name is not None and source is not None:
-        out[name] = np.log(out[source])
-    used = {f["response"], *f["regressors"], *f["partitioning"]}
-    return out, {k: v for k, v in levels.items() if k in used}
-
-
-def _ordered(f: dict[str, Any]) -> dict[str, Any]:
-    used = {f["response"], *f["regressors"], *f["partitioning"]}
-    return {
-        c["name"]: "ordered"
-        for c in _schema(f["data_csv"])
-        if c["type"] == "ordered" and c["name"] in used
-    }
-
-
 def _build(f: dict[str, Any], frame: Any, **kwargs: Any) -> Design:
     with warnings.catch_warnings():
         warnings.simplefilter("error")  # no missing data in the fixtures
@@ -144,7 +53,7 @@ def _build(f: dict[str, Any], frame: Any, **kwargs: Any) -> Design:
             f["formula"],
             frame,
             weights=f["weights"],
-            offset=_offset_column(f)[0],
+            offset=offset_column(f)[0],
             cluster=f.get("cluster"),
             **kwargs,
         )
@@ -191,20 +100,20 @@ def _assert_matches(f: dict[str, Any], design: Design) -> None:
 @pytest.mark.parametrize(("directory", "name"), ALL_TREES)
 def test_polars_frame(directory: str, name: str) -> None:
     f = fixture(directory, name)
-    _assert_matches(f, _build(f, _polars(f), kinds=_ordered(f)))
+    _assert_matches(f, _build(f, polars_frame(f), kinds=ordered_kinds(f)))
 
 
 @pytest.mark.parametrize(("directory", "name"), PANDAS_TREES)
 def test_pandas_frame(directory: str, name: str) -> None:
     f = fixture(directory, name)
-    _assert_matches(f, _build(f, _pandas(f)))
+    _assert_matches(f, _build(f, pandas_frame(f)))
 
 
 @pytest.mark.parametrize(("directory", "name"), DICT_TREES)
 def test_dict_of_arrays(directory: str, name: str) -> None:
     f = fixture(directory, name)
-    arrays, levels = _dict(f)
-    _assert_matches(f, _build(f, arrays, kinds=_ordered(f), levels=levels))
+    arrays, levels = dict_arrays(f)
+    _assert_matches(f, _build(f, arrays, kinds=ordered_kinds(f), levels=levels))
 
 
 def test_dict_subset_exercises_the_code_point_sort() -> None:
@@ -212,7 +121,7 @@ def test_dict_subset_exercises_the_code_point_sort() -> None:
     sorted_factors = [
         c["name"]
         for directory, name in DICT_TREES
-        for c in _schema(fixture(directory, name)["data_csv"])
+        for c in schema(fixture(directory, name)["data_csv"])
         if c["type"] == "factor"
         and c["name"] in fixture(directory, name)["partitioning"]
         and c["levels"] == sorted(c["levels"])
