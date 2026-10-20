@@ -3,7 +3,7 @@
 from typing import Any
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped]
 import polars as pl
 import pytest
 
@@ -98,7 +98,7 @@ def test_polars_categorical_has_no_declared_order() -> None:
 
 def test_polars_lazy_frame_raises() -> None:
     with pytest.raises(DataError, match=r"collect\(\)"):
-        Frame(pl.DataFrame({"a": [1]}).lazy())
+        Frame(pl.DataFrame({"a": [1]}).lazy())  # type: ignore[arg-type]
 
 
 def test_polars_unsupported_dtype() -> None:
@@ -235,7 +235,8 @@ def test_unsupported_input_type() -> None:
 
 def test_read_columns_in_every_backend() -> None:
     values = {"x": [1.0, 2.0], "g": ["a", "b"]}
-    for data in (pl.DataFrame(values), pd.DataFrame(values), values):
+    inputs: list[Any] = [pl.DataFrame(values), pd.DataFrame(values), values]
+    for data in inputs:
         columns, n = read_columns(data, ["x", "g", "x"])
         assert n == 2
         assert list(columns) == ["x", "g"]

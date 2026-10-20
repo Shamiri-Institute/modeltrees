@@ -155,3 +155,56 @@ arrays passed as weights, offset or cluster) and `read_columns`.
 6. **Input types.** Anything that is not a `Mapping`, an eager narwhals
    frame or a lazy frame raises `TypeError`. A mapping's values go through
    `numpy.asarray`, so lists work; they must be 1-D and of equal length.
+
+## 6. The design builder
+
+Task 6c, `modeltrees/_design.py`, `build_design(formula, data, *, weights,
+offset, cluster, levels, kinds, na_action) -> Design`.
+
+1. **Output.** `Design` holds the parsed formula, the raw `Response`
+   (float64 values, a Boolean as 0/1, or 0-based codes with levels), the
+   regressor matrix `x` (always with the intercept column when the formula
+   has one, so an intercept-only model is an `(n, 1)` column of ones, not
+   `None`), `coef_names`, the partitioning variables as the core's
+   `Variable`, weights (ones when not given), offset and cluster (None when
+   not given), `used_rows` and `missing_counts`. Every array covers the
+   used rows only. `Term` describes the response, each regressor and each
+   partitioning variable (kind, storage, kept and dropped levels, coding
+   and matrix columns) for a later predict step.
+2. **R's coefficient names keep backticks.** R writes a non-syntactic
+   name with backticks in `model.matrix` column names (`` `my x` ``,
+   `` `my f`b ``, `` `b b`TRUE ``), so the port does too (`r_name`):
+   a name is syntactic if it starts with a letter or a dot not followed by
+   a digit, has only letters, digits, `.` and `_`, and is not reserved.
+3. **Boolean regressors** follow R's logical exactly: a factor with levels
+   `FALSE` and `TRUE`, both always kept (R keeps an unused one, so a
+   constant `TRUE` column gives an all-one `bTRUE`). With an intercept
+   that is the single `<col>TRUE` column of section 1.3; without one, as
+   the first factor term, it gets `<col>FALSE` and `<col>TRUE`, as
+   `model.matrix(y ~ 0 + b)` does. `kinds={"b": "numeric"}` makes it a
+   0/1 column named `b`; `"nominal"` an ordinary factor of the observed
+   levels.
+4. **`levels` makes a numeric column categorical** unless `kinds` says
+   otherwise (section 4.3 allows a multinomial "integer with `levels`").
+   `levels` with `kinds="numeric"` raises.
+5. **Numeric columns made categorical.** Integer, float and Boolean
+   columns may be `nominal` or `ordered` through `kinds`. Their level
+   labels are R's `as.character`: integers in decimal, Booleans `FALSE` and
+   `TRUE`, doubles with 15 significant digits in the shorter of fixed and
+   scientific notation (`"1e+05"`, `"2.5"`, `"10"`). Rule 3 of section 4.3
+   (numeric order) applies to all of them, so an ordered integer or float
+   needs no `levels`.
+6. **Values outside `levels`** are checked over every non-missing row of
+   the column, not only the used rows. User levels are converted with the
+   same label rule, so `levels={"y": [0, 1, 2]}` matches integer codes.
+7. **Unknown names in `kinds` or `levels`** (columns the formula does not
+   use) raise `DataError`, to catch typos.
+8. **Weights and offset** must be integer or float columns or arrays.
+   Arrays passed for weights, offset or cluster go through the mapping path
+   of `_frame` and are named `(weights)`, `(offset)` and `(cluster)` in
+   missing-value counts. Cluster ids are passed through unchanged (numbers,
+   or strings for string and categorical columns); the core recodes them.
+9. **Missing data.** `missing_counts` counts each used column's missing
+   values over all input rows; the warning lists them in the order
+   response, regressors, partitioning variables, weights, offset, cluster.
+   Inf checks run on the used rows only.
