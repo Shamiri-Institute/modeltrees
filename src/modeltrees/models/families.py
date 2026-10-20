@@ -295,6 +295,80 @@ class Poisson:
         return True
 
 
+class NegativeBinomial:
+    """``MASS::negative.binomial(theta, link = "log")`` (MASS 7.3-66).
+
+    The family glm.nb refits with at each alternation, for a fixed theta.
+    The log link is ``make.link("log")``: ``pmax(exp(eta), DBL_EPSILON)``
+    for the mean and its derivative, every eta valid. ``validmu`` is
+    ``all(mu > 0)``, which unlike poisson's admits Inf; a NaN mean makes R
+    stop with an error and is invalid here.
+    """
+
+    link: ClassVar[str] = "log"
+
+    def __init__(self, theta: float) -> None:
+        self.theta = float(theta)
+        # R: paste("Negative Binomial(", format(round(theta, 4)), ")").
+        # Only the prefix matters, for the unit dispersion of the scores.
+        self.family = f"Negative Binomial({round(self.theta, 4):.7g})"
+
+    def linkfun(self, mu: FloatArray) -> FloatArray:
+        with np.errstate(divide="ignore"):
+            return np.log(mu)
+
+    def linkinv(self, eta: FloatArray) -> FloatArray:
+        with np.errstate(over="ignore"):
+            out = np.exp(eta)
+        return np.maximum(out, DBL_EPSILON, out=out)
+
+    def mu_eta(self, eta: FloatArray) -> FloatArray:
+        return self.linkinv(eta)
+
+    def variance(self, mu: FloatArray) -> FloatArray:
+        return mu + mu**2 / self.theta
+
+    def dev_resids(self, y: FloatArray, mu: FloatArray, wt: FloatArray) -> FloatArray:
+        th = self.theta
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return (
+                2
+                * wt
+                * (
+                    y * np.log(np.maximum(1, y) / mu)
+                    - (y + th) * np.log((y + th) / (mu + th))
+                )
+            )
+
+    def aic(
+        self, y: FloatArray, n: FloatArray, mu: FloatArray, wt: FloatArray, dev: float
+    ) -> float:
+        th = np.float64(self.theta)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            term = (
+                (y + th) * np.log(mu + th)
+                - y * np.log(mu)
+                + gammaln(y + 1)
+                - th * np.log(th)
+                + gammaln(th)
+                - gammaln(th + y)
+            )
+        return float(2 * np.sum(term * wt))
+
+    def initialize(self, y: FloatArray, weights: FloatArray) -> Initialized:
+        if np.any(y < 0):
+            raise ValueError(
+                "negative values not allowed for the negative binomial family"
+            )
+        return Initialized(y=y, n=np.ones_like(y), mustart=y + (y == 0) / 6)
+
+    def validmu(self, mu: FloatArray) -> bool:
+        return bool(np.all(mu > 0))
+
+    def valideta(self, eta: FloatArray) -> bool:
+        return True
+
+
 def _beyond(eta: FloatArray, bound: float) -> bool:
     """Whether any linear predictor is outside +-bound (or NaN)."""
     if eta.shape[0] == 0:

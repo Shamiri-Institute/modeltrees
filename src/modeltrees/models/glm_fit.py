@@ -11,7 +11,8 @@ are invalid, and NaN for aliased coefficients. R's warnings are emitted as
 :class:`GlmFitWarning` with R's messages and recorded in the result. R's
 errors (``stop()``) raise :class:`GlmFitError`.
 
-``etastart``, ``mustart`` and ``trace`` are not ported.
+``etastart`` is ported for glm.nb's alternation (models/negbin.py).
+``mustart`` and ``trace`` are not ported.
 """
 
 import warnings
@@ -116,6 +117,7 @@ def _irls(
     epsilon: float,
     maxit: int,
     messages: list[str] | None,
+    etastart: ArrayLike | None = None,
 ) -> _Irls:
     """glm.fit up to its final warnings. ``messages = None`` is quiet mode:
     no warnings and no working residuals, with the same arithmetic otherwise.
@@ -169,7 +171,15 @@ def _irls(
     else:
         coefold: FloatArray | None = None
         coef_cur: FloatArray | None = None
-        if start is not None:
+        if etastart is not None:
+            # R: eta <- etastart %||% {...}; start is then neither checked
+            # nor used as coefold, only as the base of the coefficient update.
+            eta = np.asarray(etastart, dtype=np.float64).reshape(-1).copy()
+            if eta.shape[0] != nobs:
+                raise ValueError("etastart needs one value per observation")
+            if start is not None:
+                coef_cur = np.asarray(start, dtype=np.float64).reshape(-1).copy()
+        elif start is not None:
             start_v = np.asarray(start, dtype=np.float64).reshape(-1)
             if start_v.shape[0] != nvars:
                 raise GlmFitError(
@@ -323,13 +333,14 @@ def glm_fit(
     epsilon: float = 1e-8,
     maxit: int = 25,
     intercept: bool = True,
+    etastart: ArrayLike | None = None,
 ) -> GlmFit:
     """Fit a GLM by IRLS exactly as ``glm.fit`` does."""
     xm, yv, prior, off = _prepare(x, y, weights, offset)
     nobs = yv.shape[0]
     nvars = xm.shape[1]
     messages: list[str] = []
-    r = _irls(xm, yv, family, prior, start, off, epsilon, maxit, messages)
+    r = _irls(xm, yv, family, prior, start, off, epsilon, maxit, messages, etastart)
     yv, mu, fit = r.y, r.mu, r.fit
     assert r.residuals is not None
     linkinv = family.linkinv
@@ -390,6 +401,7 @@ def glm_objective(
     offset: ArrayLike | None = None,
     epsilon: float = 1e-8,
     maxit: int = 25,
+    etastart: ArrayLike | None = None,
 ) -> GlmObjective:
     """``glm_fit`` without warnings, null deviance, residuals and weights.
 
@@ -399,7 +411,7 @@ def glm_objective(
     """
     xm, yv, prior, off = _prepare(x, y, weights, offset)
     nvars = xm.shape[1]
-    r = _irls(xm, yv, family, prior, start, off, epsilon, maxit, None)
+    r = _irls(xm, yv, family, prior, start, off, epsilon, maxit, None, etastart)
     rank = 0 if nvars == 0 or r.fit is None else r.fit.rank
     aic_model = family.aic(r.y, r.n_trials, r.mu, prior, r.dev) + 2 * rank
     return GlmObjective(r.coef, float(aic_model), rank, r.conv)

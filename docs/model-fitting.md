@@ -22,6 +22,7 @@ R sources are R 4.6.1 (`src/library/stats/R/glm.R`, `lm.R`, `family.R`,
 | partykit `glmfit` (`glmtree.R:57-133`) | `models/glm.py`: `GlmModel` |
 | factor response, `binomial()$initialize` | `models/glm.py`: `binomial_response` |
 | `FitResult`, `NodeModel` and the optional protocols | `node_model.py`, as in docs/model-interface.md, section 4 |
+| `MASS::negative.binomial`, `glm.nb`, `theta.ml`, and `negbinfit` | `models/families.py`: `NegativeBinomial`; `models/negbin.py` (docs/extensions-port.md) |
 
 ## 2. Decisions and ambiguities
 
@@ -51,8 +52,9 @@ R sources are R 4.6.1 (`src/library/stats/R/glm.R`, `lm.R`, `family.R`,
    deviance or residuals (docs/performance.md, Step 1b), so a candidate whose
    fit does not converge no longer warns. Node fits still warn. Under
    `modeltrees.reference_path()` split search uses `glm_fit` as before.
-5. **Not ported.** `etastart`, `mustart`, `trace`, `singular.ok = FALSE`,
-   two-column binomial responses and non-canonical links. `intercept` is
+5. **Not ported.** `mustart`, `trace`, `singular.ok = FALSE`,
+   two-column binomial responses and non-canonical links. `etastart` is
+   ported for glm.nb's alternation (docs/extensions-port.md). `intercept` is
    kept, defaulting to `TRUE` as in `glmfit`, which never sets it.
 6. **Zero weights in `GlmModel`: the port diverges from partykit for
    gaussian, by decision.** R's `gaussian()$aic` is
