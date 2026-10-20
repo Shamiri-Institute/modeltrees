@@ -7,3 +7,4 @@ clone partykit 1.3-0
 clone strucchange 1.6-0
 clone party 1.0-1
 clone MASS 7.3-66
+clone sandwich 3.1-3
