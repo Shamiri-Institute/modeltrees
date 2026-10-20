@@ -73,6 +73,7 @@ notes/phase1-questions.md. Match R unless a decision says otherwise.
   level is failure, the rest are success.
 - caseweights is an explicit argument. Frequency-weight semantics are the
   default, as in partykit. caseweights=False is available.
+- narwhals is the only runtime dependency beyond numpy and scipy.
 
 ## Extensions (phase 4)
 

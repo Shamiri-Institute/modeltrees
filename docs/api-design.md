@@ -14,8 +14,8 @@ The goal is a small, predictable surface: few entry points, one tree class,
 one rule for each data question, and errors rather than guesses.
 
 Every decision that was not forced lists its alternatives in a line or two and
-says which was chosen and why. Section 13 lists the open questions. Nothing
-here is implemented yet.
+says which was chosen and why. Section 13 records the decisions on the
+questions this design left open. Nothing here is implemented yet.
 
 Facts checked on 2026-10-20 for the decisions below:
 
@@ -248,8 +248,8 @@ core never sees a dataframe.
   (`narwhals>=2.0`). It is imported only in the boundary module
   (`modeltrees/_frame.py`), never in the core or the models, so the
   CLAUDE.md rule "numpy and scipy only" still holds for `src/` outside the
-  boundary. CLAUDE.md's dependency paragraph needs a one-line update to say
-  this (open question 1).
+  boundary. narwhals is a required runtime dependency (section 13,
+  decision 1), and CLAUDE.md's dependency paragraph says so.
 - A `Mapping` input does not go through narwhals: float, integer and
   Boolean numpy arrays are numeric (Boolean as 0/1), and string or object
   arrays are nominal with code-point-sorted levels unless `levels` says
@@ -283,7 +283,7 @@ class ModelTree:
     @property depth -> int
     def coef_table(self, *, layout="wide", se=None, backend=None) -> Frame
     def predict(self, newdata=None, *, type="response", offset=None,
-                unseen="error", x=None, z=None) -> np.ndarray
+                unseen="error", x=None, z=None) -> np.ndarray   # 4.2
     def loglik(self) -> LogLik                # value, df, nobs
     def aic(self) -> float
     def bic(self) -> float
@@ -373,7 +373,12 @@ Objective function (negative log-likelihood): 385.03
 - Numbers use `digits = 4` significant digits by default, as R's
   `getOption("digits") - 3`; `tree.print(digits=...)` changes it.
 - Rows dropped for missing values are reported under the header:
-  `n = 940 (60 rows dropped: missing values)`.
+  `n = 940 (60 rows dropped: missing values)`, with the count per column
+  (4.1).
+- The header lists every partitioning variable with its kind, for example
+  `Partitioning variables: age (numeric), severity (ordered), region
+  (nominal)`, so that an ordinal or nominal reading (1.4) is never
+  implicit.
 - A leaf with `status = "failed"` prints `n = 25 [fit failed: <reason>]`
   instead of coefficients. A `no_estfun` leaf prints its coefficients
   followed by `[no scores: <reason>]`, for example `complete separation`
@@ -383,10 +388,12 @@ Objective function (negative log-likelihood): 385.03
   `none`.
 
 `summary()` returns a `TreeSummary` with a `__str__` and the tables behind
-it as frames: per node (id, parent, depth, n, nobs, stop reason, status,
-selected variable, statistic, adjusted p-value, split), per inner node the
-full instability-test table, the leaf coefficients, the model reports, the
-dropped levels and rows, and the recorded warnings (7.3).
+it as frames: the partitioning variables with their kind and levels, per
+node (id, parent, depth, n, nobs, stop reason, status, selected variable,
+statistic, adjusted p-value, split), per inner node the full
+instability-test table, the leaf coefficients, the model reports, the
+dropped levels and rows (with the missing-value count per column), and the
+recorded warnings (7.3).
 
 ### 3.5 Model reports
 
@@ -456,16 +463,34 @@ NaN). Columns that the formula does not use are ignored. With
 `na_action="fail"` any missing value raises `DataError` naming the columns
 and the count.
 
-- Dropping is silent, as in R, but recorded: `n_used`, `used_rows`, the
-  print header and `summary()`. *Alternatives:* warn on every drop, or
-  default to `"fail"`. **Chosen: silent and recorded**, matching R; the
-  header line makes it visible without a warning on every fit.
+- Dropping emits one `MissingDataWarning` per fit, and only when rows are
+  dropped, with the number of rows dropped and the count of missing values
+  per column, for example `60 of 1000 rows dropped for missing values
+  (age: 41, region: 25)`. The drop is also recorded: `n_used`,
+  `used_rows`, the print header, `summary()` and the tree's recorded
+  warnings (7.3). *Alternatives:* silent as in R, or default to `"fail"`.
+  **Chosen: `"omit"` with one warning** (section 13, decision 5): R's
+  default, but a dropped row changes the population a subgroup describes,
+  so the user hears about it once per fit.
 - Infinite values: allowed in numeric partitioning variables (R allows them,
   they sort to the ends). Inf in the response, a regressor, the weight or
   the offset raises `DataError`, as `lm.fit` and `glm.fit` stop.
 - Levels are computed after the drop (1.3).
 
 ### 4.2 Prediction with missing or unseen values
+
+`predict` returns numpy arrays, not frames (section 13, decision 4): node
+ids as `int64` with 0 for "no node", `"link"`, `"response"` and `"prob"`
+as `float64` with NaN where there is no prediction, and `"class"` labels as
+an object array with None. The types:
+
+| `type` | result |
+| --- | --- |
+| `"node"` | leaf id per row |
+| `"link"` | the linear predictor `X beta + offset`; for multinomial an `(n, K - 1)` matrix of the non-reference classes |
+| `"response"` | the inverse link of `"link"`; undefined for multinomial and raises `ValueError` pointing to `"prob"` and `"class"` |
+| `"prob"` | multinomial only: the `(n, K)` probability matrix, columns in `response_levels` order |
+| `"class"` | multinomial only: the most probable label, ties to the first level, as `which.max` |
 
 `predict` routes each row from the root and stops as soon as it needs a
 value:
@@ -483,7 +508,7 @@ value:
   `model.frame(xlev = ...)` stops with "factor has new levels".
   `unseen="null"` gives no prediction for those rows instead.
 - A missing regressor or offset gives NaN for `"response"`, `"link"` and
-  `"prob"`; `"node"` is still returned.
+  `"prob"` and None for `"class"`; `"node"` is still returned.
 
 ### 4.3 Level order
 
@@ -543,12 +568,17 @@ V = H^-1 M H^-1,   M = c * sum_g s_g s_g',   s_g = sum_{i in g} estfun_i
 - The adjustment `c` follows `sandwich::vcovCL`: `cadjust=True` multiplies
   by `G / (G - 1)`, and `type="HC1"` by `(n - 1) / (n - k)`, where `G` is
   the number of clusters with positive weight in the leaf and `n` the
-  leaf's `nobs`. `type="HC0"` omits the second factor. The default
-  (`HC1`, `cadjust=True`) is vcovCL's default for lm and glm objects, and
-  equals statsmodels' `cov_type="cluster"` with its default correction.
-  *Alternatives:* HC0 only (simplest), or statsmodels' naming. **Chosen:
-  sandwich's names and defaults**, because R is the oracle (section 9 lists
-  the fixture worth generating).
+  leaf's `nobs`. `type="HC0"` omits the second factor. The default is
+  `HC1` with `cadjust=True` for every model, the extension models included
+  (section 13, decision 7). It equals statsmodels' `cov_type="cluster"`
+  with its default correction. That it is also `vcovCL`'s default for lm
+  and glm objects is a claim from the documentation and must be verified
+  against sandwich's source before release; the R fixture (section 9)
+  therefore passes `type` and `cadjust` explicitly and does not rely on
+  vcovCL's defaults. *Alternatives:* HC0 only (simplest), HC0 for the
+  extension models, or statsmodels' naming. **Chosen: sandwich's names, one
+  default for every model**, because R is the oracle and one default is
+  easier to state.
 
 ```python
 def vcov(self, node_id: int | None = None, *,
@@ -600,9 +630,14 @@ returns in a new field `FitResult.hessian`:
 
 The core never requests it during growth, so trees, timings and fixtures
 are unchanged. `vcov()` refits each requested node once with
-`estfun=True, vcov=True` on the node's rows, checks that the coefficients
-equal the stored ones bit for bit (the fit is deterministic), and uses that
-fit's scores and Hessian. *Alternatives:* (a) request the Hessian at every
+`estfun=True, vcov=True` on the node's rows and takes the scores and the
+Hessian from that refit. It checks that the refit's coefficients equal the
+stored ones to a relative tolerance of 1e-10 (NaN in the same places) and
+emits a `ModelTreesWarning` naming the node when they differ by more. The
+fit is deterministic, but a bit-for-bit check would tie `vcov` to the
+exact code path: split search and node fits may take different but
+equivalent paths (docs/decisions.md, fast and reference paths agree to
+about 1e-15 relative), and the BLAS may differ between growth and refit. *Alternatives:* (a) request the Hessian at every
 node fit during growth and store it; (b) a separate `hessian(result, y, x,
 ...)` method; (c) refit on demand with the existing flag. **Chosen: (c).**
 (a) costs time in every tree for a feature most trees do not use; (b)
@@ -649,7 +684,7 @@ inference about the subgroups. v0.1 therefore reports standard errors
 docstring and the README say why and point to sample splitting (grow on
 one part, estimate on the other) as the honest route. Model-based
 (non-robust) standard errors are deferred: they need a per-model
-dispersion convention (open question 6).
+dispersion convention (section 13, decision 6).
 
 ## 6. Parallel split search
 
@@ -669,15 +704,23 @@ with the same code.
   with `bench_tree.py`). It never changes results, only time.
 - **`restart=False`** makes each candidate start from the previous one's
   coefficients, a serial chain. Split search then runs serially whatever
-  `n_jobs` says; documented, no warning.
+  `n_jobs` says. When `n_jobs > 1` is ignored for this reason, the entry
+  point emits one `ModelTreesWarning` per fit (not per node) saying so
+  (section 13, decision 10). Falling below the size threshold is not
+  warned about: it is the normal case for small nodes.
 - **Mechanics.** One `concurrent.futures.ProcessPoolExecutor` per tree,
   created at the first parallel search and shut down when the tree is
   grown, with the `forkserver` start method on Linux (the default from
   Python 3.14; `fork` with a running BLAS thread pool is unsafe) and
   `spawn` elsewhere. Models must be picklable; the five built-in ones are.
-  Workers start with `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS` and
-  `MKL_NUM_THREADS` set to 1 in their environment, so that k workers do not
-  oversubscribe the cores (docs/performance.md, Step 1a). The node's arrays
+  Workers get `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS` and
+  `MKL_NUM_THREADS` set to 1 in their environment before the worker
+  process starts, so that k workers do not oversubscribe the cores
+  (docs/performance.md, Step 1a). The variables are set in the environment
+  the forkserver (or spawned interpreter) inherits, not in a pool
+  `initializer`: a BLAS library reads them once, when numpy loads it, and
+  the forkserver may already have imported numpy before an initializer
+  runs. A test checks that a worker reports one BLAS thread. The node's arrays
   go to each worker once per search; candidates are cut into about
   `4 k` contiguous chunks for load balance.
 - **Reproducibility rule.** The results with any `n_jobs` must be
@@ -750,11 +793,14 @@ if one fires from a frontend call it is a frontend bug.
 ModelTreesWarning(UserWarning)
 ├── NodeFitFailedWarning        a node fit failed; the node is terminal
 ├── TooFewClustersWarning       a node has at most k clusters (tests) or G <= k (vcov)
+├── MissingDataWarning          rows were dropped for missing values (4.1), counts per column
 └── GlmFitWarning               glm.fit and glm.nb warnings, with R's messages
 ```
 
-The existing three classes get the common base; no new warning classes in
-v0.1. Missing-data drops do not warn (4.1).
+The existing three classes get the common base; `MissingDataWarning` is
+the one new class. `ModelTreesWarning` itself is emitted for the ignored
+`n_jobs` (6) and a refit that does not reproduce the stored coefficients
+(5.2).
 
 ### 7.3 Recording
 
@@ -780,7 +826,8 @@ __all__ = [
     "TreeSummary", "RecordedWarning", "MobControl",
     # errors and warnings
     "ModelTreesError", "FormulaError", "DataError", "UnseenLevelError", "FitError",
-    "ModelTreesWarning", "NodeFitFailedWarning", "TooFewClustersWarning", "GlmFitWarning",
+    "ModelTreesWarning", "NodeFitFailedWarning", "TooFewClustersWarning",
+    "MissingDataWarning", "GlmFitWarning",
     # the reference implementation switch (docs/decisions.md)
     "reference_path",
     "__version__",
@@ -879,16 +926,18 @@ path. polars joins statsmodels in the dev group.
    against a central finite difference of the summed scores, and `H^-1`
    against R's model-based covariance where the fixtures record it, else
    against statsmodels' `cov_params()` (scaled to the same dispersion).
-   The bit-for-bit refit check of 5.2 on every fixture leaf.
+   The refit check of 5.2 (relative tolerance 1e-10) on every fixture
+   leaf, and its warning on a model whose refit differs.
 8. **`n_jobs`.** With `OPENBLAS_NUM_THREADS=1` set for the test process,
    every glm, negbin, safe logit and multinomial fixture tree grown with
    `n_jobs=2` and `4` (threshold lowered by a test hook so the small
    fixtures run in parallel) equals the serial tree bit for bit, including
    `SplitSearch.objective` and failed-candidate counts. `restart=False`
-   with `n_jobs=4` runs serially.
+   with `n_jobs=4` runs serially and emits one `ModelTreesWarning`. A
+   worker reports one BLAS thread.
 9. **Errors and warnings.** Each exception class from the frontend; the
-   internal exceptions never escape; recorded and merged warnings; a user
-   `"error"` filter.
+   internal exceptions never escape; recorded and merged warnings; one
+   `MissingDataWarning` with per-column counts; a user `"error"` filter.
 
 R fixtures that would still be worth generating later:
 
@@ -901,7 +950,7 @@ R fixtures that would still be worth generating later:
   tree with one).
 - **sandwich::vcovCL** on the leaf fits of a clustered lmtree, glmtree
   (binomial, poisson), glm.nb and multinom, with `type = "HC0"` and
-  `"HC1"`.
+  `"HC1"` and `cadjust = TRUE` passed explicitly (5.1).
 - **formula features**: a tree with a factor regressor (treatment coding
   and its names), `y ~ 0 + f | z`, a logical partitioning variable, and a
   model frame with `NA` rows (na.omit).
@@ -977,8 +1026,8 @@ Listed so that the implementation tasks can be cut from them:
 1. `FitResult.hessian` and each model's response to `vcov=True` (5.2, 5.3);
    `check_vcov` removed.
 2. `LogLikModel.loglik` for the five models (3.6); `PredictingModel.predict`
-   for the five models, kinds `"link"`, `"response"`, `"prob"`;
-   `ReportingModel.report` (3.5).
+   for the five models, kinds `"link"`, `"response"`, `"prob"` and
+   `"class"` (4.2); `ReportingModel.report` (3.5).
 3. `n_jobs` through `mob` into `find_split` (6), with the private threshold
    and a test hook.
 4. Exception and warning base classes (7); `GlmFitError` and `NegBinError`
@@ -990,44 +1039,40 @@ Listed so that the implementation tasks can be cut from them:
    `_design` (columns, levels, missing data, coding), `_predict`,
    `_vcov`, `_report`, `_api` (entry points and `ModelTree`).
 7. `pyproject.toml`: `narwhals>=2.0` in `dependencies`, polars in the dev
-   group; CLAUDE.md's dependency paragraph updated (open question 1).
+   group (section 13, decision 1; CLAUDE.md already says so).
 
-## 13. Open questions
+## 13. Decisions on the open questions
 
-1. **narwhals as a runtime dependency.** CLAUDE.md says "numpy and scipy
-   only". The design adds narwhals (no dependencies of its own, imported
-   only at the boundary). Confirm, or prefer an optional extra
-   (`modeltrees[frames]`) with dict-of-arrays input as the only built-in
-   path?
-2. **pandas ordered categoricals as ordinal partitioning variables.** The
-   design reads them as ordered (R's semantics) but treats a polars Enum
-   as nominal, which is the only backend-dependent rule. The alternative is
-   to require `kinds={"z": "ordered"}` for every backend. Which?
-3. **pandas unordered categorical level order.** The design honors the
-   declared `categories` of a pandas categorical and sorts polars
-   Categorical values. Is honoring pandas' order wanted, given it differs
-   from what the same data in polars would give?
-4. **`predict` output type.** numpy arrays (node ids with 0 for "no node",
-   floats with NaN, labels as an object array with None), or a Series/frame
-   in the caller's backend with real nulls? numpy is simpler and typed; a
-   frame keeps nulls honest.
-5. **Missing data default.** `"omit"` silently (R) with a printed count, or
-   `"fail"` by default for analysts, since silently dropped rows change the
-   population a subgroup describes?
-6. **Model-based standard errors.** v0.1 offers only sandwich covariances.
-   Should non-robust standard errors be added, and with which dispersion
-   (lm's `RSS / (n - k)` with `n` from case weights, glm's Pearson
-   estimate as `summary.glm`)?
-7. **Default `type` for `vcov`.** `HC1` with `cadjust` (sandwich's default
-   for lm and glm, statsmodels' default correction) for every model, or
-   `HC0` for the extension models, as `vcovCL` uses for objects other than
-   lm and glm?
-8. **Multinomial `predict(type="response")`.** The design returns the most
-   probable class label (ties to the first level, as `which.max`).
-   Alternatively `"response"` could be the probabilities and `"class"` a
-   separate type.
-9. **The `.` shorthand** (`y ~ x | .`, all other columns as partitioning
-   variables) is cheap. Leave it out of v0.1 as designed, or add it?
-10. **Parallel threshold and `restart=False`.** Silent serial fallback is
-    designed; would a one-time warning when `n_jobs > 1` is ignored be
-    preferred?
+The questions this design left open, as decided. Sections 1 to 12 are
+written to match.
+
+1. **narwhals is a required runtime dependency**, imported only in
+   `modeltrees/_frame.py`, the dataframe boundary. It is not an optional
+   extra. The core and the models stay numpy and scipy only (section 2).
+2. **Ordinal partitioning variables only when declared**: `kinds="ordered"`
+   for the column, or a pandas-like ordered categorical. A polars Enum is
+   nominal unless `kinds` says otherwise (1.4). `print` and `summary` list
+   the kind of every partitioning variable (3.4), so the reading is never
+   implicit.
+3. **A declared pandas category order is honored** for an unordered pandas
+   categorical, as for every declared order (4.3), even though the same
+   data as a polars Categorical would be sorted.
+4. **`predict` returns numpy arrays** (4.2): node ids with 0 for "no
+   node", floats with NaN, labels as an object array with None.
+5. **`na_action="omit"` by default**, with one `MissingDataWarning` (a
+   `ModelTreesWarning` subclass) when rows are dropped, giving the count
+   per column. The drop is also recorded on the tree and printed (4.1,
+   3.4, 7.2).
+6. **Model-based standard errors are deferred.** v0.1 has sandwich
+   covariances only (5.4).
+7. **`vcov` defaults to `type="HC1"` with `cadjust=True` for every model.**
+   The claim that this is `vcovCL`'s default for glm objects must be
+   verified against sandwich's source before release, so the R fixture
+   passes `type` and `cadjust` explicitly (5.1, 9).
+8. **Multinomial `predict(type="response")` is undefined and raises**,
+   pointing to `type="prob"` (the probability matrix) and `type="class"`
+   (the labels) (4.2).
+9. **The `.` shorthand stays out of v0.1** (1.2).
+10. **One `ModelTreesWarning` when `n_jobs > 1` is ignored because
+    `restart=False`** (6). Running serially below the size threshold is
+    not warned about.
