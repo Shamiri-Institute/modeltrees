@@ -9,10 +9,13 @@ only on :class:`NodeModel`; model implementations live in
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from modeltrees.split_search import SplitObjectives
 
 FloatArray = NDArray[np.float64]
 
@@ -141,6 +144,28 @@ class LogLikModel(NodeModel, Protocol):
     """
 
     def loglik(self, result: FitResult) -> tuple[float, int]: ...
+
+
+class BatchSplitModel(NodeModel, Protocol):
+    """Optional: approximate objectives of every numeric split candidate at
+    once, with an error bound (docs/model-interface.md, section 4.1).
+
+    Candidate ``i`` sends the rows ``order[:cuts[i]]`` left. Returning None
+    declines, and every candidate is fitted.
+    """
+
+    def split_objectives(
+        self,
+        y: NDArray[np.generic],
+        x: FloatArray | None,
+        *,
+        weights: FloatArray,
+        offset: FloatArray | None,
+        cluster: NDArray[np.generic] | None,
+        caseweights: bool,
+        order: NDArray[np.intp],
+        cuts: NDArray[np.intp],
+    ) -> "SplitObjectives | None": ...
 
 
 class ReportingModel(NodeModel, Protocol):

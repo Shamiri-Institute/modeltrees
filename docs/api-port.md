@@ -19,8 +19,7 @@ core tree class (section 12, item 5) and the optional model protocols
    (`FormulaError(message, position=None)`).
 3. **`modeltrees.__all__`** has the error and warning classes and
    `reference_path`. The entry points and result classes of section 8.1
-   join it when they exist; `hello()` stays until the section 8.1 surface
-   replaces it.
+   joined it in task 6d, which removed `hello()` (section 10, item 1).
 4. **Internal exceptions.** `tests/test_errors.py` grows every tree and
    extension tree fixture (44 trees, `sim_cluster_few_lmtree_cluster`
    among them, whose nodes fail the tests with too few clusters) and
@@ -286,3 +285,38 @@ Task 6d, `modeltrees/_api.py`: `ModelTree`, `NodeInfo`, `SplitRule`,
 6. **`ModelTree.model`** exposes the node model, read-only, in addition to
    the fields of section 3.1. `used_rows` and `fitted_node` are read-only
    numpy arrays; setting an attribute raises `AttributeError`.
+
+## 10. Entry points
+
+Task 6d, `modeltrees/_api.py`: `lmtree`, `glmtree`, `negbintree`,
+`safelogittree`, `multinomtree` and the public `mob`.
+
+1. **Exports.** `modeltrees.__all__` is section 8.1's list without
+   `LeafVcov`, which joins it with `vcov` (a later task). `__version__`
+   comes from the installed package's metadata. `modeltrees.models`
+   exports section 8.2's names; `BatchSplitModel`, specified in
+   docs/model-interface.md (section 4.1) but never defined, is now a
+   protocol in `modeltrees/node_model.py`.
+2. **Control options** are a `TypedDict` (`ControlOptions`) unpacked into
+   the entry points. Python accepts any keyword at runtime, so the names
+   are checked: an unknown one raises `TypeError` listing the options,
+   and so does `control` together with any option, or a `control` that is
+   not a `MobControl`. The public `mob` keeps section 1.1's signature:
+   `control` only, no control options.
+3. **`n_jobs`** accepts None or 1 (an int, not a Boolean); other ints
+   raise `NotImplementedError`, anything else `TypeError`.
+4. **Recorded warnings.** The whole fit is recorded: the design build
+   (so the `MissingDataWarning` is in `tree.warnings` too, section 4.1),
+   the response coding and the growth. Inside, the filter is `"always"`,
+   so every occurrence is counted and user filters apply only to the
+   re-emitted warnings. A warning recorded `k > 1` times is re-emitted
+   once as `"<message> (k times)"`, so a filter matching the message from
+   its start still matches. Warnings recorded before an exception are
+   re-emitted before it propagates. The re-emitted warnings are
+   attributed to the caller of the entry point. `MissingDataWarning`'s
+   message is unchanged.
+5. **`multinomtree(offset=...)`** raises `TypeError`, since the model has
+   no offset (section 4.3's multinom rules).
+6. **`mob()` trees** have `formula = None`, `model_name =
+   "mob(<model class>)"`, every row used, and `response_levels` from the
+   model's `levels` attribute if it has one (the multinomial model).

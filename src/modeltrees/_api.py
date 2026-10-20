@@ -8,18 +8,35 @@ it was grown from. It is immutable: every view (:class:`NodeInfo`,
 """
 
 import math
+import warnings as _warnings
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any
+from typing import Any, Literal, TypedDict, Unpack
 
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 
-from modeltrees._design import Design, r_double_label
+from modeltrees._design import (
+    ColumnSpec,
+    Design,
+    NaAction,
+    build_design,
+    r_double_label,
+)
+from modeltrees._frame import DataInput, Kind
+from modeltrees._response import CodedResponse, ResponseRule, code_response
 from modeltrees.instability import VariableKind
+from modeltrees.models.glm import GlmModel
+from modeltrees.models.lm import LmModel
+from modeltrees.models.multinom import MultinomModel
+from modeltrees.models.negbin import NegBinModel
+from modeltrees.models.safelogit import SafeLogitModel
 from modeltrees.node_model import NodeModel
+from modeltrees.pruning import PruneRule
 from modeltrees.split_search import Split
 from modeltrees.tree import GrownTree, MobControl, Node
+from modeltrees.tree import mob as _grow
 
 # R prints numeric split points rounded to getOption("digits") - 2 = 5
 # decimals (print.partynode, character_split).
@@ -396,6 +413,465 @@ class ModelTree:
             f"<ModelTree {self._model_name}: {what}, {n_inner} inner and "
             f"{len(self.leaves)} terminal nodes>"
         )
+
+
+# Entry points
+
+
+class ControlOptions(TypedDict, total=False):
+    """The :class:`~modeltrees.tree.MobControl` fields, as keywords of the
+    entry points (``lmtree(f, df, alpha=0.01)``). The last five raise
+    ``NotImplementedError`` for anything but their defaults."""
+
+    alpha: float
+    bonferroni: bool
+    minsize: float | None
+    maxdepth: float
+    trim: float
+    dfsplit: bool
+    prune: str | PruneRule | None
+    restart: bool
+    caseweights: bool
+    numsplit: Literal["left", "center"]
+    catsplit: Literal["binary", "multiway"]
+    mtry: float
+    breakties: bool
+    ordinal: str
+    vcov: str
+    parm: Sequence[int] | Sequence[str] | None
+
+
+def _control(control: MobControl | None, options: Mapping[str, Any]) -> MobControl:
+    unknown = sorted(set(options) - set(ControlOptions.__annotations__))
+    if unknown:
+        raise TypeError(
+            f"unexpected keyword argument(s): {', '.join(unknown)} (control options "
+            f"are {', '.join(ControlOptions.__annotations__)})"
+        )
+    if control is not None:
+        if options:
+            raise TypeError(
+                "pass either control=MobControl(...) or control options such as "
+                f"{next(iter(options))}=..., not both"
+            )
+        if not isinstance(control, MobControl):
+            raise TypeError(
+                f"control must be a MobControl, got {type(control).__name__}"
+            )
+        return control
+    return MobControl(**options)
+
+
+def _check_n_jobs(n_jobs: int | None) -> None:
+    if n_jobs is None or (
+        isinstance(n_jobs, (int, np.integer))
+        and not isinstance(n_jobs, bool)
+        and n_jobs == 1
+    ):
+        return
+    if not isinstance(n_jobs, (int, np.integer)) or isinstance(n_jobs, bool):
+        raise TypeError(f"n_jobs must be an int or None, got {n_jobs!r}")
+    raise NotImplementedError(
+        "parallel split search (n_jobs other than None or 1) is not available yet"
+    )
+
+
+def _merge(caught: Sequence[_warnings.WarningMessage]) -> tuple[RecordedWarning, ...]:
+    """Identical (category, message) pairs merged, in order of first
+    occurrence (section 7.3)."""
+    counts: dict[tuple[type[Warning], str], int] = {}
+    for w in caught:
+        key = (w.category, str(w.message))
+        counts[key] = counts.get(key, 0) + 1
+    return tuple(RecordedWarning(c, m, n) for (c, m), n in counts.items())
+
+
+def _recorded[T](
+    run: Callable[[], T], stacklevel: int
+) -> tuple[T, tuple[RecordedWarning, ...]]:
+    """Run ``run`` while recording its warnings, then re-emit each distinct
+    warning once, ``stacklevel`` frames up from here (the user's call).
+
+    Inside, every warning is recorded ("always"), so user filters such as
+    "error" apply only to the re-emitted warnings. Warnings recorded before
+    an exception are re-emitted before it propagates.
+    """
+    caught: list[_warnings.WarningMessage] = []
+    try:
+        with _warnings.catch_warnings(record=True) as recording:
+            _warnings.simplefilter("always")
+            caught = recording
+            result = run()
+    finally:
+        recorded = _merge(caught)
+        for r in recorded:
+            text = r.message if r.count == 1 else f"{r.message} ({r.count} times)"
+            _warnings.warn(text, r.category, stacklevel=stacklevel + 1)
+    return result, recorded
+
+
+def _formula_tree(
+    formula: str,
+    data: DataInput,
+    *,
+    rule: ResponseRule,
+    make_model: Callable[[tuple[str, ...], CodedResponse], NodeModel],
+    model_name: str,
+    weights: ColumnSpec,
+    offset: ColumnSpec,
+    cluster: ColumnSpec,
+    levels: Mapping[str, Sequence[Any]] | None,
+    kinds: Mapping[str, Kind] | None,
+    na_action: NaAction,
+    n_jobs: int | None,
+    control: MobControl | None,
+    options: Mapping[str, Any],
+) -> ModelTree:
+    """The shared body of the formula entry points."""
+    ctrl = _control(control, options)
+    _check_n_jobs(n_jobs)
+
+    def run() -> tuple[Design, CodedResponse, NodeModel, GrownTree]:
+        design = build_design(
+            formula,
+            data,
+            weights=weights,
+            offset=offset,
+            cluster=cluster,
+            levels=levels,
+            kinds=kinds,
+            na_action=na_action,
+        )
+        coded = code_response(design.response, rule, weighted=weights is not None)
+        model = make_model(design.coef_names, coded)
+        grown = _grow(
+            model,
+            coded.values,
+            design.x,
+            design.partitioning,
+            weights=design.weights,
+            offset=design.offset,
+            cluster=design.cluster,
+            control=ctrl,
+        )
+        return design, coded, model, grown
+
+    # Frames: _formula_tree, the entry point, the user's call.
+    (design, coded, model, grown), recorded = _recorded(run, 3)
+    return ModelTree(
+        grown,
+        model,
+        model_name=model_name,
+        formula=design.formula.expanded,
+        design=design,
+        response_levels=coded.levels,
+        warnings=recorded,
+        used_rows=design.used_rows,
+        x=design.x,
+        offset=design.offset,
+        boolean=_boolean_variables(design),
+        backend=design.backend,
+    )
+
+
+def lmtree(
+    formula: str,
+    data: DataInput,
+    *,
+    weights: ColumnSpec = None,
+    offset: ColumnSpec = None,
+    cluster: ColumnSpec = None,
+    levels: Mapping[str, Sequence[Any]] | None = None,
+    kinds: Mapping[str, Kind] | None = None,
+    na_action: NaAction = "omit",
+    n_jobs: int | None = None,
+    control: MobControl | None = None,
+    **control_options: Unpack[ControlOptions],
+) -> ModelTree:
+    """A linear model tree, as ``partykit::lmtree``.
+
+    ``formula`` is ``"y ~ x1 + x2 | z1 + z2"``: the regressors of the
+    leaf models, then the partitioning variables. A one-part formula
+    ``"y ~ z1 + z2"`` means an intercept-only model partitioned by ``z1``
+    and ``z2``, as in R (the tree's ``formula`` shows it expanded,
+    ``"y ~ 1 | z1 + z2"``). ``data`` is an eager dataframe (polars,
+    pandas, ...) or a mapping of column names to arrays.
+
+    ``weights``, ``offset`` and ``cluster`` are column names or arrays;
+    ``levels`` and ``kinds`` set level orders and variable kinds per column;
+    ``na_action="omit"`` drops incomplete rows with one
+    :class:`~modeltrees.errors.MissingDataWarning`. Control options
+    (``alpha``, ``minsize``, ``maxdepth``, ``prune``, ...) are keywords, or
+    a :class:`~modeltrees.tree.MobControl` as ``control``, not both.
+    ``n_jobs`` accepts only None or 1 for now.
+    """
+    return _formula_tree(
+        formula,
+        data,
+        rule="gaussian",
+        make_model=lambda names, _: LmModel(coef_names=names),
+        model_name="lmtree",
+        weights=weights,
+        offset=offset,
+        cluster=cluster,
+        levels=levels,
+        kinds=kinds,
+        na_action=na_action,
+        n_jobs=n_jobs,
+        control=control,
+        options=control_options,
+    )
+
+
+_FAMILIES: tuple[str, ...] = ("gaussian", "binomial", "poisson")
+
+
+def glmtree(
+    formula: str,
+    data: DataInput,
+    *,
+    family: Literal["gaussian", "binomial", "poisson"] = "gaussian",
+    epsilon: float = 1e-8,
+    maxit: int = 25,
+    weights: ColumnSpec = None,
+    offset: ColumnSpec = None,
+    cluster: ColumnSpec = None,
+    levels: Mapping[str, Sequence[Any]] | None = None,
+    kinds: Mapping[str, Kind] | None = None,
+    na_action: NaAction = "omit",
+    n_jobs: int | None = None,
+    control: MobControl | None = None,
+    **control_options: Unpack[ControlOptions],
+) -> ModelTree:
+    """A generalized linear model tree, as ``partykit::glmtree``.
+
+    ``family`` is "gaussian", "binomial" or "poisson", each with its
+    canonical link; ``epsilon`` and ``maxit`` are glm.fit's controls. A
+    binomial response may be 0/1, Boolean, categorical (the first level is
+    failure, every other level success, as in R) or proportions with the
+    number of trials as ``weights``; a poisson response non-negative
+    counts. The other arguments are those of :func:`lmtree`.
+    """
+    if not isinstance(family, str) or family not in _FAMILIES:
+        raise NotImplementedError(
+            f"family {family!r} is not available; glmtree supports "
+            f"{', '.join(_FAMILIES)} with their canonical links"
+        )
+    rule: ResponseRule = family
+    return _formula_tree(
+        formula,
+        data,
+        rule=rule,
+        make_model=lambda names, _: GlmModel(
+            family, epsilon=epsilon, maxit=maxit, coef_names=names
+        ),
+        model_name=f"glmtree({family})",
+        weights=weights,
+        offset=offset,
+        cluster=cluster,
+        levels=levels,
+        kinds=kinds,
+        na_action=na_action,
+        n_jobs=n_jobs,
+        control=control,
+        options=control_options,
+    )
+
+
+def negbintree(
+    formula: str,
+    data: DataInput,
+    *,
+    objective: Literal["loglik", "deviance"] = "loglik",
+    epsilon: float = 1e-8,
+    maxit: int = 25,
+    weights: ColumnSpec = None,
+    offset: ColumnSpec = None,
+    cluster: ColumnSpec = None,
+    levels: Mapping[str, Sequence[Any]] | None = None,
+    kinds: Mapping[str, Kind] | None = None,
+    na_action: NaAction = "omit",
+    n_jobs: int | None = None,
+    control: MobControl | None = None,
+    **control_options: Unpack[ControlOptions],
+) -> ModelTree:
+    """A negative binomial regression tree with theta estimated per leaf.
+
+    The model follows Rusch's thesis: only the regression coefficients are
+    tested for instability, so a change in overdispersion alone does not
+    split. ``objective="deviance"`` compares candidate splits by deviance,
+    as party 1.0-1 did in the thesis. The response must be non-negative
+    counts. The other arguments are those of :func:`lmtree`.
+    """
+    return _formula_tree(
+        formula,
+        data,
+        rule="negbin",
+        make_model=lambda names, _: NegBinModel(
+            objective=objective, epsilon=epsilon, maxit=maxit, coef_names=names
+        ),
+        model_name="negbintree",
+        weights=weights,
+        offset=offset,
+        cluster=cluster,
+        levels=levels,
+        kinds=kinds,
+        na_action=na_action,
+        n_jobs=n_jobs,
+        control=control,
+        options=control_options,
+    )
+
+
+def safelogittree(
+    formula: str,
+    data: DataInput,
+    *,
+    separation_tol: float = 1e-6,
+    epsilon: float = 1e-8,
+    maxit: int = 25,
+    weights: ColumnSpec = None,
+    offset: ColumnSpec = None,
+    cluster: ColumnSpec = None,
+    levels: Mapping[str, Sequence[Any]] | None = None,
+    kinds: Mapping[str, Kind] | None = None,
+    na_action: NaAction = "omit",
+    n_jobs: int | None = None,
+    control: MobControl | None = None,
+    **control_options: Unpack[ControlOptions],
+) -> ModelTree:
+    """A binary logistic regression tree that tolerates separation.
+
+    This project's design, not Rusch's implementation (the thesis names a
+    safe logit model but gives no code; docs/extensions-spec.md). A
+    completely separated leaf (every row fitted within ``separation_tol``)
+    keeps its fit but has no scores and is terminal. The response must be
+    binary: 0/1, Boolean or categorical (first level 0, the rest 1);
+    proportions raise. The other arguments are those of :func:`lmtree`.
+    """
+    return _formula_tree(
+        formula,
+        data,
+        rule="safelogit",
+        make_model=lambda names, _: SafeLogitModel(
+            separation_tol=separation_tol,
+            epsilon=epsilon,
+            maxit=maxit,
+            coef_names=names,
+        ),
+        model_name="safelogittree",
+        weights=weights,
+        offset=offset,
+        cluster=cluster,
+        levels=levels,
+        kinds=kinds,
+        na_action=na_action,
+        n_jobs=n_jobs,
+        control=control,
+        options=control_options,
+    )
+
+
+def multinomtree(
+    formula: str,
+    data: DataInput,
+    *,
+    gtol: float = 1e-12,
+    maxit: int = 100,
+    weights: ColumnSpec = None,
+    offset: ColumnSpec = None,
+    cluster: ColumnSpec = None,
+    levels: Mapping[str, Sequence[Any]] | None = None,
+    kinds: Mapping[str, Kind] | None = None,
+    na_action: NaAction = "omit",
+    n_jobs: int | None = None,
+    control: MobControl | None = None,
+    **control_options: Unpack[ControlOptions],
+) -> ModelTree:
+    """A multinomial logit tree, fitted by Newton's method in each node.
+
+    This project's design, not Rusch's implementation
+    (docs/extensions-spec.md). The response must be categorical, or integer
+    with ``levels``; its first level (after unused levels are dropped) is
+    the reference class, and the tree's ``response_levels`` records the
+    order. An offset is not supported. The other arguments are those of
+    :func:`lmtree`.
+    """
+    if offset is not None:
+        raise TypeError("multinomtree does not support an offset")
+    return _formula_tree(
+        formula,
+        data,
+        rule="multinom",
+        make_model=lambda names, coded: MultinomModel(
+            coded.levels or (), coef_names=names, gtol=gtol, maxit=maxit
+        ),
+        model_name="multinomtree",
+        weights=weights,
+        offset=offset,
+        cluster=cluster,
+        levels=levels,
+        kinds=kinds,
+        na_action=na_action,
+        n_jobs=n_jobs,
+        control=control,
+        options=control_options,
+    )
+
+
+def mob(
+    model: NodeModel,
+    y: ArrayLike,
+    x: ArrayLike | None,
+    z: Mapping[str, Any],
+    *,
+    weights: ArrayLike | None = None,
+    offset: ArrayLike | None = None,
+    cluster: ArrayLike | None = None,
+    control: MobControl | None = None,
+    n_jobs: int | None = None,
+) -> ModelTree:
+    """Grow a tree with any node model on arrays, as ``partykit::mob``.
+
+    The array path for custom models: ``y`` the response as the model takes
+    it, ``x`` the regressor matrix with its intercept column (or None for
+    an intercept-only model), ``z`` the partitioning variables, each a
+    :class:`~modeltrees.tree.Variable`, a dict with ``kind``, ``values``
+    and optionally ``levels``, or a tuple ``(kind, values[, levels])``.
+    There is no missing-data handling: every row is used.
+    """
+    _check_n_jobs(n_jobs)
+    if control is not None and not isinstance(control, MobControl):
+        raise TypeError(f"control must be a MobControl, got {type(control).__name__}")
+    xv = None if x is None else np.asarray(x, dtype=np.float64)
+    off = None if offset is None else np.asarray(offset, dtype=np.float64)
+
+    def run() -> GrownTree:
+        return _grow(
+            model,
+            y,
+            xv,
+            z,
+            weights=weights,
+            offset=off,
+            cluster=cluster,
+            control=control,
+        )
+
+    grown, recorded = _recorded(run, 2)  # mob, the user's call
+    levels = getattr(model, "levels", None)
+    return ModelTree(
+        grown,
+        model,
+        model_name=f"mob({type(model).__name__})",
+        formula=None,
+        design=None,
+        response_levels=None if levels is None else tuple(str(v) for v in levels),
+        warnings=recorded,
+        used_rows=np.ones(grown.fitted_node.shape[0], dtype=np.bool_),
+        x=xv,
+        offset=off,
+    )
 
 
 def _boolean_variables(design: Design) -> frozenset[str]:
