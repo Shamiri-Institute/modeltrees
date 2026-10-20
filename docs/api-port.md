@@ -364,3 +364,46 @@ Task 6d, `modeltrees/_predict.py` and `ModelTree.predict`.
    then the model is asked for an empty prediction of the type, so a type
    the model does not define (multinomial `"response"`, `"prob"` for the
    others) raises its `ValueError` before any leaf is computed.
+
+## 12. Tables, likelihood and printing
+
+Task 6d, `modeltrees/_report.py` and the `ModelTree` methods.
+
+1. **`coef_table` backends.** `backend` is None, "polars", "pandas",
+   "pyarrow", "modin", "cudf" or "numpy"; anything else raises
+   `ValueError`, a missing library `ImportError`. The frame is built
+   through narwhals in `_frame.build_frame`, so no other module imports a
+   dataframe library. In the "numpy" dict, columns of strings, Booleans
+   with None or mixed values are object arrays. `summary()` takes the same
+   `backend` argument for its tables.
+2. **`se="robust"`** raises `NotImplementedError` until `vcov` exists;
+   any other value but None raises `ValueError`.
+3. **`loglik()`** needs a model with `loglik` (the `LogLikModel`
+   protocol), else `TypeError`. A failed leaf makes the value NaN and
+   emits `NodeFitFailedWarning` naming the leaves on every call of
+   `loglik`, `aic` or `bic`; df stays defined (section 3.1, item 2).
+4. **Printing.** `str(tree)` uses 4 significant digits for the
+   coefficients and theta; `tree.print(digits=...)` changes it (section
+   3.4's `tree.print`). Each value is formatted on its own (`%.4g`), not
+   with R's common formatting of a vector. The footer's parameter count
+   and objective use R's 7 digits. A leaf's `n` is its `nobs`, as
+   `print.modelparty` prints `x$nobs`. The header has a title per model
+   ("Linear model tree", "Generalized linear model tree (family: ...)",
+   "Negative binomial regression tree", "Safe logistic regression tree",
+   "Multinomial logit tree", "Model-based recursive partitioning
+   (<model class>)" for `mob()`), the formula, the partitioning variables
+   with their kinds (a Boolean one as "numeric, Boolean") and
+   `n = <used rows>`, with the dropped rows and per-column counts when
+   rows were dropped. The objective's label is the residual sum of
+   squares for lmtree, the deviance for negbintree with
+   `objective="deviance"`, none for `mob()`, else the negative
+   log-likelihood.
+5. **`summary()` tables.** `variables`: variable, kind, levels and
+   dropped levels (joined with ", "). `nodes`: node, parent, depth,
+   n_rows, nobs, stop_reason, status, the variable with the smallest
+   p-value (also when not significant), its statistic, the adjusted
+   p-value, and `split`, the left kid's condition. `tests`: node,
+   variable, statistic and adjusted p-value (NaN where not tested) for
+   every node with tests. `coefficients`: `coef_table()`. The text is
+   the tree print followed by each tested node's test table, the dropped
+   levels and the recorded warnings.

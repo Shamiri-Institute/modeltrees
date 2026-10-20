@@ -25,6 +25,7 @@ from modeltrees._design import (
     r_double_label,
 )
 from modeltrees._frame import DataInput, Kind
+from modeltrees._loglik import LogLik, tree_loglik
 from modeltrees._predict import (
     PredictType,
     Unseen,
@@ -35,7 +36,17 @@ from modeltrees._predict import (
     raise_unseen,
     route,
 )
+from modeltrees._report import (
+    Backend,
+    coef_columns,
+    format_summary,
+    format_tree,
+    make_table,
+    resolve_backend,
+    summary_tables,
+)
 from modeltrees._response import CodedResponse, ResponseRule, code_response
+from modeltrees.errors import NodeFitFailedWarning
 from modeltrees.instability import VariableKind
 from modeltrees.models.glm import GlmModel
 from modeltrees.models.lm import LmModel
@@ -532,6 +543,96 @@ class ModelTree:
             off = np.full(used.shape[0], np.nan)
             off[used] = self._offset
         return xm, off
+
+    # Tables, likelihood and printing
+
+    def coef_table(
+        self,
+        *,
+        layout: Literal["wide", "long"] = "wide",
+        se: Literal["robust"] | None = None,
+        backend: Backend = None,
+    ) -> Any:
+        """The leaf coefficients, one row per leaf (section 3.3).
+
+        ``layout="wide"``: ``node``, ``n_rows``, ``nobs``, ``status``,
+        ``stop_reason``, one column per coefficient (NaN for aliased or
+        unidentified ones), then the model's report columns.
+        ``layout="long"``: ``node``, ``term``, ``estimate``. The frame is in
+        the backend of the data the tree was grown from, polars for arrays
+        (a dict of numpy arrays without polars), or ``backend``: "polars",
+        "pandas", "pyarrow" or "numpy". No p-values are given: the leaves
+        were selected on the same data (section 5.4).
+        """
+        if se is not None:
+            if se == "robust":
+                raise NotImplementedError(
+                    "robust standard errors come with vcov(), which is not "
+                    "available yet"
+                )
+            raise ValueError(f"se must be None or 'robust', got {se!r}")
+        if layout not in ("wide", "long"):
+            raise ValueError(f"layout must be 'wide' or 'long', got {layout!r}")
+        return make_table(
+            coef_columns(self, layout), resolve_backend(backend, self._backend)
+        )
+
+    def loglik(self) -> LogLik:
+        """The tree's log-likelihood, as ``logLik.modelparty``: the sum over
+        the leaves, df the leaf df plus ``dfsplit`` per inner node, nobs
+        the summed leaf ``nobs`` (section 3.6). NaN, with a
+        :class:`NodeFitFailedWarning`, if a leaf fit failed."""
+        if not callable(getattr(self._model, "loglik", None)):
+            raise TypeError(
+                f"{type(self._model).__name__} has no loglik method "
+                "(the LogLikModel protocol)"
+            )
+        model: Any = self._model
+        failed = [i.id for i in self.nodes if i.is_leaf and i.status == "failed"]
+        if failed:
+            _warnings.warn(
+                f"the fit of leaf {', '.join(map(str, failed))} failed, so the "
+                "tree's log-likelihood is undefined (NaN)",
+                NodeFitFailedWarning,
+                stacklevel=3,
+            )
+        return tree_loglik(self._grown, model)
+
+    def aic(self) -> float:
+        """``-2 loglik + 2 df``."""
+        ll = self.loglik()
+        return -2 * ll.value + 2 * ll.df
+
+    def bic(self) -> float:
+        """``-2 loglik + log(nobs) df``."""
+        ll = self.loglik()
+        return -2 * ll.value + math.log(ll.nobs) * ll.df
+
+    def print(self, *, digits: int = 4) -> None:
+        """Print the tree with leaf coefficients to ``digits`` significant
+        digits (``str(tree)`` uses 4, as R's ``getOption("digits") - 3``)."""
+        print(format_tree(self, digits))
+
+    def __str__(self) -> str:
+        return format_tree(self)
+
+    def summary(self, *, backend: Backend = None) -> TreeSummary:
+        """The tree's tables and their printed form (section 3.4). The
+        tables follow ``coef_table``'s backend rules."""
+        name = resolve_backend(backend, self._backend)
+        variables, nodes, tests = summary_tables(self)
+        design = self._design
+        return TreeSummary(
+            variables=make_table(variables, name),
+            nodes=make_table(nodes, name),
+            tests=make_table(tests, name),
+            coefficients=make_table(coef_columns(self, "wide"), name),
+            dropped_levels={} if design is None else dict(design.dropped_levels),
+            dropped_rows=self.n_rows - self.n_used,
+            missing_counts={} if design is None else dict(design.missing_counts),
+            warnings=self._warnings,
+            text=format_summary(self),
+        )
 
     def __repr__(self) -> str:
         n_inner = len(self._node_infos) - len(self.leaves)
