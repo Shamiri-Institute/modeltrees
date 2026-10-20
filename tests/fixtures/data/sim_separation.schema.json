@@ -1,0 +1,41 @@
+{
+  "dataset": "sim_separation",
+  "description": "Simulated binary data with a constant-response group (z2 = g4) and a region completely separated by x (z1 > 0.65); y_plain has no separation.",
+  "source": "simulated",
+  "seed": 20261032,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 500,
+  "csv": "sim_separation.csv",
+  "columns": [
+    {
+      "name": "x",
+      "type": "double"
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "z2",
+      "type": "factor",
+      "levels": ["g1", "g2", "g3", "g4"]
+    },
+    {
+      "name": "z3",
+      "type": "double"
+    },
+    {
+      "name": "y",
+      "type": "integer"
+    },
+    {
+      "name": "y_plain",
+      "type": "integer"
+    },
+    {
+      "name": "d4",
+      "type": "double"
+    }
+  ],
+  "generator_code": "{\n    n <- 500L\n    d <- data.frame(x = rnorm(n), z1 = runif(n), z2 = factor(sample(c(\"g1\", \"g2\", \"g3\", \"g4\"), n, replace = TRUE)), \n        z3 = rnorm(n))\n    u <- runif(n)\n    y <- as.integer(u < plogis(-0.3 + 0.8 * d$x))\n    sep <- d$z1 > 0.65\n    y[sep] <- as.integer(d$x[sep] > 0)\n    y[d$z2 == \"g4\"] <- 0L\n    d$y <- y\n    d$y_plain <- as.integer(u < plogis(ifelse(d$z1 <= 0.5, -0.5 + 1.2 * d$x, 0.5 - 0.8 * d$x)))\n    d$d4 <- as.numeric(d$z2 == \"g4\")\n    d\n}"
+}

@@ -18,7 +18,11 @@ setwd(r_dir)
 source(file.path("renv", "activate.R"))
 setwd(original_dir)
 
-for (f in c("common.R", "datasets.R", "trees.R", "glm.R", "pvalues.R")) {
+# Phase 4 node models: negbinfit, safelogitfit, multinomfit.
+for (f in sort(list.files(file.path(r_dir, "extensions"), pattern = "[.]R$", full.names = TRUE))) {
+  source(f)
+}
+for (f in c("common.R", "datasets.R", "trees.R", "glm.R", "pvalues.R", "extensions.R")) {
   source(file.path(r_dir, "fixtures", f))
 }
 
@@ -32,7 +36,7 @@ emit <- function(x, rel_path) {
 }
 
 # Datasets.
-datasets <- all_datasets()
+datasets <- c(all_datasets(), extension_datasets())
 names(datasets) <- vapply(datasets, `[[`, "", "name")
 for (ds in datasets) {
   write_dataset(ds, data_dir)
@@ -48,6 +52,40 @@ for (spec in tree_specs) {
   rel <- file.path("trees", paste0(spec$name, ".json"))
   emit(fx, rel)
   tree_index[[length(tree_index) + 1L]] <- list(file = rel, fixture = fx)
+}
+
+# Extension trees (mob() with the r/extensions/ fit functions).
+ext_tree_index <- list()
+for (spec in all_extension_tree_specs()) {
+  fx <- tree_fixture(spec, datasets[[spec$dataset]], instrumented)
+  rel <- file.path("extension_trees", paste0(spec$name, ".json"))
+  emit(fx, rel)
+  ext_tree_index[[length(ext_tree_index) + 1L]] <- list(file = rel, fixture = fx)
+  if (spec$name == "sim_separation_safelogit_plain") {
+    check_safelogit_matches_glmtree(spec, datasets[[spec$dataset]], instrumented)
+  }
+  if (spec$name == "quine_negbin_intercept_deviance") {
+    thesis <- thesis_quine_crosscheck(fx)
+  }
+}
+emit(c(list(
+  fixture = "thesis_quine_crosscheck",
+  description = paste("The thesis' negative binomial quine tree (trusch.md:1356-1368, summaries",
+    "at 1394-1470), grown by party 1.0-1, against extension_trees/quine_negbin_intercept_deviance.json",
+    "grown by partykit 1.3-0 with negbinfit(objective = \"deviance\"). party 1.0-1 itself",
+    "does not build on this R version (see docs/extensions-spec.md), so the comparison is with",
+    "the values printed in the thesis, at their printed precision."),
+  generator = "r/fixtures/extensions.R",
+  tree_fixture = "extension_trees/quine_negbin_intercept_deviance.json"), thesis),
+  "thesis_quine_crosscheck.json")
+
+# Node-level fits of the extension models.
+node_fit_index <- list()
+for (case in all_node_fit_cases()) {
+  fx <- node_fit_fixture(case, datasets[[case$dataset]])
+  rel <- file.path("node_fits", paste0(case$name, ".json"))
+  emit(fx, rel)
+  node_fit_index[[length(node_fit_index) + 1L]] <- list(file = rel, fixture = fx)
 }
 
 # glm.fit.
@@ -76,9 +114,10 @@ readme <- c(
   "edit by hand: this README is also generated. R is needed only to",
   "regenerate; the Python tests read these files directly.",
   "",
-  sprintf("Generated with R %s, partykit %s, strucchange %s, mlbench %s, jsonlite %s.",
+  sprintf("Generated with R %s, partykit %s, strucchange %s, sandwich %s, mlbench %s, jsonlite %s, MASS %s, nnet %s.",
     fixture_versions()$R, fixture_versions()$partykit, fixture_versions()$strucchange,
-    fixture_versions()$mlbench, fixture_versions()$jsonlite),
+    fixture_versions()$sandwich, fixture_versions()$mlbench, fixture_versions()$jsonlite,
+    utils::packageDescription("MASS")$Version, utils::packageDescription("nnet")$Version),
   "",
   "## Conventions",
   "",
@@ -96,8 +135,9 @@ readme <- c(
   "- `stop_reason` is one of `split`, `minsize` (fewer than 2 * minsize",
   "  observations), `maxdepth`, `test_failed` (the instability tests raised an",
   "  error, caught by partykit's `try()`), `not_significant` (adjusted p-value",
-  "  above `alpha`), `no_admissible_split`, or `pruned` (split found, then",
-  "  removed by post-pruning).",
+  "  above `alpha`), `no_admissible_split`, `pruned` (split found, then",
+  "  removed by post-pruning), or `no_estfun` (the fit function returned no",
+  "  scores, so partykit skipped the tests; only the extension models do this).",
   "- `test.status` is `ok`, `not_run` (node stopped before testing, partykit",
   "  stores no `test`), or `failed` (partykit stores `NA`).",
   "- Factor responses (binomial) are encoded by `glm.fit` as 0 for the first",
@@ -112,6 +152,11 @@ readme <- c(
   "  a node's cluster vector is the cluster column at the node's `rows`.",
   "- Each dataset has a `.schema.json` with column types, factor levels in R's",
   "  order, the seed, the RNG kind and the generating code.",
+  "- Trees grown by `partykit::mob()` with an extension fit function have",
+  "  `function_name` `mob`, `fit_function`, `fit_args`, and per node a",
+  "  `model_info` object with the fit's extra outputs (for example `theta` for",
+  "  `negbinfit`, `separation` for `safelogitfit`, `classes_present` for",
+  "  `multinomfit`). See docs/extensions-spec.md for their meaning.",
   "",
   "## Data",
   "",
@@ -120,7 +165,7 @@ readme <- c(
 )
 for (ds in datasets) {
   readme <- c(readme, sprintf("| `data/%s.csv` | %d | %s | %s |", ds$name, nrow(ds$data),
-    if (is.null(ds$seed)) "none (mlbench)" else ds$seed, md_escape(ds$description)))
+    if (is.null(ds$seed)) sprintf("none (%s)", ds$source) else ds$seed, md_escape(ds$description)))
 }
 readme <- c(readme, "",
   "The glm.fit fixtures each have their own `data/glm_<case>.csv`, listed with",
@@ -153,6 +198,63 @@ for (entry in tree_index) {
     "```r", fx$r_call, "```", "")
 }
 readme <- c(readme,
+  "## Extension tree fixtures",
+  "",
+  "Generator: `r/fixtures/extensions.R` (specs) and `r/fixtures/trees.R`",
+  "(growing and extraction, as above). Same format as the tree fixtures, in",
+  "their own directory `extension_trees/` so that tests of the core models",
+  "can keep globbing `trees/`. The fit functions are in `r/extensions/`",
+  "and are specified in docs/extensions-spec.md. The generator also checks",
+  "that `sim_separation_safelogit_plain` is identical to the tree glmtree grows",
+  "with `binomial()` on the same data and settings.",
+  "")
+for (entry in ext_tree_index) {
+  fx <- entry$fixture
+  readme <- c(readme,
+    sprintf("### `%s`", entry$file), "",
+    fx$description, "",
+    sprintf("Data `%s`. %d inner and %d terminal nodes.", fx$data_csv,
+      fx$summary$n_inner, fx$summary$n_terminal), "",
+    "```r", fx$r_call, "```", "")
+}
+readme <- c(readme,
+  "## Node-level fit fixtures",
+  "",
+  "Generator: `r/fixtures/extensions.R`. One fit of an extension model on a",
+  "subset of a dataset, with everything needed to repeat it: `rows` (0-based)",
+  "and `row_filter`, the design matrix `x` (row-major, columns `x_names`), `y`",
+  "(labels for factor responses, with `response_levels`), `weights`, `offset`,",
+  "`start` and `fit_args`. `result` holds the coefficients (null for NA),",
+  "`objfun`, `estfun` (null when the fit returns none) and `model_info`.",
+  "",
+  "`checks` records the numerical verification of `estfun`, each enforced by",
+  "the generator: agreement with the analytic score written by hand",
+  "(`estfun_vs_analytic_max_rel`; exact for multinom, within the IRLS",
+  "tolerance for the glm.fit-based models, whose working weights lag one",
+  "iteration), with central finite differences of the per-observation",
+  "log-likelihood (`fd_vs_estfun_max_rel`, `fd_vs_analytic_max_rel`), and",
+  "column sums at the fit (`estfun_colsums`, relative to the column sums of",
+  "absolute values). `objfun_vs_loglik_abs` checks the objective against the",
+  "summed log-likelihood. For negbin, `theta_score_sum` is the theta score at",
+  "the returned theta (not part of `estfun`).",
+  "")
+for (entry in node_fit_index) {
+  fx <- entry$fixture
+  readme <- c(readme,
+    sprintf("- `%s`: %s Data `%s`, %d rows.", entry$file, fx$description, fx$data_csv, fx$n))
+}
+readme <- c(readme, "",
+  "## Thesis cross-check",
+  "",
+  "### `thesis_quine_crosscheck.json`",
+  "",
+  "The quine tree printed in the thesis (grown with party 1.0-1) against",
+  "`extension_trees/quine_negbin_intercept_deviance.json`. Split variables, node sizes,",
+  "intercepts, theta, test statistics and 1 - p agree at the printed",
+  "precision; the generator stops otherwise. party 1.0-1 does not compile on",
+  "R 4.6 (its C code uses the `Calloc` macro, which R removed), so the thesis",
+  "printout is the reference.",
+  "",
   "## glm.fit fixtures",
   "",
   "Generator: `r/fixtures/glm.R`. Each file records `glm.fit`'s coefficients,",

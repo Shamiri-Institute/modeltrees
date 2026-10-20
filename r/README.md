@@ -134,6 +134,18 @@ instrumented copy of `partykit:::mob_partynode`), `datasets.R`, `trees.R`,
 `glm.R` and `pvalues.R`. Output is deterministic; two consecutive runs produce
 byte-identical files.
 
+`extensions/` holds the phase 4 node models as `partykit::mob()` fit
+functions: `negbinfit` (MASS::glm.nb), `safelogitfit` (glm.fit) and
+`multinomfit` (nnet::multinom). `fixtures/extensions.R` builds their datasets,
+node-level fit fixtures with estfun checks, and tree specs.
+docs/extensions-spec.md specifies them.
+
+party 1.0-1 (the thesis implementation) does not compile on R 4.6.1, because
+its C code uses the removed `Calloc` macro. It is not part of this
+environment. Its dependencies modeltools, coin and vcd were installed into the
+renv library during the attempt. They are not in `renv.lock` and nothing uses
+them.
+
 `mlbench` provides `SynthDiabetes`, the data set used by the partykit 1.3-0
 mob vignette. mlbench 2.1-11 no longer ships `PimaIndiansDiabetes`.
 

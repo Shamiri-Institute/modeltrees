@@ -18,14 +18,16 @@ GLM_CONTROL_DEFAULTS <- list(epsilon = 1e-8, maxit = 25)
 
 tree_spec <- function(name, dataset, fun, formula, description, expect,
                       family = NULL, weights = NULL, offset = NULL,
-                      cluster = NULL, control = list()) {
+                      cluster = NULL, control = list(), fit = NULL,
+                      fit_args = list()) {
   unknown <- setdiff(names(control), names(MOB_CONTROL_DEFAULTS))
   if (length(unknown)) stop("Unknown control settings: ", paste(unknown, collapse = ", "))
   ctrl <- MOB_CONTROL_DEFAULTS
   ctrl[names(control)] <- control
   list(name = name, dataset = dataset, fun = fun, formula = formula,
     description = description, expect = expect, family = family,
-    weights = weights, offset = offset, cluster = cluster, control = ctrl)
+    weights = weights, offset = offset, cluster = cluster, control = ctrl,
+    fit = fit, fit_args = fit_args)
 }
 
 all_tree_specs <- function() {
@@ -173,6 +175,7 @@ all_tree_specs <- function() {
 deparse_value <- function(v) paste(deparse(v, width.cutoff = 500L), collapse = "")
 
 tree_call_text <- function(spec) {
+  if (spec$fun == "mob") return(mob_call_text(spec))
   args <- c(
     sprintf("formula = %s", spec$formula),
     sprintf("data = %s", spec$dataset),
@@ -186,6 +189,25 @@ tree_call_text <- function(spec) {
     sprintf("%s = %s", names(spec$control), vapply(spec$control, deparse_value, ""))
   )
   sprintf("partykit::%s(%s)", spec$fun, paste(args, collapse = ", "))
+}
+
+# partykit::mob() with a custom fit function (r/extensions/). Extra fit
+# arguments go through mob's dots; control is an explicit mob_control() call.
+mob_call_text <- function(spec) {
+  args <- c(
+    sprintf("formula = %s", spec$formula),
+    sprintf("data = %s", spec$dataset),
+    if (!is.null(spec$weights)) sprintf("weights = %s", spec$weights),
+    if (!is.null(spec$offset)) sprintf("offset = %s", spec$offset),
+    if (!is.null(spec$cluster)) sprintf("cluster = %s", spec$cluster),
+    sprintf("fit = %s", spec$fit),
+    if (length(spec$fit_args)) {
+      sprintf("%s = %s", names(spec$fit_args), vapply(spec$fit_args, deparse_value, ""))
+    },
+    sprintf("control = partykit::mob_control(%s)", paste(sprintf("%s = %s",
+      names(spec$control), vapply(spec$control, deparse_value, "")), collapse = ", "))
+  )
+  sprintf("partykit::mob(%s)", paste(args, collapse = ", "))
 }
 
 # JSON form of a control value: Inf becomes the string "Inf", NULL becomes null.
@@ -291,6 +313,9 @@ stop_reason <- function(nd, info, alpha) {
   if (is.null(info$test)) {
     return(if (info$nobs < 2 * info$.fx_minsize) "minsize" else "maxdepth")
   }
+  # A fit that returns no estfun (safelogitfit under complete separation,
+  # multinomfit with one class) makes partykit skip the tests.
+  if (is.null(info$.fx_raw_test) && is.null(info$estfun)) return("no_estfun")
   if (is.null(info$.fx_raw_test)) return("test_failed")
   if (is.na(info$p.value) || info$p.value > alpha) return("not_significant")
   ss <- info$.fx_split_search
@@ -328,7 +353,7 @@ extract_node <- function(nd, tree, mf, z_names, parent, depth, alpha) {
   cf <- info$coefficients
   ef <- info$estfun
   ss <- info$.fx_split_search
-  list(
+  out <- list(
     id = nd$id,
     parent = if (parent[nd$id] == 0L) NULL else parent[nd$id],
     depth = depth[nd$id],
@@ -351,9 +376,16 @@ extract_node <- function(nd, tree, mf, z_names, parent, depth, alpha) {
       candidates = arr(if (is.numeric(ss$candidates)) ss$candidates else as.character(ss$candidates)),
       objective = arr(finite_or_na(ss$objective))
     ),
-    estfun_names = arr(colnames(ef)),
-    estfun = unname(ef)
+    estfun_names = if (is.null(ef)) NULL else arr(colnames(ef)),
+    estfun = if (is.null(ef)) NULL else unname(ef)
   )
+  # Extension fit functions return model-specific diagnostics (theta,
+  # separation status, classes present) that mob() keeps in the node info.
+  extras <- setdiff(names(info), c("coefficients", "objfun", "estfun", "object",
+    "nobs", "p.value", "test"))
+  extras <- extras[!startsWith(extras, ".fx_")]
+  if (length(extras)) out$model_info <- info[extras]
+  out
 }
 
 # How close the fixture sits to a decision boundary. Small values mean a
@@ -372,6 +404,13 @@ decision_margins <- function(nodes, alpha) {
     min_abs_p_value_minus_alpha = if (length(p_gap)) min(p_gap) else NULL,
     min_relative_split_objective_gap = if (length(split_gap)) min(split_gap) else NULL
   )
+}
+
+response_encoding <- function(spec) {
+  if (identical(spec$fit, "multinomfit")) {
+    return("multinomial: class labels; the first level is the reference class")
+  }
+  "binomial: 0 for the first level, 1 otherwise (glm.fit family$initialize)"
 }
 
 tree_fixture <- function(spec, ds, instrumented) {
@@ -398,25 +437,30 @@ tree_fixture <- function(spec, ds, instrumented) {
   }
 
   y <- tree$data[[1L]]
-  ll <- stats::logLik(tree)
-  family <- if (spec$fun == "lmtree") NULL else {
+  ll <- tryCatch(stats::logLik(tree), error = function(e) NULL)
+  family <- if (spec$fun != "glmtree") NULL else {
     f <- eval(parse(text = spec$family))
     list(family = f$family, link = f$link)
   }
 
+  versions <- fixture_versions()
+  if (spec$fun == "mob") {
+    versions <- c(versions, list(MASS = utils::packageDescription("MASS")$Version,
+      nnet = utils::packageDescription("nnet")$Version))
+  }
   fx <- list(
     fixture = spec$name,
     description = spec$description,
     generator = "r/fixtures/trees.R",
     r_call = call_text,
-    versions = fixture_versions(),
+    versions = versions,
     dataset = spec$dataset,
     data_csv = file.path("data", paste0(spec$dataset, ".csv")),
     function_name = spec$fun,
     formula = spec$formula,
     response = names(tree$data)[1L],
     response_levels = if (is.factor(y)) arr(levels(y)) else NULL,
-    response_encoding = if (is.factor(y)) "binomial: 0 for the first level, 1 otherwise (glm.fit family$initialize)" else NULL,
+    response_encoding = if (is.factor(y)) response_encoding(spec) else NULL,
     regressors = arr(all.vars(formula(Formula::Formula(tree$info$formula), lhs = 0L, rhs = 1L))),
     partitioning = arr(all.vars(tree$info$terms$partitioning)),
     coefficient_names = nodes[[1L]]$coefficient_names,
@@ -435,8 +479,8 @@ tree_fixture <- function(spec, ds, instrumented) {
       n_terminal = n_terminal,
       depth = max(vapply(nodes, function(nd) nd$depth, 0L)),
       objfun = sum(vapply(Filter(function(nd) nd$terminal, nodes), function(nd) nd$objfun, 0)),
-      loglik = as.numeric(ll),
-      loglik_df = attr(ll, "df")
+      loglik = if (is.null(ll)) NULL else as.numeric(ll),
+      loglik_df = if (is.null(ll)) NULL else attr(ll, "df")
     ),
     decision_margins = decision_margins(nodes, spec$control$alpha),
     fitted_node = arr(as.integer(tree$fitted[["(fitted)"]])),
@@ -448,6 +492,11 @@ tree_fixture <- function(spec, ds, instrumented) {
     hit <- Filter(function(nd) nd$test$status == "failed" &&
       nd$n_clusters < length(nd$coefficient_names), nodes)
     if (!length(hit)) stop(spec$name, ": no failed node with fewer clusters than parameters")
+  }
+  # mob() fixtures name the fit function and its extra arguments.
+  if (spec$fun == "mob") {
+    fx <- append(fx, list(fit_function = spec$fit, fit_args = spec$fit_args),
+      after = match("family", names(fx)))
   }
   # Clustered fixtures name the cluster column of the data CSV.
   if (!is.null(spec$cluster)) {

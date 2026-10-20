@@ -1,0 +1,52 @@
+{
+  "dataset": "sim_multinom",
+  "description": "Simulated three-class responses (lo, mid, hi): no instability, a planted split at z1 = 0.5, and a school-clustered version. Weights w0 in 0 to 3.",
+  "source": "simulated",
+  "seed": 20261033,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 900,
+  "csv": "sim_multinom.csv",
+  "columns": [
+    {
+      "name": "school",
+      "type": "integer"
+    },
+    {
+      "name": "x",
+      "type": "double"
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "z2",
+      "type": "factor",
+      "levels": ["a", "b", "c"]
+    },
+    {
+      "name": "z3",
+      "type": "double"
+    },
+    {
+      "name": "y_null",
+      "type": "factor",
+      "levels": ["lo", "mid", "hi"]
+    },
+    {
+      "name": "y_one",
+      "type": "factor",
+      "levels": ["lo", "mid", "hi"]
+    },
+    {
+      "name": "y_cluster",
+      "type": "factor",
+      "levels": ["lo", "mid", "hi"]
+    },
+    {
+      "name": "w0",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "{\n    n <- 900L\n    g <- 30L\n    d <- data.frame(school = sample(seq_len(g), n, replace = TRUE), x = rnorm(n), z1 = runif(n), z2 = factor(sample(c(\"a\", \n        \"b\", \"c\"), n, replace = TRUE)), z3 = rnorm(n))\n    lev <- c(\"lo\", \"mid\", \"hi\")\n    draw <- function(eta_mid, eta_hi) {\n        p <- cbind(1, exp(eta_mid), exp(eta_hi))\n        p <- p/rowSums(p)\n        u <- runif(n)\n        factor(lev[1L + (u > p[, 1L]) + (u > p[, 1L] + p[, 2L])], levels = lev)\n    }\n    left <- d$z1 <= 0.5\n    um <- rnorm(g, 0, 0.5)[d$school]\n    uh <- rnorm(g, 0, 0.5)[d$school]\n    em <- ifelse(left, 0.3 + 0.8 * d$x, -0.5 - 0.5 * d$x)\n    eh <- ifelse(left, -0.2 - 0.6 * d$x, 0.6 + 1 * d$x)\n    d$y_null <- draw(0.3 + 0.8 * d$x, -0.2 - 0.6 * d$x)\n    d$y_one <- draw(em, eh)\n    d$y_cluster <- draw(em + um, eh + uh)\n    d$w0 <- sample(0:3, n, replace = TRUE)\n    d\n}"
+}

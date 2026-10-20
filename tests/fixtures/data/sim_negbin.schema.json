@@ -1,0 +1,57 @@
+{
+  "dataset": "sim_negbin",
+  "description": "Simulated overdispersed counts (theta = 2) with an exposure offset: no instability, a planted split at z1 = 0.5, a theta-only change, and a school-clustered version. Integer case weights w.",
+  "source": "simulated",
+  "seed": 20261031,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 600,
+  "csv": "sim_negbin.csv",
+  "columns": [
+    {
+      "name": "school",
+      "type": "integer"
+    },
+    {
+      "name": "x",
+      "type": "double"
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "z2",
+      "type": "factor",
+      "levels": ["a", "b", "c"]
+    },
+    {
+      "name": "z3",
+      "type": "double"
+    },
+    {
+      "name": "exposure",
+      "type": "double"
+    },
+    {
+      "name": "y_null",
+      "type": "double"
+    },
+    {
+      "name": "y_one",
+      "type": "double"
+    },
+    {
+      "name": "y_theta",
+      "type": "double"
+    },
+    {
+      "name": "y_cluster",
+      "type": "double"
+    },
+    {
+      "name": "w",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "{\n    n <- 600L\n    g <- 30L\n    d <- data.frame(school = sample(seq_len(g), n, replace = TRUE), x = rnorm(n), z1 = runif(n), z2 = factor(sample(c(\"a\", \n        \"b\", \"c\"), n, replace = TRUE)), z3 = rnorm(n), exposure = runif(n, 0.5, 2))\n    u <- rnorm(g, 0, 0.5)[d$school]\n    left <- d$z1 <= 0.5\n    eta_null <- 0.5 + 0.5 * d$x\n    eta_one <- ifelse(left, 0.2 + 0.8 * d$x, 1 - 0.3 * d$x)\n    d$y_null <- rnbinom(n, mu = d$exposure * exp(eta_null), size = 2)\n    d$y_one <- rnbinom(n, mu = d$exposure * exp(eta_one), size = 2)\n    d$y_theta <- rnbinom(n, mu = d$exposure * exp(eta_null), size = ifelse(left, 0.7, 20))\n    d$y_cluster <- rnbinom(n, mu = d$exposure * exp(u + eta_one), size = 2)\n    d$w <- sample(1:3, n, replace = TRUE)\n    d\n}"
+}

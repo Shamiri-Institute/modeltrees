@@ -55,14 +55,22 @@ notes/phase1-questions.md. Match R unless a decision says otherwise.
 
 ## Extensions (phase 4)
 
-- Whether theta is among the tested parameters for negative binomial is decided
-  from reference/trusch.md in phase 4. The interface needs no change because
-  estfun width is defined by the model. minsize uses len(coefficients), so check
-  that count against the thesis code.
+The full specification, with thesis citations and open questions, is in
+docs/extensions-spec.md.
+
+- Negative binomial: theta is not among the tested parameters. The thesis
+  scores come from estfun.glm (beta only), and the thesis' quine statistics are
+  reproduced exactly with beta-only scores. coefficients is beta, so
+  len(coefficients) = p, which matches the thesis code. theta is reported per
+  node next to the FitResult.
 - Multinomial coefficients are flattened with names. Column order does not
   change the test statistics, since the statistic is a quadratic form that is
-  invariant to column permutation. Use the order of R's flattened coef(multinom)
+  invariant to column permutation. The order is class-major,
+  "<level>:<regressor>", as in vcov(multinom) and sandwich's estfun.multinom,
   so fixtures compare directly.
+- Safe logit: the thesis has no code for it. The provisional rule is that
+  complete separation returns no scores, which makes the node terminal.
+  Quasi-separation is only reported.
 
 ## glm.fit and log-likelihood
 

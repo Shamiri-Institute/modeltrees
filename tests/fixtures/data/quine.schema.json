@@ -1,0 +1,36 @@
+{
+  "dataset": "quine",
+  "description": "MASS::quine, days absent from school (Venables and Ripley). The thesis' negative binomial example (trusch.md:1339-1357).",
+  "source": "MASS",
+  "seed": null,
+  "rng_kind": null,
+  "n": 146,
+  "csv": "quine.csv",
+  "columns": [
+    {
+      "name": "Eth",
+      "type": "factor",
+      "levels": ["A", "N"]
+    },
+    {
+      "name": "Sex",
+      "type": "factor",
+      "levels": ["F", "M"]
+    },
+    {
+      "name": "Age",
+      "type": "factor",
+      "levels": ["F0", "F1", "F2", "F3"]
+    },
+    {
+      "name": "Lrn",
+      "type": "factor",
+      "levels": ["AL", "SL"]
+    },
+    {
+      "name": "Days",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "{\n    env <- new.env()\n    utils::data(\"quine\", package = \"MASS\", envir = env)\n    env$quine\n}"
+}

@@ -1,0 +1,68 @@
+{
+  "fixture": "thesis_quine_crosscheck",
+  "description": "The thesis' negative binomial quine tree (trusch.md:1356-1368, summaries at 1394-1470), grown by party 1.0-1, against extension_trees/quine_negbin_intercept_deviance.json grown by partykit 1.3-0 with negbinfit(objective = \"deviance\"). party 1.0-1 itself does not build on this R version (see docs/extensions-spec.md), so the comparison is with the values printed in the thesis, at their printed precision.",
+  "generator": "r/fixtures/extensions.R",
+  "tree_fixture": "extension_trees/quine_negbin_intercept_deviance.json",
+  "thesis": {
+    "root": {
+      "variable": "Eth",
+      "statistic": 11.359999999999999,
+      "criterion": 0.997
+    },
+    "node2": {
+      "variable": "Age",
+      "statistic": 10.795999999999999,
+      "criterion": 0.96199999999999997
+    },
+    "terminal": [
+      {
+        "levels": "Eth = A, Age in F0, F1",
+        "n": 33,
+        "intercept": 2.7400000000000002,
+        "theta": 1.873
+      },
+      {
+        "levels": "Eth = A, Age in F2, F3",
+        "n": 36,
+        "intercept": 3.2799999999999998,
+        "theta": 1.5
+      },
+      {
+        "levels": "Eth = N",
+        "n": 77,
+        "intercept": 2.5,
+        "theta": 0.91859999999999997
+      }
+    ]
+  },
+  "partykit": {
+    "root": {
+      "variable": "Eth",
+      "statistic": [11.360469885648129],
+      "criterion": 0.99699904634075276
+    },
+    "node2": {
+      "variable": "Age",
+      "statistic": [10.795761385751923],
+      "criterion": 0.9618464136176802
+    },
+    "terminal": [
+      {
+        "n": 33,
+        "intercept": 2.7398620287372237,
+        "theta": 1.8725809087898144
+      },
+      {
+        "n": 36,
+        "intercept": 3.2771447329921775,
+        "theta": 1.4997914781781647
+      },
+      {
+        "n": 77,
+        "intercept": 2.4999445271525387,
+        "theta": 0.9185896034486174
+      }
+    ]
+  },
+  "agree": true
+}
