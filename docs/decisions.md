@@ -51,8 +51,9 @@ notes/phase1-questions.md. Match R unless a decision says otherwise.
   full fits in split search and the dqrdc2 port for every least-squares
   solve. Outside it, `dqrls` takes a LAPACK path when every column keeps at
   least 1e-4 of its norm (1000 times R's tolerance), glm split-search fits
-  skip warnings, null deviance and residuals, and split search fits on the
-  node's own arrays. The fast and reference paths agree to rounding (about
+  skip warnings, null deviance and residuals, split search fits on the
+  node's own arrays, and the binomial and poisson families use specialised
+  formulas for their deviance residuals, links and AIC. The fast and reference paths agree to rounding (about
   1e-15 relative), not bit for bit, because LAPACK and the port round
   differently. docs/performance.md has the details.
 - Batch split objectives (docs/model-interface.md, section 4.1): a model may

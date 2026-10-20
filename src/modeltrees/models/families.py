@@ -8,6 +8,14 @@ linear predictor, which change fitted values near separation.
 
 Only a vector response is supported. R's two-column binomial response
 (successes, failures) is out of scope.
+
+The binomial and poisson deviance residuals, inverse links, link
+derivatives and AIC have specialised versions that skip work R's general
+formulas do and then discard: the second logarithm of a 0/1 response, the
+clamping when no linear predictor is beyond +-30, ``gammaln`` of repeated
+small counts (docs/performance.md, Step 3, option 1). They give R's values
+to rounding. Under :func:`modeltrees.reference_path` the general formulas
+run, and the tests compare both.
 """
 
 import math
@@ -18,6 +26,8 @@ from typing import ClassVar, Protocol
 import numpy as np
 from numpy.typing import NDArray
 from scipy.special import gammaln, xlog1py, xlogy
+
+from modeltrees._reference import reference_active
 
 FloatArray = NDArray[np.float64]
 
@@ -117,6 +127,12 @@ class Binomial:
             return np.log(mu / (1 - mu))
 
     def linkinv(self, eta: FloatArray) -> FloatArray:
+        if reference_active() or _beyond(eta, _THRESH):
+            return self.linkinv_reference(eta)
+        tmp = np.exp(eta)
+        return tmp / (1 + tmp)
+
+    def linkinv_reference(self, eta: FloatArray) -> FloatArray:
         # family.c logit_linkinv: eps and 1/eps outside +-30.
         with np.errstate(over="ignore"):
             tmp = np.where(
@@ -127,6 +143,13 @@ class Binomial:
         return tmp / (1 + tmp)
 
     def mu_eta(self, eta: FloatArray) -> FloatArray:
+        if reference_active() or _beyond(eta, _THRESH):
+            return self.mu_eta_reference(eta)
+        e = np.exp(eta)
+        opexp = 1 + e
+        return e / (opexp * opexp)
+
+    def mu_eta_reference(self, eta: FloatArray) -> FloatArray:
         # family.c logit_mu_eta: DBL_EPSILON outside +-30.
         with np.errstate(over="ignore", invalid="ignore"):
             e = np.exp(eta)
@@ -138,6 +161,18 @@ class Binomial:
         return mu * (1 - mu)
 
     def dev_resids(self, y: FloatArray, mu: FloatArray, wt: FloatArray) -> FloatArray:
+        if reference_active() or not _binary(y):
+            return self.dev_resids_reference(y, mu, wt)
+        # For y in {0, 1} one of R's two terms is 0 and the other is
+        # log(1 / mu) or log(1 / (1 - mu)): the same arithmetic on the kept
+        # term, without the discarded logarithm and division.
+        t = np.where(y == 1, mu, 1 - mu)
+        with np.errstate(divide="ignore"):
+            return 2 * wt * np.log(1 / t)
+
+    def dev_resids_reference(
+        self, y: FloatArray, mu: FloatArray, wt: FloatArray
+    ) -> FloatArray:
         # family.c binomial_dev_resids with y_log_y(y, mu) = y * log(y/mu), 0 at y = 0.
         with np.errstate(divide="ignore", invalid="ignore"):
             a = np.where(y != 0, y * np.log(y / mu), 0.0)
@@ -145,6 +180,18 @@ class Binomial:
         return 2 * wt * (a + b)
 
     def aic(
+        self, y: FloatArray, n: FloatArray, mu: FloatArray, wt: FloatArray, dev: float
+    ) -> float:
+        if reference_active() or np.any(n > 1) or not (_ones(wt) and _binary(y)):
+            return self.aic_reference(y, n, mu, wt, dev)
+        # One trial per row with unit weight: dbinom(y, 1, mu, log = TRUE) is
+        # log(mu) or log1p(-mu), and the lgamma terms are lgamma(1) = 0 and
+        # lgamma(2) = 0.
+        with np.errstate(divide="ignore"):
+            logd = np.where(y == 1, np.log(mu), np.log1p(-mu))
+        return float(-2 * np.sum(logd))
+
+    def aic_reference(
         self, y: FloatArray, n: FloatArray, mu: FloatArray, wt: FloatArray, dev: float
     ) -> float:
         m = n if np.any(n > 1) else wt
@@ -188,21 +235,50 @@ class Poisson:
     def linkinv(self, eta: FloatArray) -> FloatArray:
         # R: pmax(exp(eta), .Machine$double.eps)
         with np.errstate(over="ignore"):
-            return np.maximum(np.exp(eta), DBL_EPSILON)
+            out = np.exp(eta)
+        return np.maximum(out, DBL_EPSILON, out=out)
 
     def mu_eta(self, eta: FloatArray) -> FloatArray:
-        with np.errstate(over="ignore"):
-            return np.maximum(np.exp(eta), DBL_EPSILON)
+        return self.linkinv(eta)
 
     def variance(self, mu: FloatArray) -> FloatArray:
         return mu
 
     def dev_resids(self, y: FloatArray, mu: FloatArray, wt: FloatArray) -> FloatArray:
+        if reference_active():
+            return self.dev_resids_reference(y, mu, wt)
+        # R's two branches in one expression: at y = 0 the logarithm is
+        # skipped and wt * (0 - (0 - mu)) is exactly mu * wt.
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            r = y / mu
+            np.log(r, out=r, where=y > 0)
+            r[y <= 0] = 0.0
+            return 2 * (wt * (y * r - (y - mu)))
+
+    def dev_resids_reference(
+        self, y: FloatArray, mu: FloatArray, wt: FloatArray
+    ) -> FloatArray:
         with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
             r = np.where(y > 0, wt * (y * np.log(y / mu) - (y - mu)), mu * wt)
         return 2 * r
 
     def aic(
+        self, y: FloatArray, n: FloatArray, mu: FloatArray, wt: FloatArray, dev: float
+    ) -> float:
+        if reference_active() or not bool(np.all(y == np.round(y))):
+            return self.aic_reference(y, n, mu, wt, dev)
+        # Integer counts: R's non-integer check cannot fire, and lgamma(y + 1)
+        # comes from a table over 0..max(y) when that is no longer than y.
+        top = float(np.max(y)) if y.shape[0] else 0.0
+        if top <= y.shape[0]:
+            lgam = gammaln(np.arange(int(top) + 1) + 1.0)[y.astype(np.intp)]
+        else:
+            lgam = gammaln(y + 1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            out = xlogy(y, mu) - mu - lgam
+        return float(-2 * np.sum(out * wt))
+
+    def aic_reference(
         self, y: FloatArray, n: FloatArray, mu: FloatArray, wt: FloatArray, dev: float
     ) -> float:
         return float(-2 * np.sum(_log_dpois(y, mu) * wt))
@@ -217,6 +293,22 @@ class Poisson:
 
     def valideta(self, eta: FloatArray) -> bool:
         return True
+
+
+def _beyond(eta: FloatArray, bound: float) -> bool:
+    """Whether any linear predictor is outside +-bound (or NaN)."""
+    if eta.shape[0] == 0:
+        return False
+    lo, hi = float(np.min(eta)), float(np.max(eta))
+    return not (-bound <= lo and hi <= bound)
+
+
+def _binary(y: FloatArray) -> bool:
+    return bool(np.all((y == 0) | (y == 1)))
+
+
+def _ones(w: FloatArray) -> bool:
+    return bool(np.all(w == 1))
 
 
 def _log_dbinom(k: FloatArray, size: FloatArray, p: FloatArray) -> FloatArray:

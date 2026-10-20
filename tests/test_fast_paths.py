@@ -15,13 +15,15 @@ from typing import Any
 
 import numpy as np
 import pytest
+from fixtures_io import FIXTURES, load_dataset, load_json
 from test_tree import ORACLE_TREES, _control, _grown
 from tree_fixtures import cluster, inputs, model, tree, variables
 
 from modeltrees import reference_path
 from modeltrees.instability import TooFewClustersWarning, VariableKind
 from modeltrees.models import _qr
-from modeltrees.models.families import GlmFitWarning, get_family
+from modeltrees.models import glm_fit as glm_fit_module
+from modeltrees.models.families import Binomial, GlmFitWarning, Poisson, get_family
 from modeltrees.models.glm import GlmModel
 from modeltrees.models.glm_fit import glm_fit, glm_objective
 from modeltrees.models.lm import LmModel
@@ -208,6 +210,162 @@ def test_glm_model_objective_fit_equals_full_fit() -> None:
         ref = m.fit(y, x, start=None, estfun=False, **kw)
     np.testing.assert_allclose(fast.coefficients, ref.coefficients, rtol=1e-12)
     assert math.isclose(fast.objfun, ref.objfun, rel_tol=1e-12)
+
+
+# 2b. Specialised family formulas against R's general ones.
+
+FAMILY_RTOL = 1e-12
+
+
+def _assert_kernel_close(fast: np.ndarray, ref: np.ndarray) -> None:
+    np.testing.assert_array_equal(np.isnan(fast), np.isnan(ref))
+    np.testing.assert_array_equal(np.isinf(fast), np.isinf(ref))
+    finite = np.isfinite(ref)
+    np.testing.assert_array_equal(
+        fast[~finite & ~np.isnan(ref)], ref[~finite & ~np.isnan(ref)]
+    )
+    np.testing.assert_allclose(fast[finite], ref[finite], rtol=FAMILY_RTOL, atol=0)
+
+
+def _assert_family_kernels(
+    family: str, y: np.ndarray, mu: np.ndarray, eta: np.ndarray, wt: np.ndarray
+) -> None:
+    """Every specialised method against the same call under reference_path()."""
+    fam = get_family(family)
+    n = np.ones_like(y)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        got = (
+            fam.linkinv(eta),
+            fam.mu_eta(eta),
+            fam.dev_resids(y, mu, wt),
+            np.array([fam.aic(y, n, mu, wt, 0.0)]),
+        )
+        with reference_path():
+            ref = (
+                fam.linkinv(eta),
+                fam.mu_eta(eta),
+                fam.dev_resids(y, mu, wt),
+                np.array([fam.aic(y, n, mu, wt, 0.0)]),
+            )
+    for g, r in zip(got, ref, strict=True):
+        _assert_kernel_close(g, r)
+
+
+def _family_scenarios(
+    seed: int,
+) -> list[tuple[str, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
+    rng = np.random.default_rng(seed)
+    n = 400
+    eta = rng.normal(0, 3, n)
+    wide = np.concatenate([eta[: n - 6], [-45.0, -30.0, 30.0, 31.0, 700.0, -800.0]])
+    p = 1 / (1 + np.exp(-eta))
+    yb = (rng.uniform(size=n) < p).astype(float)
+    ones = np.ones(n)
+    intw = rng.integers(0, 4, n).astype(float)
+    fracw = rng.uniform(0, 2, n)
+    mu_p = np.exp(np.clip(eta, -20, 6))
+    yp = rng.poisson(mu_p).astype(float)
+    big = yp.copy()
+    big[:3] = [5e3, 1e5, 2e6]  # counts above the table bound
+    nonint = yp + np.where(rng.uniform(size=n) < 0.1, 0.5, 0.0)
+    prop = rng.uniform(size=n)
+    edge = p.copy()
+    edge[:4] = [0.0, 1.0, 1e-300, 1 - 1e-16]
+    return [
+        ("binomial", yb, p, eta, ones),
+        ("binomial", yb, p, wide, intw),
+        ("binomial", yb, edge, eta, fracw),
+        ("binomial", prop, p, eta, ones),
+        ("binomial", np.zeros(n), p, eta, ones),
+        ("poisson", yp, mu_p, eta, ones),
+        ("poisson", yp, mu_p, wide, intw),
+        ("poisson", big, mu_p, eta, fracw),
+        ("poisson", nonint, mu_p, eta, ones),
+        ("poisson", np.zeros(n), np.concatenate([[0.0, np.inf], mu_p[2:]]), eta, ones),
+    ]
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_family_kernels_match_general_formulas(seed: int) -> None:
+    for family, y, mu, eta, wt in _family_scenarios(seed):
+        _assert_family_kernels(family, y, mu, eta, wt)
+
+
+def test_family_kernels_take_the_specialised_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # On typical data (0/1 or integer responses, unit weights, |eta| <= 30)
+    # the general formulas must not run outside reference_path().
+    def fail(*args: Any) -> Any:
+        raise AssertionError("general formula used")
+
+    for cls in (Binomial, Poisson):
+        for method in ("linkinv", "mu_eta", "dev_resids", "aic"):
+            if hasattr(cls, f"{method}_reference"):
+                monkeypatch.setattr(cls, f"{method}_reference", fail)
+    eta = np.linspace(-5, 5, 11)
+    mu = 1 / (1 + np.exp(-eta))
+    y = (eta > 0).astype(float)
+    ones = np.ones_like(y)
+    b = Binomial()
+    b.linkinv(eta), b.mu_eta(eta), b.dev_resids(y, mu, ones)
+    b.aic(y, ones, mu, ones, 0.0)
+    p = Poisson()
+    counts = np.arange(11.0)
+    p.dev_resids(counts, np.exp(eta), ones), p.aic(counts, ones, np.exp(eta), ones, 0.0)
+
+
+GLM_FIXTURES = sorted(p.stem for p in (FIXTURES / "glm").glob("*.json"))
+
+
+@pytest.mark.parametrize("name", GLM_FIXTURES)
+def test_family_kernels_on_glm_fixtures(
+    name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    g = load_json(f"glm/{name}.json")
+    family = g["family"]["family"]
+    if family not in ("binomial", "poisson"):
+        pytest.skip("only binomial and poisson have specialised formulas")
+    data, _ = load_dataset(g["data_csv"])
+    x = np.column_stack([data[c] for c in g["x_columns"]])
+    w = data[g["weights_column"]] if g["weights_column"] else None
+    off = data[g["offset_column"]] if g["offset_column"] else None
+    y = data["y"]
+    kw: dict[str, Any] = {
+        "weights": w,
+        "start": g["start"],
+        "offset": off,
+        "epsilon": g["control"]["epsilon"],
+        "maxit": g["control"]["maxit"],
+    }
+    fam = get_family(family)
+    # The same QR (the port) in both runs, so that only the family formulas
+    # differ; reference_path() would also replace the LAPACK solve.
+    monkeypatch.setattr(glm_fit_module, "dqrls", _qr.dqrls_reference)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", GlmFitWarning)
+        fast = glm_fit(x, y, fam, **kw)
+        with reference_path():
+            ref = glm_fit(x, y, fam, **kw)
+    _assert_family_kernels(
+        family,
+        fast.y,
+        fast.fitted_values,
+        fast.linear_predictors,
+        fast.prior_weights,
+    )
+    assert fast.iter == ref.iter
+    assert fast.converged == ref.converged
+    np.testing.assert_allclose(fast.coefficients, ref.coefficients, rtol=FAMILY_RTOL)
+    for a, b in [
+        (fast.deviance, ref.deviance),
+        (fast.aic, ref.aic),
+        (fast.null_deviance, ref.null_deviance),
+    ]:
+        assert math.isclose(a, b, rel_tol=FAMILY_RTOL)
+    np.testing.assert_allclose(fast.fitted_values, ref.fitted_values, rtol=FAMILY_RTOL)
+    np.testing.assert_allclose(fast.weights, ref.weights, rtol=FAMILY_RTOL)
 
 
 # 3. find_split against find_split_reference.

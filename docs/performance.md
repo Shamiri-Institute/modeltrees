@@ -490,6 +490,47 @@ speed for glm; it should be opt-in until a certified bound (or extensive
 validation) makes it safe as a default. Option 5 changes split points and
 is the last resort.
 
+## Step 4: specialised family formulas (option 1)
+
+Option 1 of Step 3 is implemented in `models/families.py`. Outside
+`reference_path()`:
+
+- binomial deviance residuals, for a 0/1 response: `2 wt log(1 / t)` with
+  `t = mu` where `y = 1` and `1 - mu` where `y = 0`, the same arithmetic as
+  R's kept term, without the discarded logarithm and division (83 to 31 us
+  per call at 2500 rows, the 0/1 check included);
+- logit inverse link and its derivative without the `+-30` clamping when no
+  linear predictor is beyond it (28 to 19 us); otherwise the general code;
+- binomial AIC with unit weights, one trial and a 0/1 response:
+  `log(mu)` or `log1p(-mu)` per row, since the `lgamma` terms are 0;
+- poisson deviance residuals in one expression for both of R's branches,
+  the inverse link and its derivative with an in-place `pmax`, and the AIC
+  with `lgamma(y + 1)` from a table over `0..max(y)` for integer counts
+  (when `max(y)` is at most the number of rows), which also makes R's
+  non-integer check unnecessary.
+
+Each general formula stays as `<method>_reference` and runs under
+`reference_path()`. The deviance residuals and links are bit-identical to
+the general formulas; the AIC terms use numpy's `log` and `log1p` instead
+of scipy's `xlogy` and `xlog1py` and agree to rounding. Tests
+(`tests/test_fast_paths.py`, section 2b): every method against the general
+one to 1e-12 relative on random data (0/1 responses, proportions, constant
+responses, integer and fractional weights, linear predictors beyond +-30
+and beyond overflow, fitted values at 0 and 1, counts above the table
+bound, non-integer counts, `mu` of 0 and Inf) and at the fitted values of
+every binomial and poisson glm fixture; whole `glm_fit` runs on those
+fixtures with the same QR in both, to 1e-12; and that the specialised code
+runs on ordinary data.
+
+Median seconds from `bench_tree.py` (3 runs after a warm-up), glm:
+
+| n | after Step 2 | after Step 4 |
+| --- | --- | --- |
+| 1000 | 1.976 | 1.774 |
+| 5000 | 20.51 | 16.41 |
+
+About 10 to 20 %, as estimated in Step 3. Every tree is unchanged.
+
 ## Reproducing
 
 ```
