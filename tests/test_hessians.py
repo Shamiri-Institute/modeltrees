@@ -30,9 +30,11 @@ from grown_trees import fixture, model, tree_inputs
 from modeltrees.models.families import (
     Family,
     GlmFitWarning,
+    NegativeBinomial,
 )
 from modeltrees.models.glm import GlmModel
 from modeltrees.models.lm import LmModel
+from modeltrees.models.negbin import NegBinModel, glm_nb
 from modeltrees.node_model import FitResult
 
 FloatArray = np.ndarray
@@ -454,3 +456,144 @@ def test_glm_vcov_without_estfun() -> None:
     b = GlmModel("poisson").fit(y, x, weights=w, offset=off, vcov=True)
     assert a.hessian is not None and b.hessian is not None and b.estfun is None
     np.testing.assert_array_equal(a.hessian, b.hessian)
+
+
+# 3. NegBinModel: as glm at theta_irls, dispersion 1.
+
+NEGBIN_FITS = sorted(p.stem for p in (FIXTURES / "node_fits").glob("negbin_*.json"))
+
+
+@cache
+def _node_fixture(name: str) -> dict[str, Any]:
+    f: dict[str, Any] = load_json(f"node_fits/{name}.json")
+    return f
+
+
+def _node_arrays(
+    name: str,
+) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray | None, FloatArray | None]:
+    """y, x, weights, offset and start of a node fit fixture (y as given)."""
+    f = _node_fixture(name)
+    y = np.array(f["y"]) if f["response_levels"] else np.array(f["y"], np.float64)
+    return (
+        y,
+        np.array(f["x"], np.float64),
+        np.array(f["weights"], np.float64),
+        None if f["offset"] is None else np.array(f["offset"], np.float64),
+        None if f["start"] is None else np.array(f["start"], np.float64),
+    )
+
+
+@cache
+def _negbin_fit(name: str) -> FitResult:
+    f = _node_fixture(name)
+    y, x, w, off, start = _node_arrays(name)
+    return NegBinModel(coef_names=f["x_names"], **f["fit_args"]).fit(
+        y, x, start=start, weights=w, offset=off, estfun=True, vcov=True
+    )
+
+
+def _negbin_working_weights(name: str) -> FloatArray:
+    """The working weights of glm.nb's last glm.fit call."""
+    f = _node_fixture(name)
+    y, x, w, off, start = _node_arrays(name)
+    keep = w > 0
+    z = glm_nb(
+        x[keep],
+        y[keep],
+        weights=w[keep],
+        offset=None if off is None else off[keep],
+        start=start,
+        epsilon=f["fit_args"]["epsilon"],
+        maxit=f["fit_args"]["maxit"],
+    )
+    return z.fit.weights
+
+
+def test_negbin_files() -> None:
+    assert NEGBIN_FITS == [
+        "negbin_quine_deviance",
+        "negbin_quine_eth_a_intercept",
+        "negbin_quine_full",
+        "negbin_sim_offset_weights",
+        "negbin_sim_start",
+    ]
+
+
+@pytest.mark.parametrize("name", NEGBIN_FITS)
+def test_negbin_hessian_is_minus_the_score_derivative(name: str) -> None:
+    """The log link is not canonical for the negative binomial, so the
+    expected information (vcov(glm.nb)'s bread) is not the derivative of the
+    scores at the data. It is the derivative with the response held at the
+    fitted means; the derivative at the data adds the observed term
+    ``sum_i w_i (y_i - mu_i) (mu_i / theta) / (1 + mu_i / theta)^2 x_i x_i'``.
+    Both are checked, within the lag bound of glm.fit's working weights."""
+    y, x, w, off, _ = _node_arrays(name)
+    got = _negbin_fit(name)
+    assert got.hessian is not None and got.estfun is not None
+    assert got.hessian.shape == (got.estfun.shape[1],) * 2
+    symmetric(got.hessian)
+    theta = got.extras["theta_irls"]
+    family = NegativeBinomial(theta)
+    keep = w > 0
+    xk, yk, wk = x[keep], y[keep], w[keep]
+    ok = None if off is None else off[keep]
+    beta = got.coefficients
+    mu = family.linkinv(xk @ beta + (0 if ok is None else ok))
+    lag = lag_bound(
+        _negbin_working_weights(name), exact_weights(family, beta, xk, wk, ok), xk, 1.0
+    )
+    expected = central_difference(glm_score_sum(family, mu, xk, wk, ok, 1.0), beta)
+    assert_fd(got.hessian, expected, lag)
+    c = wk * (yk - mu) * (mu / theta) / (1 + mu / theta) ** 2
+    observed = central_difference(glm_score_sum(family, yk, xk, wk, ok, 1.0), beta)
+    assert_fd(got.hessian + xk.T @ (c[:, None] * xk), observed, lag)
+    assert np.max(lag) <= 1e-4 * np.max(np.abs(expected))
+
+
+@pytest.mark.parametrize("name", NEGBIN_FITS)
+def test_negbin_inverse_against_statsmodels(name: str) -> None:
+    # statsmodels' GLM with NegativeBinomial(alpha = 1 / theta) at our
+    # theta_irls: scale 1, its own tight estimate.
+    y, x, w, off, _ = _node_arrays(name)
+    got = _negbin_fit(name)
+    assert got.hessian is not None
+    theta = got.extras["theta_irls"]
+    keep = w > 0
+    xk = x[keep]
+    ok = None if off is None else off[keep]
+    ref = sm.GLM(
+        y[keep],
+        xk,
+        family=sm.families.NegativeBinomial(alpha=1 / theta),
+        freq_weights=w[keep],
+        offset=ok,
+    ).fit(tol=1e-13)
+    v = np.linalg.inv(got.hessian)
+    family = NegativeBinomial(theta)
+    lag = lag_bound(
+        _negbin_working_weights(name),
+        exact_weights(family, got.coefficients, xk, w[keep], ok),
+        xk,
+        1.0,
+    )
+    tol = 2 * np.abs(v) @ lag @ np.abs(v) + RTOL * np.max(np.abs(v))
+    assert np.all(np.abs(v - ref.cov_params()) <= tol)
+
+
+@pytest.mark.parametrize(("name", "node_id"), vcovcl_leaves("negbin"))
+def test_negbin_hessian_against_r(name: str, node_id: int) -> None:
+    leaf = _leaf(name, node_id)
+    got = leaf_fit(name, node_id)
+    assert got.hessian is not None
+    np.testing.assert_allclose(got.hessian, np.array(leaf["hessian"]), rtol=RTOL)
+    # vcov(glm.nb): dispersion 1, conditional on theta.
+    np.testing.assert_allclose(
+        np.linalg.inv(got.hessian), np.array(leaf["vcov_model"]), rtol=RTOL
+    )
+
+
+def test_negbin_failed_fit_has_no_hessian() -> None:
+    # y = 0 everywhere: theta.ml fails, and so does the fit.
+    got = NegBinModel().fit(np.zeros(20), None, weights=np.ones(20), vcov=True)
+    assert got.failed and got.hessian is None

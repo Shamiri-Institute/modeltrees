@@ -26,7 +26,11 @@ from numpy.typing import NDArray
 from scipy.special import digamma, gammaln, zeta
 
 from modeltrees.errors import FitError
-from modeltrees.models._common import check_vcov, numeric_response, regressor_matrix
+from modeltrees.models._common import (
+    numeric_response,
+    regressor_matrix,
+    weighted_crossprod,
+)
 from modeltrees.models.families import (
     GlmFitWarning,
     NegativeBinomial,
@@ -299,7 +303,9 @@ class NegBinModel:
     ``objective = "deviance"`` the residual deviance of the last glm.fit
     call, as party 1.0-1 compared splits. The scores are sandwich's
     ``estfun.glm`` of that call: working residuals times working weights
-    times x, dispersion 1.
+    times x, dispersion 1. With ``vcov=True`` the Hessian is ``X'
+    diag(working weights) X`` of that call, at ``theta_irls``: the bread of
+    ``vcov(glm.nb)``, conditional on theta.
 
     Rows with zero weight are left out of the fit and get zero scores, as in
     GlmModel; they contribute nothing to glm.nb's sums. An error in glm.fit
@@ -379,7 +385,6 @@ class NegBinModel:
         estfun: bool = False,
         vcov: bool = False,
     ) -> FitResult:
-        check_vcov(vcov)
         try:
             z, xm, names, keep = self.fit_nb(
                 y, x, start=start, weights=weights, offset=offset
@@ -391,12 +396,15 @@ class NegBinModel:
             for message in z.warnings:
                 warnings.warn(message, GlmFitWarning, stacklevel=2)
         objfun = -z.twologlik / 2 if self.objective == "loglik" else z.deviance
+        cols = ~np.isnan(z.coefficients)
         scores = None
         if estfun:
             wres = z.fit.residuals * z.fit.weights
-            cols = ~np.isnan(z.coefficients)
             scores = np.zeros((xm.shape[0], int(cols.sum())))
             scores[keep] = wres[:, None] * xm[keep][:, cols]
+        hessian = None
+        if vcov:
+            hessian = weighted_crossprod(xm[keep][:, cols], z.fit.weights)
         return FitResult(
             coefficients=z.coefficients,
             coef_names=names,
@@ -414,6 +422,7 @@ class NegBinModel:
                 # 2 * log-likelihood at (beta, theta), R's z$twologlik.
                 "twologlik": z.twologlik,
             },
+            hessian=hessian,
         )
 
     def n_response_columns(self, y: NDArray[np.generic]) -> int:
