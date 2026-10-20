@@ -45,6 +45,10 @@ class FitResult:
     # Model-specific diagnostics, for example theta, warnings or boundary
     # counts. The core stores them and does not read them.
     extras: Mapping[str, Any] = field(default_factory=dict)
+    # Minus the derivative of the summed scores, (k_na, k_na) over the
+    # non-aliased columns in estfun's column order; only with vcov=True,
+    # None for failed and no_estfun fits (docs/api-design.md, section 5.2).
+    hessian: FloatArray | None = None
 
     @property
     def failed(self) -> bool:
@@ -91,7 +95,8 @@ class NodeModel(Protocol):
     Mirrors the type 1 fit interface of partykit::mob (modelparty.R, mob()).
     A fit that cannot produce an estimate returns ``status = FAILED``
     (see :func:`failed_fit`) instead of raising; one without scores returns
-    ``status = NO_ESTFUN``. Optional attributes: ``extra_df`` (int, default
+    ``status = NO_ESTFUN``. ``vcov=True`` asks for ``FitResult.hessian``;
+    the core never asks for it while growing. Optional attributes: ``extra_df`` (int, default
     0) and ``batch_split`` (bool, default True).
     """
 

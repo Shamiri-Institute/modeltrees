@@ -45,6 +45,13 @@ def numeric_response(y: NDArray[np.generic]) -> FloatArray:
     return values.astype(np.float64).reshape(-1)
 
 
+def weighted_crossprod(x: FloatArray, w: FloatArray) -> FloatArray:
+    """``X' diag(w) X``, made exactly symmetric (the product is symmetric
+    only to rounding), as the Hessians of ``fit(..., vcov=True)``."""
+    h: FloatArray = x.T @ (w[:, None] * x)
+    return (h + h.T) / 2
+
+
 def check_vcov(vcov: bool) -> None:
     if vcov:
         raise NotImplementedError(

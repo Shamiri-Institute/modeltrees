@@ -9,7 +9,11 @@ from collections.abc import Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-from modeltrees.models._common import check_vcov, numeric_response, regressor_matrix
+from modeltrees.models._common import (
+    numeric_response,
+    regressor_matrix,
+    weighted_crossprod,
+)
 from modeltrees.models.lm_fit import lm_fit, lm_wfit
 from modeltrees.node_model import FitResult, Report, linear_predictor, rank
 from modeltrees.pruning import PruneRule, lm_prune_rule
@@ -31,7 +35,9 @@ class LmModel:
     ``objfun`` is the weighted residual sum of squares (lmtree.R:78) and the
     scores are ``residuals * weights * x`` over the non-aliased columns
     (lmtree.R:85). ``start``, ``cluster`` and ``caseweights`` do not change
-    the fit, as in R.
+    the fit, as in R. With ``vcov=True`` the Hessian is ``X'WX`` over the
+    non-aliased columns: minus the derivative of the summed scores, without
+    ``1 / sigma^2`` since the scores have none (docs/api-design.md, 5.2).
     """
 
     def __init__(self, coef_names: Sequence[str] | None = None) -> None:
@@ -50,7 +56,6 @@ class LmModel:
         estfun: bool = False,
         vcov: bool = False,
     ) -> FitResult:
-        check_vcov(vcov)
         yv = numeric_response(y)
         xm, names = regressor_matrix(yv.shape[0], x, self.coef_names)
         w = np.asarray(weights, dtype=np.float64).reshape(-1)
@@ -66,10 +71,13 @@ class LmModel:
                 positive.shape[0],
                 float(np.sum(np.log(positive))),
             )
+        keep = ~np.isnan(z.coefficients)
         scores = None
         if estfun:
-            keep = ~np.isnan(z.coefficients)
             scores = (z.residuals * w)[:, None] * xm[:, keep]
+        hessian = None
+        if vcov:
+            hessian = weighted_crossprod(xm[:, keep], w)
         return FitResult(
             coefficients=z.coefficients,
             coef_names=names,
@@ -78,6 +86,7 @@ class LmModel:
             # What logLik.lm needs besides the RSS: the rows with positive
             # weight and the sum of their log weights.
             extras={"n_positive": n_positive, "sum_log_weights": sum_log_weights},
+            hessian=hessian,
         )
 
     def split_objectives(

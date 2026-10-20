@@ -304,7 +304,7 @@ def test_vcov_is_out_of_scope() -> None:
         "caseweights": True,
         "estfun": False,
     }
-    for model in (LmModel(), GlmModel("poisson")):
+    for model in (GlmModel("poisson"),):
         with pytest.raises(NotImplementedError, match="v0.1"):
             model.fit(np.ones(3), None, weights=np.ones(3), vcov=True, **kw)
 
