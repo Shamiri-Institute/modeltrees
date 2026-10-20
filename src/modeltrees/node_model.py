@@ -111,8 +111,19 @@ class NodeModel(Protocol):
         ...
 
 
+# A model report: fixed keys per model (docs/api-design.md, section 3.5).
+Report = Mapping[str, float | int | str | bool | None]
+
+
 class PredictingModel(NodeModel, Protocol):
-    """Optional: prediction from a fitted node (predict.modelparty)."""
+    """Optional: prediction from a fitted node (predict.modelparty).
+
+    ``kind`` is "link" (the linear predictor ``x beta + offset``),
+    "response" (its inverse link), "prob" or "class" (multinomial: the
+    class probabilities, and the 0-based code of the most probable class
+    as floats). A kind the model does not define raises ``ValueError``.
+    Rows of a failed fit are NaN (docs/api-design.md, section 4.2).
+    """
 
     def predict(
         self,
@@ -124,6 +135,52 @@ class PredictingModel(NodeModel, Protocol):
 
 
 class LogLikModel(NodeModel, Protocol):
-    """Optional: log-likelihood and df (logLik.modelparty)."""
+    """Optional: log-likelihood and df (logLik.modelparty).
+
+    The value is NaN for a failed fit (docs/api-design.md, section 3.6).
+    """
 
     def loglik(self, result: FitResult) -> tuple[float, int]: ...
+
+
+class ReportingModel(NodeModel, Protocol):
+    """Optional: the model's extras for the coefficient table, with the
+    same keys for every fit (docs/api-design.md, section 3.5)."""
+
+    def report(self, result: FitResult) -> Report: ...
+
+
+def rank(result: FitResult) -> int:
+    """The number of estimated (non-NaN) coefficients."""
+    return int(np.sum(~np.isnan(result.coefficients)))
+
+
+def linear_predictor(
+    result: FitResult, x: FloatArray | None, offset: FloatArray | None
+) -> FloatArray:
+    """``x beta + offset``, aliased (NaN) coefficients counting as 0.
+
+    predict.lm and predict.glm drop aliased columns the same way. ``x =
+    None`` is an intercept-only model, which needs ``offset`` for the number
+    of rows. A failed fit gives NaN.
+    """
+    coef = np.asarray(result.coefficients, dtype=np.float64)
+    if x is None:
+        if offset is None:
+            raise ValueError("x = None needs an offset to give the number of rows")
+        xm = np.ones((np.shape(offset)[0], 1))
+    else:
+        xm = np.asarray(x, dtype=np.float64)
+        if xm.ndim == 1:
+            xm = xm[:, None]
+    if xm.shape[1] != coef.shape[0]:
+        raise ValueError(
+            f"x has {xm.shape[1]} columns for {coef.shape[0]} coefficients"
+        )
+    if result.failed:
+        return np.full(xm.shape[0], np.nan)
+    keep = ~np.isnan(coef)
+    eta: FloatArray = xm[:, keep] @ coef[keep]
+    if offset is not None:
+        eta = eta + np.asarray(offset, dtype=np.float64)
+    return eta

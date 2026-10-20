@@ -3,6 +3,7 @@
 Port of ``lmfit`` from partykit 1.3-0 (reference/partykit/R/lmtree.R:59-104).
 """
 
+import math
 from collections.abc import Sequence
 
 import numpy as np
@@ -10,7 +11,7 @@ from numpy.typing import NDArray
 
 from modeltrees.models._common import check_vcov, numeric_response, regressor_matrix
 from modeltrees.models.lm_fit import lm_fit, lm_wfit
-from modeltrees.node_model import FitResult
+from modeltrees.node_model import FitResult, Report, linear_predictor, rank
 from modeltrees.pruning import PruneRule, lm_prune_rule
 from modeltrees.split_search import SplitObjectives
 
@@ -57,8 +58,14 @@ class LmModel:
         if np.all(w == 1):
             z = lm_fit(xm, yv, offset)
             w = np.ones_like(yv)
+            n_positive, sum_log_weights = yv.shape[0], 0.0
         else:
             z = lm_wfit(xm, yv, w, offset)
+            positive = w[w > 0]
+            n_positive, sum_log_weights = (
+                positive.shape[0],
+                float(np.sum(np.log(positive))),
+            )
         scores = None
         if estfun:
             keep = ~np.isnan(z.coefficients)
@@ -68,6 +75,9 @@ class LmModel:
             coef_names=names,
             objfun=float(np.sum(w * z.residuals**2)),
             estfun=scores,
+            # What logLik.lm needs besides the RSS: the rows with positive
+            # weight and the sum of their log weights.
+            extras={"n_positive": n_positive, "sum_log_weights": sum_log_weights},
         )
 
     def split_objectives(
@@ -133,6 +143,39 @@ class LmModel:
 
     def n_response_columns(self, y: NDArray[np.generic]) -> int:
         return 1 if np.ndim(y) <= 1 else int(np.shape(y)[1])
+
+    def loglik(self, result: FitResult) -> tuple[float, int]:
+        """``logLik.lm`` with the leaf's own sigma: df is rank + 1.
+
+        R: ``0.5 (sum(log(w)) - N (log(2 pi) + 1 - log(N) + log(RSS)))`` over
+        the N rows with positive weight. Case weights enter only through
+        ``log(w)`` and the RSS, as in R, not as replicated rows.
+        """
+        if result.failed:
+            return math.nan, len(result.coefficients) + 1
+        n = result.extras["n_positive"]
+        sum_log_weights = result.extras["sum_log_weights"]
+        with np.errstate(divide="ignore"):
+            log_rss = float(np.log(result.objfun))
+        value = 0.5 * (
+            sum_log_weights - n * (math.log(2 * math.pi) + 1 - math.log(n) + log_rss)
+        )
+        return value, rank(result) + 1
+
+    def report(self, result: FitResult) -> Report:
+        return {}
+
+    def predict(
+        self,
+        result: FitResult,
+        x: FloatArray | None,
+        offset: FloatArray | None,
+        kind: str,
+    ) -> FloatArray:
+        """The fitted mean ``x beta + offset`` for "link" and "response"."""
+        if kind not in ("link", "response"):
+            raise ValueError(f"lmtree predicts 'link' or 'response', not {kind!r}")
+        return linear_predictor(result, x, offset)
 
     def prune_rule(self, name: str) -> PruneRule | None:
         """lmtree's pruning rules, for an RSS objective (lmtree.R:12-29)."""
