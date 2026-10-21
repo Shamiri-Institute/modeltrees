@@ -1,0 +1,75 @@
+{
+  "k": 60,
+  "j": 12,
+  "model": "multinom",
+  "name": "blind_60_multinom",
+  "seed": 1161165229,
+  "family": null,
+  "planted": true,
+  "clustered": false,
+  "weighted": true,
+  "cluster_weighted": false,
+  "offset": false,
+  "separated": false,
+  "n_classes": 4,
+  "lose_class": true,
+  "n": 778,
+  "regressors": ["x1", "x2"],
+  "partitioning": [
+    {
+      "name": "z1",
+      "type": "nominal",
+      "n_levels": 8,
+      "dist": null,
+      "cluster_level": false
+    },
+    {
+      "name": "z2",
+      "type": "nominal",
+      "n_levels": 4,
+      "dist": null,
+      "cluster_level": false
+    },
+    {
+      "name": "z3",
+      "type": "numeric",
+      "n_levels": null,
+      "dist": "normal",
+      "cluster_level": false
+    }
+  ],
+  "control": {
+    "alpha": 0.01,
+    "bonferroni": false,
+    "minsize": 58,
+    "maxdepth": 5,
+    "prune": "BIC",
+    "numsplit": "center"
+  },
+  "effect": {
+    "variable": 3,
+    "type": "intercept",
+    "size": 0.49357881867326792,
+    "quantile": 0.37289830977097149
+  },
+  "n_clusters": null,
+  "theta": null,
+  "separation": null,
+  "lost_class": {
+    "class": 1,
+    "variable": 1,
+    "frac": 0.23676810080651195,
+    "n_rows": 278
+  },
+  "formula": "y ~ x1 + x2 | z1 + z2 + z3",
+  "r_call": "partykit::mob(formula = y ~ x1 + x2 | z1 + z2 + z3, data = blind_60_multinom, weights = w, fit = multinomfit, maxit = 1000L, reltol = 1e-16, abstol = 1e-04, control = partykit::mob_control(alpha = 0.01, bonferroni = FALSE, minsize = 58L, maxdepth = 5L, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = \"BIC\", restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = \"vector\", xtype = \"matrix\", terminal = c(\"estfun\", \"object\"), inner = c(\"estfun\", \"object\"), model = TRUE, numsplit = \"center\", catsplit = \"binary\", vcov = \"opg\", ordinal = \"chisq\", nrep = 10000, applyfun = NULL, cores = NULL))",
+  "r_outcome": "ok",
+  "r_seconds": 10.318999999999999,
+  "n_nodes": 9,
+  "n_terminal": 5,
+  "decision_margins": {
+    "min_abs_p_value_minus_alpha": 0.0099999408281245122,
+    "min_relative_split_objective_gap": 1.5788920983866133e-06
+  },
+  "warnings": []
+}

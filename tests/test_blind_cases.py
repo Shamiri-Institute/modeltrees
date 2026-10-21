@@ -1,5 +1,6 @@
-"""The cases of the blind differential run (task 6j) where the port and R
-differ, in tests/fixtures/blind_cases/ (README.md there has the analysis).
+"""The cases of the blind differential runs (tasks 6j and 6l) where the port
+and R differed, in tests/fixtures/blind_cases/ (README.md there has the
+analysis).
 
 Each test compares the case with R in the order of CLAUDE.md
 (tests/blind_compare.py). The cases the port now matches (``MATCHING``) are
@@ -46,8 +47,40 @@ MATCHING = [
 ]
 
 # (case, first diverging component, start of the difference, reason, slow).
-# Empty since task 6k; a case that diverges from R goes here, xfail strict.
-EXPECTED: list[tuple[str, str, str, str, bool]] = []
+# The mismatching cases of the second blind run (task 6l), xfail strict.
+EXPECTED: list[tuple[str, str, str, str, bool]] = [
+    (
+        "blind_22_glm",
+        "whole tree",
+        "node 9: stop reason test_failed vs R pruned",
+        (
+            "G = 2 < k = 3 under case weights: R's chol() of the singular meat "
+            "succeeds by rounding, the port stops; R prunes the node"
+        ),
+        False,
+    ),
+    (
+        "blind_52_multinom",
+        "node sizes and coefficients",
+        "node 6: rows differ (65 vs R 135)",
+        (
+            "G = 3 < k = 4 under case weights at node 6: R's chol() of the "
+            "singular meat succeeds by rounding and R splits, the port stops "
+            "and AIC prunes node 5"
+        ),
+        False,
+    ),
+    (
+        "blind_60_multinom",
+        "split candidates and objectives",
+        "node 6: split objectives:",
+        (
+            "nnet stops at maxit in two small split-search fits, 1.8e-5 above "
+            "the Newton optimum"
+        ),
+        True,
+    ),
+]
 
 
 def test_every_blind_case_is_listed() -> None:

@@ -1,4 +1,9 @@
-# Blind differential run: the mismatching cases
+# Blind differential runs: the mismatching cases
+
+Two blind runs are recorded here: task 6j (below) and task 6l, which
+repeated it on new seeds after the fixes of task 6k (last section). Case
+names number the cases within their run; `cases/<case>.json` gives the
+seed.
 
 Task 6j ran the port against partykit 1.3-0 on 60 cases (12 per model) that
 nobody shaped during development: seeds from
@@ -117,3 +122,68 @@ the linear predictor on the leaf's rows at `SEPARATED_RTOL`, the fitted
 means at the usual tolerance and the objective relatively (it is below the
 absolute tolerance), instead of each coefficient. A 1e-6 relative change of
 the objective or of one fitted mean is still caught.
+
+## Second blind run (task 6l)
+
+Task 6l repeated the run with the same harness, case grid, settings draws
+and comparisons (`tests/blind_compare.py` as task 6k left it) on seeds from
+`numpy.random.SeedSequence(20261023).generate_state(60) >> 1`, to check
+that the task 6k fixes introduced no new difference. Two additions to the
+grid: each model has at least two clustered cases with case weights (here
+exactly two), and in those every partitioning variable is constant within
+clusters, so nodes come down to G = k clusters for k coefficients and
+below. Their R trees had 39 nodes with G = k (37 tested by R; the 31 in
+the matching cases, 25 of them split, all match the port) and 94 with
+G < k. The vcov of
+weighted clustered leaves was compared against the formula of
+docs/api-design.md 5.1 evaluated in R on R's own scores; their
+`vcov/<case>.json` holds it as `formula` next to `vcovcl`, which is no
+oracle under weights (for the multinomial not even for HC0: sandwich's
+`estfun.multinom` drops the case weights of the refit).
+
+57 of the 60 cases matched on every component. The 3 below did not; they
+are copied here unchanged and are xfail (strict) in
+`tests/test_blind_cases.py` with their first diverging component. Nothing
+was fixed.
+
+| case | model | n | first diverging component (6l) | classification |
+| --- | --- | --- | --- | --- |
+| `blind_22_glm` | glmtree poisson, clustered, weighted | 874 | whole tree (node 9 stop reason) | rounding: R's `chol()` of a singular meat at G = 2 < k = 3 succeeds |
+| `blind_52_multinom` | multinomfit, clustered, weighted | 621 | node sizes (node 6) | rounding: same at G = 3 < k = 4 (node 6), then AIC prunes node 5 in the port |
+| `blind_60_multinom` | multinomfit, weighted | 778 | split candidates and objectives (node 6) | documented decision: nnet stops at maxit, the port's Newton fit reaches the optimum |
+
+### `blind_22_glm` and `blind_52_multinom`: R's Cholesky at G < k
+
+R ran the instability tests at `blind_22_glm` node 9 (G = 2, k = 3,
+weights 1 to 4) and `blind_52_multinom` node 6 (G = 3, k = 4). With
+G < k the meat, the crossproduct of the G cluster sums of
+`process / sqrt(weights)` (modelparty.R:244), has rank G under any
+weights. On R's own scores its eigenvalues are 0.208, 0.0222, 1.1e-17 and
+0.502, 0.0459, 0.00959, 8.3e-18: R's `chol()` happens to succeed, and the
+statistics (9.8e15 to 2.5e17, p = 0) are the inverse of the rounding noise.
+On copies with 1e-15 relative noise R's `chol()` succeeds about half the
+time (99 and 112 of 199), and the port's `cho_factor` fails on R's meat
+itself. Of the 70 weighted nodes with G < k that R tested in the run, its
+`chol()` failed at 68, where the port (which stops at G < k,
+docs/decisions.md) matches. In `blind_22_glm` R then prunes node 9 (BIC),
+so only its stop reason differs; in `blind_52_multinom` R splits node 6
+and keeps the split, while in the port node 6 is terminal and AIC prunes
+node 5 by 0.072 (650.7901 against 650.8623 with R's own objectives). With
+R's `chol.default` traced to stop when the smallest/largest eigenvalue is
+below 1e-12, R grows trees the port matches on every component in both
+cases. Not a port defect; docs/decisions.md's "partykit silently stops
+splitting" at G < k holds only when rounding makes `chol()` fail.
+
+### `blind_60_multinom`: nnet's iteration limit in split search
+
+At node 6, 2 of 159 candidate objectives on z3 (133 and 134) differ by
+4.3e-8 and 4.0e-8 relative (R higher by 1.8e-5); the other 157 agree to
+4e-13, and the chosen split is the same. In both, the right child (25 and
+24 rows, classes 4/14/3/4 and 4/13/3/4) stops in nnet with
+`convergence = 1` (maxit 1000) and summed scores about 5e-4; the port's
+Newton fit converges with summed scores 3e-11. R's own multinomial
+log-likelihood is lower at the port's coefficients by exactly the
+difference (1.83e-5 and 1.72e-5). With these two candidates exempt, the
+case matches R on every component. docs/extensions-spec.md (Q10): R's
+multinomial estimates are accurate only to about the gradient's size, and
+the port uses Newton's method rather than nnet's BFGS.

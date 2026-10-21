@@ -1,0 +1,71 @@
+{
+  "k": 22,
+  "j": 10,
+  "model": "glm",
+  "name": "blind_22_glm",
+  "seed": 1526306394,
+  "family": "poisson",
+  "planted": true,
+  "clustered": true,
+  "weighted": true,
+  "cluster_weighted": true,
+  "offset": false,
+  "separated": false,
+  "n_classes": null,
+  "lose_class": false,
+  "n": 874,
+  "regressors": ["x1", "x2"],
+  "partitioning": [
+    {
+      "name": "z1",
+      "type": "nominal",
+      "n_levels": 6,
+      "dist": null,
+      "cluster_level": true
+    },
+    {
+      "name": "z2",
+      "type": "nominal",
+      "n_levels": 8,
+      "dist": null,
+      "cluster_level": true
+    },
+    {
+      "name": "z3",
+      "type": "numeric",
+      "n_levels": null,
+      "dist": "uniform",
+      "cluster_level": true
+    }
+  ],
+  "control": {
+    "alpha": 0.050000000000000003,
+    "bonferroni": true,
+    "minsize": null,
+    "maxdepth": null,
+    "prune": "BIC",
+    "numsplit": "left"
+  },
+  "effect": {
+    "variable": 2,
+    "type": "intercept",
+    "size": -0.97453786523547015,
+    "quantile": 0.68723425930365911,
+    "levels": ["x", "j", "t", "c"]
+  },
+  "n_clusters": 33,
+  "theta": null,
+  "separation": null,
+  "lost_class": null,
+  "formula": "y ~ x1 + x2 | z1 + z2 + z3",
+  "r_call": "partykit::glmtree(formula = y ~ x1 + x2 | z1 + z2 + z3, data = blind_22_glm, family = poisson(link = \"log\"), weights = w, cluster = school, epsilon = 1e-08, maxit = 25, alpha = 0.05, bonferroni = TRUE, minsize = NULL, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = \"BIC\", restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = \"vector\", xtype = \"matrix\", terminal = c(\"estfun\", \"object\"), inner = c(\"estfun\", \"object\"), model = TRUE, numsplit = \"left\", catsplit = \"binary\", vcov = \"opg\", ordinal = \"chisq\", nrep = 10000, applyfun = NULL, cores = NULL)",
+  "r_outcome": "ok",
+  "r_seconds": 3.5900000000000003,
+  "n_nodes": 21,
+  "n_terminal": 11,
+  "decision_margins": {
+    "min_abs_p_value_minus_alpha": 0.035654359041839181,
+    "min_relative_split_objective_gap": 0.0026863558906376362
+  },
+  "warnings": []
+}

@@ -477,22 +477,25 @@ readme <- c(readme,
   "",
   "```r", pv$r_call, "```", "")
 
-# The blind differential run's mismatching cases (task 6j) are copied from
-# that run, not generated here; they are listed and kept. Task 6k fixed or
-# explained each, and they are standing tests.
+# The blind differential runs' mismatching cases (tasks 6j and 6l) are
+# copied from those runs, not generated here; they are listed and kept. Task
+# 6k fixed or explained the 6j cases, which are standing tests; the 6l cases
+# are xfail.
 blind_dir <- file.path(out_dir, "blind_cases")
 blind_trees <- sort(list.files(file.path(blind_dir, "trees"), pattern = "[.]json$"))
 if (length(blind_trees)) {
   readme <- c(readme,
     "## Blind differential run cases",
     "",
-    "Copied unchanged from the blind differential run of task 6j, not generated",
-    "here: the cases where the port and R differed in that run, each with its",
-    "data, R tree (tree fixture format, `data_csv` relative to `blind_cases/`),",
-    "drawn settings and, for clustered cases, `sandwich::vcovCL` per leaf.",
-    "`blind_cases/README.md` has the run, the analysis of each case and the",
-    "task 6k fixes; `tests/test_blind_cases.py` compares them with R as",
-    "standing tests, which all match on every component.",
+    "Copied unchanged from the blind differential runs of tasks 6j and 6l, not",
+    "generated here: the cases where the port and R differed in those runs,",
+    "each with its data, R tree (tree fixture format, `data_csv` relative to",
+    "`blind_cases/`), drawn settings and, for clustered cases, `sandwich::vcovCL`",
+    "per leaf (task 6l also the sandwich formula on R's scores).",
+    "`blind_cases/README.md` has the runs, the analysis of each case and the",
+    "task 6k fixes; `tests/test_blind_cases.py` compares them with R: the task",
+    "6j cases as standing tests, which match on every component, and the task",
+    "6l cases as strict xfail tests with their first diverging component.",
     "")
   for (f in blind_trees) {
     fx <- jsonlite::fromJSON(file.path(blind_dir, "trees", f), simplifyVector = FALSE)

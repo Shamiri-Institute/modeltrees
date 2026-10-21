@@ -1,0 +1,43 @@
+{
+  "dataset": "blind_60_multinom",
+  "description": "Blind differential run, case 60 (multinom, seed 1161165229).",
+  "source": "simulated",
+  "seed": 1161165229,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 778,
+  "csv": "blind_60_multinom.csv",
+  "columns": [
+    {
+      "name": "y",
+      "type": "factor",
+      "levels": ["k1", "k2", "k3", "k4"]
+    },
+    {
+      "name": "x1",
+      "type": "double"
+    },
+    {
+      "name": "x2",
+      "type": "double"
+    },
+    {
+      "name": "z1",
+      "type": "factor",
+      "levels": ["c", "q", "g", "v", "b", "t", "l", "x"]
+    },
+    {
+      "name": "z2",
+      "type": "factor",
+      "levels": ["w", "k", "t", "f"]
+    },
+    {
+      "name": "z3",
+      "type": "double"
+    },
+    {
+      "name": "w",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "notes/blind2/r/cases.R, draw_case()"
+}

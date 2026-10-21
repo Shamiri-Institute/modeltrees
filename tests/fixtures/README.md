@@ -989,18 +989,23 @@ logp.supLM(statistic, k, lambda) extracted from partykit:::mob_partynode; lambda
 
 ## Blind differential run cases
 
-Copied unchanged from the blind differential run of task 6j, not generated
-here: the cases where the port and R differed in that run, each with its
-data, R tree (tree fixture format, `data_csv` relative to `blind_cases/`),
-drawn settings and, for clustered cases, `sandwich::vcovCL` per leaf.
-`blind_cases/README.md` has the run, the analysis of each case and the
-task 6k fixes; `tests/test_blind_cases.py` compares them with R as
-standing tests, which all match on every component.
+Copied unchanged from the blind differential runs of tasks 6j and 6l, not
+generated here: the cases where the port and R differed in those runs,
+each with its data, R tree (tree fixture format, `data_csv` relative to
+`blind_cases/`), drawn settings and, for clustered cases, `sandwich::vcovCL`
+per leaf (task 6l also the sandwich formula on R's scores).
+`blind_cases/README.md` has the runs, the analysis of each case and the
+task 6k fixes; `tests/test_blind_cases.py` compares them with R: the task
+6j cases as standing tests, which match on every component, and the task
+6l cases as strict xfail tests with their first diverging component.
 
 - `blind_cases/trees/blind_03_lm.json`: Blind differential run, case 3 (lm, seed 28957036). Data `blind_cases/data/blind_03_lm.csv`, 2953 rows. 12 inner and 13 terminal nodes.
 - `blind_cases/trees/blind_13_glm.json`: Blind differential run, case 13 (glm, seed 250857512). Data `blind_cases/data/blind_13_glm.csv`, 1015 rows. 64 inner and 65 terminal nodes.
+- `blind_cases/trees/blind_22_glm.json`: Blind differential run, case 22 (glm, seed 1526306394). Data `blind_cases/data/blind_22_glm.csv`, 874 rows. 10 inner and 11 terminal nodes.
 - `blind_cases/trees/blind_29_negbin.json`: Blind differential run, case 29 (negbin, seed 1576914726). Data `blind_cases/data/blind_29_negbin.csv`, 412 rows. 3 inner and 4 terminal nodes.
 - `blind_cases/trees/blind_36_negbin.json`: Blind differential run, case 36 (negbin, seed 32529904). Data `blind_cases/data/blind_36_negbin.csv`, 961 rows. 59 inner and 60 terminal nodes.
 - `blind_cases/trees/blind_43_safelogit.json`: Blind differential run, case 43 (safelogit, seed 1859485392). Data `blind_cases/data/blind_43_safelogit.csv`, 828 rows. 1 inner and 2 terminal nodes.
 - `blind_cases/trees/blind_47_safelogit.json`: Blind differential run, case 47 (safelogit, seed 951672132). Data `blind_cases/data/blind_47_safelogit.csv`, 785 rows. 1 inner and 2 terminal nodes.
+- `blind_cases/trees/blind_52_multinom.json`: Blind differential run, case 52 (multinom, seed 1982912904). Data `blind_cases/data/blind_52_multinom.csv`, 621 rows. 7 inner and 8 terminal nodes.
+- `blind_cases/trees/blind_60_multinom.json`: Blind differential run, case 60 (multinom, seed 1161165229). Data `blind_cases/data/blind_60_multinom.csv`, 778 rows. 4 inner and 5 terminal nodes.
 
