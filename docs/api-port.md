@@ -466,9 +466,12 @@ JSON is unchanged). The suites that glob `extension_trees/` now grow it.
    candidate and compares their classes, status and objective with the
    fixture's `reference_absent` field.
 3. **The fixture README** still introduces the file under its own heading
-   ("Reference-absent multinomial tree ... in its own directory"), since
-   that text is in `r/generate_all.R` and the task allowed one changed
-   line there.
+   ("Reference-absent multinomial tree"). Task 6f, step 0 rewrote the
+   paragraph in `r/generate_all.R` that said it lived in its own directory:
+   it now says the file is in `extension_trees/` and is listed separately
+   because one leaf has no scores. Two regenerations changed only that
+   paragraph of `tests/fixtures/README.md` (eight lines, rewrapped) and were
+   byte-identical to each other; no JSON or CSV changed.
 
 ## 15. Hessians and `vcov`
 

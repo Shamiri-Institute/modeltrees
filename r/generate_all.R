@@ -261,14 +261,14 @@ for (entry in ext_tree_index) {
 readme <- c(readme,
   "## Reference-absent multinomial tree",
   "",
-  "Generator: `r/fixtures/extensions.R`. Extension tree format, in its own",
-  "directory `reference_absent_trees/` because some Python tests of",
-  "`extension_trees/` assume every multinomial node has scores (see",
-  "docs/sandwich-fixtures.md, section 3). The extra field `reference_absent`",
-  "has every root split-search candidate refitted side by side (classes",
-  "present, status and objective of each side, which add up to the",
-  "split-search objective) and the leaf without the reference class with its",
-  "objective.",
+  "Generator: `r/fixtures/extensions.R`. Extension tree format, stored in",
+  "`extension_trees/` with the extension trees above and listed here",
+  "separately because one of its leaves lacks the reference class and has no",
+  "scores (see docs/sandwich-fixtures.md, section 3). The extra field",
+  "`reference_absent` has every root split-search candidate refitted side by",
+  "side (classes present, status and objective of each side, which add up to",
+  "the split-search objective) and the leaf without the reference class with",
+  "its objective.",
   "")
 for (entry in noref_tree_index) {
   fx <- entry$fixture
