@@ -868,6 +868,31 @@ polars tree bit for bit.
 Task 6k fixes what the blind differential run of task 6j found
 (tests/fixtures/blind_cases/README.md).
 
+### Blind run
+
+Task 6j grew 60 cases (12 per model: lm, glm, negbin, safe logit,
+multinomial) that nobody shaped during development, with data and settings
+drawn in R from fixed seeds, and compared the port's public entry points
+with partykit 1.3-0 component by component. 54 matched on every component
+and 6 did not, in three classes:
+
+- **a port defect** (`blind_03_lm`, `blind_13_glm`): the cluster guard
+  stopped at G = k also under unequal case weights, where partykit's meat
+  is regular. Fixed in the core (item 1);
+- **a documented decision that R contradicted** (`blind_36_negbin`): theta
+  in the pruning df. Changed to partykit's coefficient count (item 4);
+- **rounding in quantities the data do not determine** (`blind_29_negbin`,
+  `blind_36_negbin` after the pruning change, `blind_43_safelogit`,
+  `blind_47_safelogit`): a weakly identified theta and the slopes of a
+  completely separated leaf. The blind-case comparison now compares what
+  the data determine (items 5 and 6), with sensitivity tests (item 7); no
+  standing tolerance changed.
+
+No multinomial case diverged. All six cases are now standing tests that
+match R on every component (item 8).
+
+### Decisions
+
 1. **Clusters with case weights at G = k.** The instability tests stop at
    `n_clusters < k` always and at `n_clusters == k` only when the cluster
    sums of the scaled scores are constrained to sum to zero, that is with
@@ -954,3 +979,7 @@ Task 6k fixes what the blind differential run of task 6j found
    (`blind_43_safelogit`, `blind_47_safelogit` node 3).
 8. **Standing tests.** All six blind cases match R on every component and
    are in `MATCHING`; the xfail set is empty.
+9. **Fixture README.** The blind-case paragraph of `r/generate_all.R` now
+   says the cases are standing tests; `Rscript r/generate_all.R` changed
+   only that paragraph of `tests/fixtures/README.md` (no JSON or CSV
+   changed).

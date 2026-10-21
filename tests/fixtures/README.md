@@ -990,12 +990,12 @@ logp.supLM(statistic, k, lambda) extracted from partykit:::mob_partynode; lambda
 ## Blind differential run cases
 
 Copied unchanged from the blind differential run of task 6j, not generated
-here: the cases where the port and R differ, each with its data, R tree
-(tree fixture format, `data_csv` relative to `blind_cases/`), drawn
-settings and, for clustered cases, `sandwich::vcovCL` per leaf.
-`blind_cases/README.md` has the run and the analysis of each case;
-`tests/test_blind_cases.py` marks them xfail with the first diverging
-component.
+here: the cases where the port and R differed in that run, each with its
+data, R tree (tree fixture format, `data_csv` relative to `blind_cases/`),
+drawn settings and, for clustered cases, `sandwich::vcovCL` per leaf.
+`blind_cases/README.md` has the run, the analysis of each case and the
+task 6k fixes; `tests/test_blind_cases.py` compares them with R as
+standing tests, which all match on every component.
 
 - `blind_cases/trees/blind_03_lm.json`: Blind differential run, case 3 (lm, seed 28957036). Data `blind_cases/data/blind_03_lm.csv`, 2953 rows. 12 inner and 13 terminal nodes.
 - `blind_cases/trees/blind_13_glm.json`: Blind differential run, case 13 (glm, seed 250857512). Data `blind_cases/data/blind_13_glm.csv`, 1015 rows. 64 inner and 65 terminal nodes.

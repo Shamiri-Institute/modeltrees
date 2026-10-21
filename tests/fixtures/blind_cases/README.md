@@ -1,4 +1,4 @@
-# Blind differential run: mismatching cases
+# Blind differential run: the mismatching cases
 
 Task 6j ran the port against partykit 1.3-0 on 60 cases (12 per model) that
 nobody shaped during development: seeds from
@@ -24,18 +24,24 @@ the run:
   standard R function. For weighted cases it is recorded but is not an
   oracle (docs/sandwich-fixtures.md 1.5).
 
-`tests/test_blind_cases.py` compares each case (`tests/blind_compare.py`) and
-is marked xfail (strict) with the first diverging component; it fails if a
-case diverges anywhere else first.
+Task 6k fixed or explained each one, and all six now match R on every
+component. `tests/test_blind_cases.py` compares each case
+(`tests/blind_compare.py`) as a standing test (`MATCHING`); a case that
+diverged again would have to be marked xfail (strict) with its first
+diverging component. The table gives the first divergence found in task 6j
+and what task 6k did (docs/api-port.md, section 19).
 
-| case | model | n | first diverging component | classification |
-| --- | --- | --- | --- | --- |
-| `blind_03_lm` | lmtree | 2953 | node sizes (node 21) | port defect: G = k with case weights |
-| `blind_13_glm` | glmtree binomial | 1015 | node sizes (node 14) | port defect: G = k with case weights |
-| `blind_29_negbin` | negbinfit | 412 | coefficients (node 4 theta) | rounding: theta not identified |
-| `blind_36_negbin` | negbinfit | 961 | node sizes (node 19) | documented decision: theta in the pruning df |
-| `blind_43_safelogit` | safelogitfit | 828 | coefficients (node 3 slope) | rounding: separated leaf |
-| `blind_47_safelogit` | safelogitfit | 785 | coefficients (node 3 slope) | rounding: separated leaf |
+| case | model | n | first diverging component (6j) | classification | task 6k |
+| --- | --- | --- | --- | --- | --- |
+| `blind_03_lm` | lmtree | 2953 | node sizes (node 21) | port defect: G = k with case weights | guard fixed: tests run at G = k under unequal case weights |
+| `blind_13_glm` | glmtree binomial | 1015 | node sizes (node 14) | port defect: G = k with case weights | same |
+| `blind_29_negbin` | negbinfit | 412 | coefficients (node 4 theta) | rounding: theta not identified | theta at 1e-6 under a weak-identification warning |
+| `blind_36_negbin` | negbinfit | 961 | node sizes (node 19) | documented decision: theta in the pruning df | pruning counts coefficients only, as partykit; then as `blind_29` |
+| `blind_43_safelogit` | safelogitfit | 828 | coefficients (node 3 slope) | rounding: separated leaf | linear predictor and fitted values instead of slopes |
+| `blind_47_safelogit` | safelogitfit | 785 | coefficients (node 3 slope) | rounding: separated leaf | same |
+
+The sections below are the analysis of task 6j; each ends with what task
+6k changed.
 
 ## `blind_03_lm` and `blind_13_glm`: clusters with case weights at G = k
 
@@ -53,6 +59,12 @@ on R's own scores). The port's tests with only the guard changed to
 `n_clusters < k` reproduce R's statistics and log p-values at both nodes to
 all digits, and both cases then match R on every component.
 
+Task 6k: the guard stops at `n_clusters < k`, and at `n_clusters == k` only
+when the cluster sums are constrained to sum to zero (`caseweights = FALSE`
+or equal positive weights). The cluster-robust `vcov` keeps its warning at
+G <= k, since its meat sums the scores themselves, whose cluster sums add
+up to zero under any weights.
+
 ## `blind_29_negbin`: theta of a near-Poisson node
 
 Node 4's theta is 4923.558164104566 against R's 4923.5579300528625 (4.7e-8
@@ -62,6 +74,12 @@ only for theta.ml's "iteration limit reached". The coefficients agree to
 2.6e-10, and the log-likelihoods at the two thetas differ by 4.7e-13
 (1.1e-15 relative). With theta compared at 1e-6, the case matches R on
 every component.
+
+Task 6k: `tests/blind_compare.py` compares theta, theta_irls and theta_se
+at 1e-6 when R or the port reports the alternation limit (theta.ml's
+iteration limit keeps the standing 1e-3), and accepts a differing
+alternation-limit flag when the final thetas agree to 1e-10. The standing
+fixture tests are unchanged.
 
 ## `blind_36_negbin`: theta in the pruning df
 
@@ -78,6 +96,11 @@ jitter by 1e-8 to 2e-7 around epsilon = 1e-8: R's step happened to fall to
 reports "alternation limit reached" (final thetas agree to 4.5e-15). With
 all three allowed, the case matches R on every component.
 
+Task 6k: pruning counts the coefficients only, as partykit does; theta
+still counts in `loglik()`, `aic()` and `bic()`, as in `logLik.negbin`. The
+two rounding differences are covered by the theta comparison of
+`blind_29_negbin`.
+
 ## `blind_43_safelogit` and `blind_47_safelogit`: slopes of a separated leaf
 
 Node 3 is a constant-response subgroup (y = 1). Both R and the port find
@@ -88,3 +111,9 @@ effect on the fitted values is about 1e-19) and are rounding residue: x1 =
 (`blind_47`), with atol 1e-10. The port's `reference_path()` gives different
 residue again, while the objective equals R's bit for bit. With node 3's
 slopes exempt, both cases match R on every component.
+
+Task 6k: for a completely separated leaf `tests/blind_compare.py` compares
+the linear predictor on the leaf's rows at `SEPARATED_RTOL`, the fitted
+means at the usual tolerance and the objective relatively (it is below the
+absolute tolerance), instead of each coefficient. A 1e-6 relative change of
+the objective or of one fitted mean is still caught.

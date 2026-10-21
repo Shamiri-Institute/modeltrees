@@ -235,6 +235,7 @@ These are deliberate. Each is recorded in docs/decisions.md or docs/api-port.md.
   small for inference about the subgroups. modeltrees reports standard errors
   but no p-values or confidence intervals for leaf coefficients. Growing the
   tree on one part of the data and estimating on the other is the honest route.
+- **`aic()` and `bic()` count theta, pruning does not, as in partykit.**
 - **Scope.** Binary splits only; no surrogate splits or random routing of
   missing values; the instability tests use `vcov = "opg"` only; options that
   need R's random numbers (`mtry`, `breakties`, `ordinal = "L2"` and `"max"`)
