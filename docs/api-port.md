@@ -614,13 +614,19 @@ docs/sandwich-fixtures.md section 1) and `tests/test_predict_fixtures.py`
 5. **A completely separated safe logit leaf** is "unavailable"; R has no fixture
    for it (its `estfun` is NULL).
 6. **Weighted leaves.** Weighted multinomial vcov has no R oracle. sandwich's
-   `estfun.multinom` reads the weights from `model.frame()` of the refit, which
-   has none, so its scores lack the case weights and `vcovCL` differs from the
-   formula of docs/api-design.md 5.1 by up to 0.92 (the second blind run, task
-   6l, tests/fixtures/blind_cases/README.md). Weighted multinomial leaves are
-   checked against that formula evaluated on our own scores only. For weighted
-   leaves of the other models HC0 equals `vcovCL`, while HC1 differs: sandwich's
-   n is the number of rows, ours is the sum of the weights (16.2, item 1).
+   `estfun.multinom` takes the weights as `model.weights(model.frame(x))` and
+   uses ones when that is NULL (reference/sandwich/R/estfun.R:319-320), not the
+   fit's `x$weights`. sandwich's source does not show whether that frame has the
+   weights: `model.frame()` dispatches to nnet's `model.frame.multinom`, which
+   rebuilds the frame from the call's `formula`, `data`, `na.action` and
+   `subset` only. With nnet 7.3-20 (the installed version; the pinned 7.3-21 was
+   not checked), the frame of a weighted `multinom` fit has no `(weights)`
+   column, so the scores lack the case weights and `vcovCL` is not the formula
+   of docs/api-design.md 5.1 (tests/fixtures/blind_cases/README.md, second blind
+   run). Weighted multinomial leaves are checked against that formula evaluated
+   on our own scores only. For weighted leaves of the other models HC0 equals
+   `vcovCL`, while HC1 differs: sandwich's n is the number of rows, ours is the
+   sum of the weights (16.2, item 1).
 
 ### 16.2 Weights, without R
 
