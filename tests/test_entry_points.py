@@ -103,9 +103,9 @@ def test_control_errors() -> None:
         mt.lmtree("y ~ x | z", df, mtry=2)
 
 
-@pytest.mark.parametrize("n_jobs", [2, -1, 0])
-def test_n_jobs_other_than_one_is_not_implemented(n_jobs: int) -> None:
-    with pytest.raises(NotImplementedError, match="n_jobs"):
+@pytest.mark.parametrize("n_jobs", [0, -2])
+def test_invalid_n_jobs(n_jobs: int) -> None:
+    with pytest.raises(ValueError, match="n_jobs"):
         mt.lmtree("y ~ x | z", _gaussian(), n_jobs=n_jobs)
 
 
@@ -146,8 +146,8 @@ def test_mob_wraps_the_core_tree() -> None:
     assert tree.formula is None and tree.model_name == "mob(LmModel)"
     assert np.array_equal(tree.fitted_node, core.fitted_node)
     assert [n.objective for n in tree.nodes] == [n.fit.objfun for n in core.nodes]
-    with pytest.raises(NotImplementedError):
-        mt.mob(model, y, xm, {"z": ("numeric", z)}, n_jobs=4)
+    with pytest.raises(ValueError, match="n_jobs"):
+        mt.mob(model, y, xm, {"z": ("numeric", z)}, n_jobs=0)
 
 
 def _grow_separated(

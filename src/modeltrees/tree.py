@@ -18,8 +18,9 @@ from typing import Any, Literal
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from modeltrees._parallel import SplitPool, resolve_n_jobs
 from modeltrees._reference import reference_active
-from modeltrees.errors import NodeFitFailedWarning
+from modeltrees.errors import ModelTreesWarning, NodeFitFailedWarning
 from modeltrees.instability import (
     FluctuationTests,
     InstabilityTestError,
@@ -230,6 +231,7 @@ def mob(
     offset: ArrayLike | None = None,
     cluster: ArrayLike | None = None,
     control: MobControl | None = None,
+    n_jobs: int | None = None,
 ) -> GrownTree:
     """Grow (and optionally prune) a model-based tree, as ``partykit::mob``.
 
@@ -239,8 +241,15 @@ def mob(
     ``(kind, values)`` or ``(kind, values, levels)``. Factors given as integer
     codes need ``levels``. ``x`` is the regressor matrix, intercept column
     included, or None for an intercept-only model.
+
+    ``n_jobs`` > 1 (or -1, every CPU) fits the candidates of large split
+    searches in that many worker processes, with the same result as
+    ``n_jobs=None`` (docs/api-design.md, section 6). The model must be
+    picklable. ``restart=False`` chains the candidates' fits, so split
+    search then runs serially, with one warning.
     """
     control = control or MobControl()
+    n_workers = resolve_n_jobs(n_jobs)
     yv = np.asarray(y)
     n = yv.shape[0]
     xv = None if x is None else np.asarray(x, dtype=np.float64)
@@ -261,8 +270,24 @@ def mob(
         raise ValueError("at least one partitioning variable is needed")
     variables = tuple(_as_variable(name, spec, n) for name, spec in z.items())
 
-    grower = _Grower(model, yv, xv, variables, w, off, cl, control)
-    root = grower.grow(np.arange(n, dtype=np.intp), node_id=1, depth=1)
+    pool = None
+    if n_workers > 1:
+        if control.restart:
+            pool = SplitPool(n_workers)
+        else:
+            warnings.warn(
+                f"restart=False makes each split candidate start from the "
+                f"previous one's fit, so split search runs serially; "
+                f"n_jobs={n_jobs} is ignored",
+                ModelTreesWarning,
+                stacklevel=2,
+            )
+    grower = _Grower(model, yv, xv, variables, w, off, cl, control, pool)
+    try:
+        root = grower.grow(np.arange(n, dtype=np.intp), node_id=1, depth=1)
+    finally:
+        if pool is not None:
+            pool.shutdown()
     assert grower.minsize is not None
 
     rule = _prune_rule(control.prune, model)
@@ -294,6 +319,33 @@ def _prune_rule(prune: str | PruneRule | None, model: NodeModel) -> PruneRule | 
     return prune
 
 
+@dataclass(frozen=True)
+class _NodeSideFit:
+    """A side fit on a node's own arrays (a SideFit). A class rather than a
+    closure so that parallel split search can pickle it to its workers."""
+
+    model: NodeModel
+    y: NDArray[Any]
+    x: FloatArray | None
+    weights: FloatArray
+    offset: FloatArray | None
+    cluster: NDArray[Any] | None
+    caseweights: bool
+
+    def __call__(self, mask: NDArray[np.bool_], start: FloatArray | None) -> FitResult:
+        return self.model.fit(
+            self.y[mask],
+            None if self.x is None else self.x[mask],
+            start=start,
+            weights=self.weights[mask],
+            offset=None if self.offset is None else self.offset[mask],
+            cluster=None if self.cluster is None else self.cluster[mask],
+            caseweights=self.caseweights,
+            estfun=False,
+            vcov=False,
+        )
+
+
 class _Grower:
     """State shared by the recursion, as the closures in mob_partynode."""
 
@@ -307,8 +359,10 @@ class _Grower:
         offset: FloatArray | None,
         cluster: NDArray[Any] | None,
         control: MobControl,
+        pool: SplitPool | None = None,
     ) -> None:
         self.model = model
+        self.pool = pool
         self.y = y
         self.x = x
         self.variables = variables
@@ -352,19 +406,7 @@ class _Grower:
         cl = None if self.cluster is None else self.cluster[rows]
         caseweights = self.control.caseweights
         model = self.model
-
-        def side_fit(mask: NDArray[np.bool_], start: FloatArray | None) -> FitResult:
-            return model.fit(
-                y[mask],
-                None if x is None else x[mask],
-                start=start,
-                weights=w[mask],
-                offset=None if off is None else off[mask],
-                cluster=None if cl is None else cl[mask],
-                caseweights=caseweights,
-                estfun=False,
-                vcov=False,
-            )
+        side_fit = _NodeSideFit(model, y, x, w, off, cl, caseweights)
 
         scorer = getattr(model, "split_objectives", None)
         if scorer is None or not uses_batch_split(model):
@@ -485,6 +527,7 @@ class _Grower:
                 restart=control.restart,
                 numsplit=control.numsplit,
                 batch=batch,
+                parallel=self.pool,
             )
         if search.split is None:
             return terminal(

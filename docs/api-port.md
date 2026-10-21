@@ -304,7 +304,9 @@ Task 6d, `modeltrees/_api.py`: `lmtree`, `glmtree`, `negbintree`,
    not a `MobControl`. The public `mob` keeps section 1.1's signature:
    `control` only, no control options.
 3. **`n_jobs`** accepts None or 1 (an int, not a Boolean); other ints
-   raise `NotImplementedError`, anything else `TypeError`.
+   raise `NotImplementedError`, anything else `TypeError`. Task 6f made
+   parallel split search available (section 17): `NotImplementedError` is
+   gone, and 0 or a negative int other than -1 raises `ValueError`.
 4. **Recorded warnings.** The whole fit is recorded: the design build
    (so the `MissingDataWarning` is in `tree.warnings` too, section 4.1),
    the response coding and the growth. Inside, the filter is `"always"`,
@@ -704,3 +706,87 @@ kid of the split, as the most negative finite value does (section 11,
 item 4). Unseen levels raise `UnseenLevelError` both in a split variable
 (R stops too) and in a partitioning variable no split uses (R ignores it),
 and give node 0 with `unseen="null"`.
+
+## 17. Parallel split search
+
+Task 6f, step 1: `modeltrees/_parallel.py`, `find_split(parallel=...)` and
+`n_jobs` in `tree.mob` and every entry point (design section 6).
+
+1. **`n_jobs`.** None and 1 run today's serial code; nothing of the
+   parallel path is touched (no pool, no environment change). -1 is
+   `os.process_cpu_count()` (1 if it returns None), k > 1 is k workers. 0
+   and negative values other than -1 raise `ValueError` (joblib's -2 and
+   below are not offered); a Boolean or a non-int `TypeError`. The check
+   runs before the data is read. A value that resolves to one worker (-1
+   on one CPU) is serial.
+2. **What runs in workers.** In `find_split`, with `restart=True`: the
+   exact fits of a numeric search without a batch scorer, or whose batch
+   scorer declined (returned None), and the fits of a factor search, when
+   `parallel.use(candidates, node rows)` holds. Ordered factors take the
+   same route as nominal ones; their candidate count (levels - 1) keeps
+   them below the threshold in practice. A factor with a single candidate
+   partition keeps R's objective-1 quirk on the serial path. lm's batch
+   path, including its refits and the "fit them all after a failed refit"
+   fallback, stays serial, as does everything under `reference_path()`
+   (`find_split_reference` has no parallel path).
+3. **Threshold.** `_parallel._THRESHOLD`, candidates (admissible ones,
+   the fits actually made) times the node's rows (zero-weight rows
+   included), strictly above. `_parallel.parallel_threshold(value)` is the
+   test hook, a context manager. Docs/performance.md has the chosen
+   value.
+4. **Pool.** `SplitPool` in `tree.mob`, created only for `n_workers > 1`
+   and `restart=True`; its `ProcessPoolExecutor` starts at the first
+   parallel search, and `mob` shuts it down (`wait=True`,
+   `cancel_futures=True`) in a `finally` right after growing, before
+   pruning, so also on errors and interrupts. A tree whose searches all
+   stay below the threshold never starts a process.
+5. **BLAS variables.** `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS` and
+   `MKL_NUM_THREADS` are set to "1" in `os.environ` from the pool's start
+   to its shutdown and then restored (a counter shared by concurrent
+   pools). `ProcessPoolExecutor` starts workers on demand, so the variables
+   must be in place whenever one starts, not only at creation. The parent's
+   own BLAS is already loaded and does not reread them. Two consequences:
+   - the forkserver is a process-wide singleton that keeps the
+     environment of its start. If the pool starts it, it keeps the
+     variables at 1, so later forkserver children of the same process
+     (also the user's own) get one BLAS thread. If something else started
+     it earlier without them, our workers inherit that environment, and the
+     variables do not reach them. `tests/test_parallel.py` checks a worker
+     in a fresh interpreter;
+   - while a tree is grown with `n_jobs > 1`, other threads of the process
+     see the three variables at 1.
+6. **What a search sends.** The side fit (`tree._NodeSideFit`, a frozen
+   dataclass with the model and the node's arrays, which replaces the
+   closure of `_node_fitters`; the serial path calls the same object) and
+   the node's values of the variable are pickled once per search in the
+   parent. The bytes go with each chunk, and a worker unpickles them once
+   per search (cached by a search key). So the arrays cross the pipe once
+   per chunk, about `4 k` times per search, not once per worker as the
+   design says; at n = 20000 that is about 1 MB per chunk against seconds
+   of fitting. An unpicklable model fails in the parent with `TypeError`
+   before any worker starts.
+7. **Chunks and assembly.** The admissible candidates, in candidate
+   order, are cut into `min(m, 4 k)` contiguous chunks with boundaries
+   `round(linspace(0, m, chunks + 1))`. A worker rebuilds each mask
+   exactly as the serial loop does (`zv <= uz[i]`, `np.isin(codes,
+   levels)`), fits left then right with no start, and returns the summed
+   objective and a failed flag per candidate. The parent writes them into
+   the objective vector at the candidates' indices (failed ones stay Inf,
+   `n_failed` is the count of flags) and then applies the unchanged
+   first-minimum rule and split construction (`_factor_split`, now shared
+   with the reference).
+8. **`restart=False`** with more than one worker grows serially (no pool)
+   and `tree.mob` emits one `ModelTreesWarning` per call, recorded and
+   re-emitted by the entry points like every warning.
+9. **Errors.** Futures are read in submission order; the first exception
+   cancels the rest and is raised in the parent with its own type and the
+   worker's traceback as `__cause__` (`concurrent.futures`' remote
+   traceback). A worker that dies gives `BrokenProcessPool`. The pool is
+   shut down by `mob`'s `finally` either way.
+10. **Start method.** `forkserver` on Linux, `spawn` elsewhere. Both import
+    the caller's `__main__` in the workers, so a script that grows a tree
+    with `n_jobs > 1` needs the `if __name__ == "__main__":` guard (without
+    it, multiprocessing raises at worker start and the search fails with
+    `BrokenProcessPool`). Custom models must be importable by the workers
+    (defined in a module, not in `__main__` of an interactive session).
+

@@ -9,6 +9,7 @@ caller passes a function that fits the model on a subset of the node's rows.
 import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import Protocol
 
 import numpy as np
 from numpy.typing import NDArray
@@ -43,6 +44,27 @@ class SplitObjectives:
 # variable (stable) and candidate i sends the rows order[:cuts[i]] left. None
 # means the model declines and every candidate is fitted.
 BatchObjectives = Callable[[IntArray, IntArray], SplitObjectives | None]
+
+
+class ParallelPairs(Protocol):
+    """Fits both sides of many candidates elsewhere (modeltrees._parallel).
+
+    ``pairs`` gets the side fit, the node's values of the variable and each
+    candidate's left set (numeric: a float array of thresholds, ``z <= t``
+    goes left; factors: arrays of level codes) and returns the summed
+    objective per candidate, in candidate order, and whether either side
+    failed. ``fit`` must be picklable.
+    """
+
+    def use(self, n_candidates: int, n_rows: int) -> bool: ...
+
+    def pairs(
+        self,
+        fit: SideFit,
+        z: NDArray[np.generic],
+        lefts: FloatArray | Sequence[IntArray],
+    ) -> tuple[FloatArray, BoolArray]: ...
+
 
 # Candidates refitted exactly after screening: every one that could be within
 # REFIT_MARGIN (relative) of the best given the error bounds, and at least
@@ -251,14 +273,7 @@ def find_split_reference(
             n_failed,
         )
     best = _which_min(dev)
-    if kind is VariableKind.ORDERED:
-        # Position of the chosen level among the original levels (:492-497).
-        split = Split(variable, kind, float(present[best] + 1), None)
-    else:
-        index: list[int | None] = [None] * len(level_names)
-        for j, c in enumerate(present):
-            index[c] = 1 if al[best, j] else 2
-        split = Split(variable, kind, None, tuple(index))
+    split = _factor_split(variable, kind, level_names, present, al, best)
     return SplitSearch(
         variable, kind, minsize, None, left_levels, labels, dev, best, split, n_failed
     )
@@ -277,6 +292,7 @@ def find_split(
     restart: bool = True,
     numsplit: str = "left",
     batch: BatchObjectives | None = None,
+    parallel: ParallelPairs | None = None,
 ) -> SplitSearch:
     """Search the best binary split, as :func:`find_split_reference`, faster.
 
@@ -298,8 +314,29 @@ def find_split(
     A candidate with a failed fit on either side is inadmissible (Inf) and
     counted in ``n_failed``. If a refitted candidate fails, every other
     candidate is fitted exactly too (docs/model-interface.md, section 4.2).
+
+    With ``parallel`` and ``restart = True``, the exact fits of a search
+    without a batch scorer (numeric candidates, or factor partitions) run
+    in worker processes when ``parallel.use`` says the search is large
+    enough (docs/api-design.md, section 6). The objectives are assembled in
+    candidate order before the same first-minimum rule, so the result is
+    the serial one.
     """
     if kind is not VariableKind.NUMERIC:
+        if parallel is not None and restart:
+            search = _factor_split_parallel(
+                variable,
+                kind,
+                z,
+                level_names,
+                weights,
+                fit,
+                parallel,
+                minsize=minsize,
+                caseweights=caseweights,
+            )
+            if search is not None:
+                return search
         return find_split_reference(
             variable,
             kind,
@@ -352,6 +389,14 @@ def find_split(
                 if pair is None:
                     n_failed += 1
                 dev[i] = np.inf if pair is None else pair
+    elif (
+        parallel is not None
+        and restart
+        and parallel.use(candidates.shape[0], zv.shape[0])
+    ):
+        objective, failed = parallel.pairs(fit, zv, uz[candidates])
+        n_failed = int(np.sum(failed))
+        dev[candidates[~failed]] = objective[~failed]
     else:
         starts: tuple[FloatArray | None, FloatArray | None] = (None, None)
         for i in candidates:
@@ -379,6 +424,87 @@ def find_split(
     split = Split(variable, kind, breaks, None)
     return SplitSearch(
         variable, kind, minsize, uz, None, None, dev, best, split, n_failed
+    )
+
+
+def _factor_split(
+    variable: int,
+    kind: VariableKind,
+    level_names: Sequence[str],
+    present: IntArray,
+    al: BoolArray,
+    best: int,
+) -> Split:
+    """The split of the factor candidate ``best``."""
+    if kind is VariableKind.ORDERED:
+        # Position of the chosen level among the original levels (:492-497).
+        return Split(variable, kind, float(present[best] + 1), None)
+    index: list[int | None] = [None] * len(level_names)
+    for j, c in enumerate(present):
+        index[c] = 1 if al[best, j] else 2
+    return Split(variable, kind, None, tuple(index))
+
+
+def _factor_split_parallel(
+    variable: int,
+    kind: VariableKind,
+    z: NDArray[np.generic],
+    level_names: Sequence[str] | None,
+    weights: FloatArray,
+    fit: SideFit,
+    parallel: ParallelPairs,
+    *,
+    minsize: float,
+    caseweights: bool,
+) -> SplitSearch | None:
+    """The factor branch of :func:`find_split_reference` with the fits in
+    ``parallel``, or None if the search is too small for it (or has a
+    single candidate partition, which R scores without fitting)."""
+    if level_names is None:
+        raise ValueError("a factor needs its level names")
+    minsize = _effective_minsize(minsize, w2n(weights, caseweights))
+    codes = np.asarray(z, dtype=np.intp)
+    present = np.unique(codes[weights > 0])
+    al = getlevels(present.shape[0], kind is VariableKind.ORDERED)
+    if al.shape[0] < 2:
+        return None
+    candidates = []
+    for i, row in enumerate(al):
+        left = np.isin(codes, present[row])
+        if not (
+            w2n(weights[left], caseweights) < minsize
+            or w2n(weights[~left], caseweights) < minsize
+        ):
+            candidates.append(i)
+    if not parallel.use(len(candidates), codes.shape[0]):
+        return None
+    if kind is VariableKind.ORDERED:
+        labels = tuple(level_names[c] for c in present[:-1])
+    else:
+        labels = tuple("+".join(level_names[c] for c in present[row]) for row in al)
+    left_levels = tuple(tuple(int(c) for c in present[row]) for row in al)
+    dev = np.full(al.shape[0], np.inf)
+    index_of = np.asarray(candidates, dtype=np.intp)
+    objective, failed = parallel.pairs(fit, codes, [present[al[i]] for i in candidates])
+    n_failed = int(np.sum(failed))
+    dev[index_of[~failed]] = objective[~failed]
+    if not np.any(np.isfinite(dev)):
+        return SplitSearch(
+            variable,
+            kind,
+            minsize,
+            None,
+            left_levels,
+            labels,
+            dev,
+            None,
+            None,
+            n_failed,
+        )
+    best = _which_min(dev)
+    split = _factor_split(variable, kind, level_names, present, al, best)
+    return SplitSearch(
+        variable, kind, minsize, None, left_levels, labels, dev, best, split, n_failed
     )
 
 

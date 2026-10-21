@@ -26,6 +26,7 @@ from modeltrees._design import (
 )
 from modeltrees._frame import DataInput, Frame, Kind, array_column
 from modeltrees._loglik import LogLik, tree_loglik
+from modeltrees._parallel import resolve_n_jobs
 from modeltrees._predict import (
     PredictType,
     Unseen,
@@ -926,17 +927,8 @@ def _control(control: MobControl | None, options: Mapping[str, Any]) -> MobContr
 
 
 def _check_n_jobs(n_jobs: int | None) -> None:
-    if n_jobs is None or (
-        isinstance(n_jobs, (int, np.integer))
-        and not isinstance(n_jobs, bool)
-        and n_jobs == 1
-    ):
-        return
-    if not isinstance(n_jobs, (int, np.integer)) or isinstance(n_jobs, bool):
-        raise TypeError(f"n_jobs must be an int or None, got {n_jobs!r}")
-    raise NotImplementedError(
-        "parallel split search (n_jobs other than None or 1) is not available yet"
-    )
+    """Fail before any work on an invalid ``n_jobs`` (section 6)."""
+    resolve_n_jobs(n_jobs)
 
 
 def _merge(caught: Sequence[_warnings.WarningMessage]) -> tuple[RecordedWarning, ...]:
@@ -1016,6 +1008,7 @@ def _formula_tree(
             offset=design.offset,
             cluster=design.cluster,
             control=ctrl,
+            n_jobs=n_jobs,
         )
         return design, coded, model, grown
 
@@ -1070,7 +1063,9 @@ def lmtree(
     :class:`~modeltrees.errors.MissingDataWarning`. Control options
     (``alpha``, ``minsize``, ``maxdepth``, ``prune``, ...) are keywords, or
     a :class:`~modeltrees.tree.MobControl` as ``control``, not both.
-    ``n_jobs`` accepts only None or 1 for now.
+    ``n_jobs`` > 1 fits the candidates of large split searches in that many
+    worker processes (-1: every CPU), with results identical to the serial
+    search; ``restart=False`` runs serially with a warning.
     """
     return _formula_tree(
         formula,
@@ -1323,6 +1318,7 @@ def mob(
             offset=off,
             cluster=cluster,
             control=control,
+            n_jobs=n_jobs,
         )
 
     grown, recorded = _recorded(run, 2)  # mob, the user's call
