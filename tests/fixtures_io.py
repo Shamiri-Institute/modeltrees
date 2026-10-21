@@ -12,7 +12,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def load_json(relative: str) -> Any:
-    with open(FIXTURES / relative) as f:
+    with open(FIXTURES / relative, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -31,7 +31,7 @@ def load_dataset(
     """
     schema = load_json(csv_relative.replace(".csv", ".schema.json"))
     columns = {c["name"]: c for c in schema["columns"]}
-    with open(FIXTURES / csv_relative, newline="") as f:
+    with open(FIXTURES / csv_relative, encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
     data: dict[str, NDArray[Any]] = {}
     for name, col in columns.items():

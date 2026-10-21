@@ -75,7 +75,7 @@ def _schema(csv_relative: str) -> list[dict[str, Any]]:
 @cache
 def _typed_columns(csv_relative: str) -> dict[str, list[Any]]:
     """The CSV's columns as Python values, None for NA."""
-    with open(FIXTURES / csv_relative, newline="") as f:
+    with open(FIXTURES / csv_relative, encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
     out: dict[str, list[Any]] = {}
     for col in _schema(csv_relative):

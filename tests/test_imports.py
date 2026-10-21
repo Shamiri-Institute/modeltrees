@@ -76,7 +76,9 @@ def test_narwhals_loads_only_through_the_boundary() -> None:
 
 
 def _imports_narwhals(path: Path) -> bool:
-    for node in ast.walk(ast.parse(path.read_text(), filename=str(path))):
+    for node in ast.walk(
+        ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    ):
         if isinstance(node, ast.Import):
             if any(a.name.split(".")[0] == "narwhals" for a in node.names):
                 return True

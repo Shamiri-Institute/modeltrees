@@ -217,7 +217,7 @@ def blas_threads() -> dict[str, int]:
     """The thread count of each OpenBLAS library loaded in this process, by
     file name (Linux only; empty elsewhere). For tests and diagnostics."""
     try:
-        with open("/proc/self/maps") as f:
+        with open("/proc/self/maps", encoding="utf-8") as f:
             paths = sorted({line.split()[-1] for line in f if "openblas" in line})
     except OSError:
         return {}

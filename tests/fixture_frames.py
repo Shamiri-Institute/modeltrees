@@ -24,7 +24,7 @@ def schema(csv_relative: str) -> list[dict[str, Any]]:
 
 
 def raw_columns(csv_relative: str) -> dict[str, list[str]]:
-    with open(FIXTURES / csv_relative, newline="") as f:
+    with open(FIXTURES / csv_relative, encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
     return {name: [r[name] for r in rows] for name in rows[0]}
 

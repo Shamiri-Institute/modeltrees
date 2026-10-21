@@ -95,7 +95,7 @@ def write_csv(d: Data, path: str) -> None:
         "x": d.x[:, 1],
         **{name: v.values for name, v in d.z.items()},
     }
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(",".join(cols) + "\n")
         f.writelines(
             ",".join(
