@@ -1,38 +1,38 @@
 # Documents
 
-Two kinds of documents live here. **Design records** are normative: the
-code must follow them, and a change in behavior needs a change to them
-first (or an entry in docs/decisions.md). **Porting records and working
-notes** describe how a part was ported, what was measured and why a choice
-was made; they explain the code but do not constrain later changes beyond
-what the design records say. Where the two disagree, the design records and
-docs/decisions.md win, and the porting record should be corrected.
+Two kinds of documents live here. **Design records** are normative: the code
+must follow them, and a change in behavior needs a change to them first (or an
+entry in docs/decisions.md). **Porting records and working notes** describe how
+a part was ported, what was measured and why a choice was made; they explain the
+code but do not constrain later changes beyond what the design records say.
+Where the two disagree, the design records and docs/decisions.md win, and the
+porting record should be corrected.
 
 ## Design records (normative)
 
-| document | what it fixes |
-| --- | --- |
-| [decisions.md](decisions.md) | Scope of v0.1 and the decisions on behavior, interface and the extension models. Read it before any change. |
-| [model-interface.md](model-interface.md) | The node-model protocol between the core and the models, and the tree data structures, derived from partykit 1.3-0. |
-| [api-design.md](api-design.md) | The user-facing API: entry points, formulas, data input, `ModelTree`, `predict`, `vcov`, `n_jobs`, errors, the public names and the documented limitations. |
-| [extensions-spec.md](extensions-spec.md) | The negative binomial, safe logit and multinomial node models and their R oracles. The safe logit and multinomial specifications are provisional. |
+| document                                 | what it fixes                                                                                                                                               |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [decisions.md](decisions.md)             | Scope of v0.1 and the decisions on behavior, interface and the extension models. Read it before any change.                                                 |
+| [model-interface.md](model-interface.md) | The node-model protocol between the core and the models, and the tree data structures, derived from partykit 1.3-0.                                         |
+| [api-design.md](api-design.md)           | The user-facing API: entry points, formulas, data input, `ModelTree`, `predict`, `vcov`, `n_jobs`, errors, the public names and the documented limitations. |
+| [extensions-spec.md](extensions-spec.md) | The negative binomial, safe logit and multinomial node models and their R oracles. The safe logit and multinomial specifications are provisional.           |
 
 ## Porting records (descriptive)
 
-| document | what it records |
-| --- | --- |
-| [model-fitting.md](model-fitting.md) | The ports of `glm.fit`, `lm.fit`, `lm.wfit` and R's QR, with the ambiguities met. |
-| [instability-tests.md](instability-tests.md) | The port of partykit's instability tests and p-values, including clusters. |
-| [tree-growing.md](tree-growing.md) | The port of the growing and pruning loop, and which R quirks are replicated. |
-| [extensions-port.md](extensions-port.md) | How the extension models were ported and how they compare with R, with the tolerances derived from measurements. |
-| [api-port.md](api-port.md) | Deviations from api-design.md and the choices the design left open, recorded as the API was implemented. |
-| [sandwich-fixtures.md](sandwich-fixtures.md) | Decisions taken while generating the `vcovCL`, `predict` and reference-absent fixtures. |
-| [formula-fixtures.md](formula-fixtures.md) | The formula-feature fixtures (factor and logical regressors, no intercept, logical, ordered and nominal partitioning variables, missing values, one-part formulas): what R did with each, and how the public layer compares. |
+| document                                     | what it records                                                                                                                                                                                                              |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [model-fitting.md](model-fitting.md)         | The ports of `glm.fit`, `lm.fit`, `lm.wfit` and R's QR, with the ambiguities met.                                                                                                                                            |
+| [instability-tests.md](instability-tests.md) | The port of partykit's instability tests and p-values, including clusters.                                                                                                                                                   |
+| [tree-growing.md](tree-growing.md)           | The port of the growing and pruning loop, and which R quirks are replicated.                                                                                                                                                 |
+| [extensions-port.md](extensions-port.md)     | How the extension models were ported and how they compare with R, with the tolerances derived from measurements.                                                                                                             |
+| [api-port.md](api-port.md)                   | Deviations from api-design.md and the choices the design left open, recorded as the API was implemented.                                                                                                                     |
+| [sandwich-fixtures.md](sandwich-fixtures.md) | Decisions taken while generating the `vcovCL`, `predict` and reference-absent fixtures.                                                                                                                                      |
+| [formula-fixtures.md](formula-fixtures.md)   | The formula-feature fixtures (factor and logical regressors, no intercept, logical, ordered and nominal partitioning variables, missing values, one-part formulas): what R did with each, and how the public layer compares. |
 
 ## Working notes
 
-| document | what it records |
-| --- | --- |
+| document                         | what it records                                                                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | [performance.md](performance.md) | Timings and profiles, the speedups and the options considered. One machine on one day; the numbers are only comparable to each other. |
 
 The fixture formats are documented in tests/fixtures/README.md, which is

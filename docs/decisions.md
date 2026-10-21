@@ -12,30 +12,29 @@ notes/phase1-questions.md. Match R unless a decision says otherwise.
 - Options that need R's random numbers raise NotImplementedError: mtry < Inf,
   breakties = TRUE, ordinal = "L2", ordinal = "max". Ordered factors use the
   chi-squared test, which is R's default.
-- cluster is in scope for v0.1 (applications often have grouped observations). It
-  affects only the instability tests: scores are summed within clusters before
-  the covariance estimate, as in mob_grow_fluctests (modelparty.R:240-245).
-  Coefficient fits and split search ignore it. With fewer clusters than
-  parameters the meat has rank G and is exactly singular, and whether
-  partykit's chol() succeeds on it is decided by rounding. In the second
-  blind run (task 6l) R failed at 68 of the 70 such nodes it tested and
-  succeeded at 2, where it split on statistics of order 1e16. Python stops
-  at G < k always, which is R's usual outcome: it warns and makes the node
-  terminal. At exactly as many
-  clusters as parameters the outcome depends on the weights: partykit sums
-  `process / sqrt(weights)` within clusters (modelparty.R:244), and those sums
-  add up to zero only when sqrt(weights) is constant over the node (unit or
-  equal case weights, or caseweights = FALSE). Then the meat has rank k - 1,
-  partykit's chol() fails or not by rounding, and Python warns and makes the
-  node terminal. With unequal positive case weights the sums are
-  unconstrained, the meat is regular and the tests run as in partykit (a
-  failing Cholesky is still an InstabilityTestError). Evidence from the blind
-  run (task 6j): at blind_03 node 20 (G = k = 3) and blind_13 node 13 (G = k =
-  2) the meat built from R's own scores has smallest/largest eigenvalue 8.9e-4
-  and 3.7e-3, and the port's tests reproduce R's statistics and log p-values
-  to 17 digits. The cluster-robust vcov sums the scores themselves, whose
-  cluster sums add up to zero under any weights, so its TooFewClustersWarning
-  stays at G <= k (docs/api-port.md, section 19).
+- cluster is in scope for v0.1 (applications often have grouped observations).
+  It affects only the instability tests: scores are summed within clusters
+  before the covariance estimate, as in mob_grow_fluctests
+  (modelparty.R:240-245). Coefficient fits and split search ignore it. With
+  fewer clusters than parameters the meat has rank G and is exactly singular,
+  and whether partykit's chol() succeeds on it is decided by rounding. In the
+  second blind run (task 6l) R failed at 68 of the 70 such nodes it tested and
+  succeeded at 2, where it split on statistics of order 1e16. Python stops at G
+  < k always, which is R's usual outcome: it warns and makes the node terminal.
+  At exactly as many clusters as parameters the outcome depends on the weights:
+  partykit sums `process / sqrt(weights)` within clusters (modelparty.R:244),
+  and those sums add up to zero only when sqrt(weights) is constant over the
+  node (unit or equal case weights, or caseweights = FALSE). Then the meat has
+  rank k - 1, partykit's chol() fails or not by rounding, and Python warns and
+  makes the node terminal. With unequal positive case weights the sums are
+  unconstrained, the meat is regular and the tests run as in partykit (a failing
+  Cholesky is still an InstabilityTestError). Evidence from the blind run (task
+  6j): at blind_03 node 20 (G = k = 3) and blind_13 node 13 (G = k = 2) the meat
+  built from R's own scores has smallest/largest eigenvalue 8.9e-4 and 3.7e-3,
+  and the port's tests reproduce R's statistics and log p-values to 17 digits.
+  The cluster-robust vcov sums the scores themselves, whose cluster sums add up
+  to zero under any weights, so its TooFewClustersWarning stays at G <= k
+  (docs/api-port.md, section 19).
 - Not implemented and without fixtures: parm, ytype and xtype other than the
   defaults.
 

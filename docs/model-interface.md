@@ -1,7 +1,7 @@
 # Model interface for MOB
 
-This document specifies what a node model must provide to the MOB algorithm,
-how the algorithm uses each piece, and the tree data structures the Python port
+This document specifies what a node model must provide to the MOB algorithm, how
+the algorithm uses each piece, and the tree data structures the Python port
 needs. It is derived from partykit 1.3-0. Every behavioral claim cites the R
 source in `reference/partykit/` by file and function. Line numbers refer to the
 pinned 1.3-0 sources and are given as `file:line`.
@@ -20,8 +20,8 @@ Abbreviations used below:
 
 ### 1.1 The two fit interfaces
 
-`mob()` accepts a `fit` function in one of two forms (`mob.Rnw`, section
-"Model fitting and parameter estimation"; `modelparty.R:4-36`, `mob()`).
+`mob()` accepts a `fit` function in one of two forms (`mob.Rnw`, section "Model
+fitting and parameter estimation"; `modelparty.R:4-36`, `mob()`).
 
 **Type 1, full interface.**
 
@@ -39,11 +39,11 @@ It returns a list with four elements (`mob.Rnw`, same section):
 | `estfun`       | n by k matrix of per-observation score contributions.           | Only when `estfun = TRUE` |
 | `object`       | A fitted model object for downstream methods.                   | Only when `object = TRUE` |
 
-`mob()` checks the formals by name. It stops with "no suitable fitting
-function specified" unless `y`, `x`, `start`, `weights` and `offset` are all
-formals (`modelparty.R:5-8`). If `estfun` and `object` are both formals, the
-function is used as type 1. If `cluster` is not a formal, `mob()` wraps the
-function so that `cluster` is accepted and dropped (`modelparty.R:28-35`).
+`mob()` checks the formals by name. It stops with "no suitable fitting function
+specified" unless `y`, `x`, `start`, `weights` and `offset` are all formals
+(`modelparty.R:5-8`). If `estfun` and `object` are both formals, the function is
+used as type 1. If `cluster` is not a formal, `mob()` wraps the function so that
+`cluster` is accepted and dropped (`modelparty.R:28-35`).
 
 **Type 2, simple interface.**
 
@@ -63,17 +63,17 @@ these directly.
 
 ### 1.2 The arguments mob passes in
 
-| Argument  | What mob passes                                                                                                                                                                                                                                                                   | Source                                                         |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `y`       | Response for the node's rows. Shape depends on `control$ytype`: `"vector"` (default, a single model-frame column, possibly a factor), `"matrix"` (via `model.matrix(~ 0 + .)`), or `"data.frame"`.                                                                                | `modelparty.R:69-73`, `mob()`; subsetting in `suby`, `:177-179` |
+| Argument  | What mob passes                                                                                                                                                                                                                                                                       | Source                                                          |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `y`       | Response for the node's rows. Shape depends on `control$ytype`: `"vector"` (default, a single model-frame column, possibly a factor), `"matrix"` (via `model.matrix(~ 0 + .)`), or `"data.frame"`.                                                                                    | `modelparty.R:69-73`, `mob()`; subsetting in `suby`, `:177-179` |
 | `x`       | Regressor matrix for the node's rows, built by `model.matrix()` on the first RHS part (`xtype = "matrix"`, default) or a data frame (`xtype = "data.frame"`). `NULL` when the formula has no regressor part. Carries attributes `formula`, `terms`, `offset`, `xlevels`, `contrasts`. | `modelparty.R:74-87`, `mob()`; `subx`, `:180-192`               |
-| `start`   | `NULL` at every node fit. During split search, `NULL` when `restart = TRUE` (default), otherwise the previous candidate's coefficients.                                                                                                                                            | `mob_grow`, `:526`; `mob_grow_findsplit`, `:396-438`            |
-| `weights` | Numeric vector of length n for the node, never `NULL`. Defaults to all 1. Zero weights are allowed.                                                                                                                                                                               | `mob()`, `:94-97`; `mob_partynode()`, `:163-164`                |
-| `offset`  | Model offset subset to the node, or `NULL`. Only extracted when there is a regressor part.                                                                                                                                                                                        | `mob()`, `:98`                                                 |
-| `cluster` | Cluster vector subset to the node, or `NULL`.                                                                                                                                                                                                                                     | `mob()`, `:99`                                                 |
-| `...`     | Extra arguments given to `mob()`, for example `family`, `epsilon`, `maxit` from `glmtree()`.                                                                                                                                                                                      | `glmtree()`, `glmtree.R:37-48`                                 |
-| `estfun`  | `TRUE` for the node fit, `FALSE` (default) in split search.                                                                                                                                                                                                                       | `mob_grow`, `:526-527`; `mob_grow_findsplit`, `:402-405`        |
-| `object`  | `TRUE` for the node fit if `"object"` is in `control$terminal` or `control$vcov == "info"`. `FALSE` in split search.                                                                                                                                                              | `mob_grow`, `:527`                                              |
+| `start`   | `NULL` at every node fit. During split search, `NULL` when `restart = TRUE` (default), otherwise the previous candidate's coefficients.                                                                                                                                               | `mob_grow`, `:526`; `mob_grow_findsplit`, `:396-438`            |
+| `weights` | Numeric vector of length n for the node, never `NULL`. Defaults to all 1. Zero weights are allowed.                                                                                                                                                                                   | `mob()`, `:94-97`; `mob_partynode()`, `:163-164`                |
+| `offset`  | Model offset subset to the node, or `NULL`. Only extracted when there is a regressor part.                                                                                                                                                                                            | `mob()`, `:98`                                                  |
+| `cluster` | Cluster vector subset to the node, or `NULL`.                                                                                                                                                                                                                                         | `mob()`, `:99`                                                  |
+| `...`     | Extra arguments given to `mob()`, for example `family`, `epsilon`, `maxit` from `glmtree()`.                                                                                                                                                                                          | `glmtree()`, `glmtree.R:37-48`                                  |
+| `estfun`  | `TRUE` for the node fit, `FALSE` (default) in split search.                                                                                                                                                                                                                           | `mob_grow`, `:526-527`; `mob_grow_findsplit`, `:402-405`        |
+| `object`  | `TRUE` for the node fit if `"object"` is in `control$terminal` or `control$vcov == "info"`. `FALSE` in split search.                                                                                                                                                                  | `mob_grow`, `:527`                                              |
 
 Two details matter for the port:
 
@@ -82,17 +82,17 @@ Two details matter for the port:
   (`glmtree.R:11-18`, `lmtree.R:200-207`). Inside the fitters, `x = NULL` is
   replaced by a one-column intercept matrix (`glmfit`, `glmtree.R:74-75`;
   `lmfit`, `lmtree.R:230-231`).
-- `glmtree()` passes `caseweights = control$caseweights` into its fitter
-  through a wrapper, `glmfit0` (`glmtree.R:30-35`). The generic interface has
-  no `caseweights` argument, so a model that needs it must receive it out of
-  band. The Python interface passes it explicitly.
+- `glmtree()` passes `caseweights = control$caseweights` into its fitter through
+  a wrapper, `glmfit0` (`glmtree.R:30-35`). The generic interface has no
+  `caseweights` argument, so a model that needs it must receive it out of band.
+  The Python interface passes it explicitly.
 
 ### 1.3 The objective
 
-`objfun` must be additive over observations, because split search sums the
-left and right objectives (`mob_grow_findsplit`, `:406`, `:436`, `:480`;
-`mob.Rnw`, section "Splitting"). Smaller is better: split search takes
-`which.min` (`:450-452`).
+`objfun` must be additive over observations, because split search sums the left
+and right objectives (`mob_grow_findsplit`, `:406`, `:436`, `:480`; `mob.Rnw`,
+section "Splitting"). Smaller is better: split search takes `which.min`
+(`:450-452`).
 
 The two built-in models use different objectives:
 
@@ -104,34 +104,36 @@ The two built-in models use different objectives:
   returns the deviance.
 
 Post-pruning compares objectives through a `prune` function (section 2.6).
-`lmtree()` installs a different pruning rule from `mob()` because its
-objective is an RSS, not a negative log-likelihood (`lmtree.R:178-195` versus
-`mob()`, `modelparty.R:101-119`).
+`lmtree()` installs a different pruning rule from `mob()` because its objective
+is an RSS, not a negative log-likelihood (`lmtree.R:178-195` versus `mob()`,
+`modelparty.R:101-119`).
 
 ### 1.4 The scores, `estfun`
 
-`estfun` is an n by k matrix with one row per observation in the node,
-including zero-weight rows. Its columns are the non-aliased coefficients only:
+`estfun` is an n by k matrix with one row per observation in the node, including
+zero-weight rows. Its columns are the non-aliased coefficients only:
 
 - `lmfit`: `residuals * weights * x[, !is.na(coef)]` (`lmtree.R:251`).
-- `glmfit`: `working_residuals * working_weights * x[, !is.na(coef)] /
-  dispersion` (`glmtree.R:97-110`). The dispersion is 1 for poisson, binomial
-  and "Negative Binomial". For other families it is
-  `sum(wres^2 / weights) / sum(z$weights)` with case weights, or
-  `sum(wres^2) / sum(z$weights)` without (`glmtree.R:99-108`).
+- `glmfit`:
+  `working_residuals * working_weights * x[, !is.na(coef)] /
+  dispersion`
+  (`glmtree.R:97-110`). The dispersion is 1 for poisson, binomial and "Negative
+  Binomial". For other families it is `sum(wres^2 / weights) / sum(z$weights)`
+  with case weights, or `sum(wres^2) / sum(z$weights)` without
+  (`glmtree.R:99-108`).
 
 The weights are already inside the scores. `mob_grow_fluctests` accounts for
 this when it forms the variance estimate (section 2.3).
 
 ### 1.5 The optional pieces
 
-| Piece                                        | When mob uses it                                                                                                                                                                                                        | Source                                                                                        |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `start` support                              | Only when `control$restart = FALSE`. The default `restart = TRUE` never passes starting values.                                                                                                                         | `mob_grow_findsplit`, `:396-438`                                                              |
-| `object` with `vcov()`                       | When `control$vcov` is `"info"` or `"sandwich"`. The bread is `vcov(obj) * nobs`. If no object is available, `vcov` silently falls back to `"opg"`.                                                                     | `mob_grow_fluctests`, `:231-235`                                                              |
-| `object` with `predict`, `fitted`, `logLik`, etc. | For methods on the finished tree. If `object` is not stored, `refit.modelparty` refits the node.                                                                                                                   | `apply_to_models`, `:894-905`; `refit.modelparty`, `:817-892`                                  |
-| `cluster` support                            | Clustered variance in the OPG meat: scores are summed within clusters before the cross product.                                                                                                                        | `mob_grow_fluctests`, `:240-245`                                                              |
-| `logLik` with a `df` attribute               | `logLik.modelparty` sums node log-likelihoods and their `df` plus `dfsplit` per inner node.                                                                                                                             | `logLik.modelparty`, `:907-920`                                                               |
+| Piece                                             | When mob uses it                                                                                                                                    | Source                                                        |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `start` support                                   | Only when `control$restart = FALSE`. The default `restart = TRUE` never passes starting values.                                                     | `mob_grow_findsplit`, `:396-438`                              |
+| `object` with `vcov()`                            | When `control$vcov` is `"info"` or `"sandwich"`. The bread is `vcov(obj) * nobs`. If no object is available, `vcov` silently falls back to `"opg"`. | `mob_grow_fluctests`, `:231-235`                              |
+| `object` with `predict`, `fitted`, `logLik`, etc. | For methods on the finished tree. If `object` is not stored, `refit.modelparty` refits the node.                                                    | `apply_to_models`, `:894-905`; `refit.modelparty`, `:817-892` |
+| `cluster` support                                 | Clustered variance in the OPG meat: scores are summed within clusters before the cross product.                                                     | `mob_grow_fluctests`, `:240-245`                              |
+| `logLik` with a `df` attribute                    | `logLik.modelparty` sums node log-likelihoods and their `df` plus `dfsplit` per inner node.                                                         | `logLik.modelparty`, `:907-920`                               |
 
 ## 2. How `mob()` uses each piece during tree growth
 
@@ -153,16 +155,16 @@ At each node, in this order (`mob_grow`, `modelparty.R:516-623`):
    `sum(w > 0)` otherwise (`:176`, `:529`).
 3. If `minsize` is `NULL`, set it once, at the root, to
    `ceiling(10 * length(coefficients) / NCOL(y))` (`:533`). The length counts
-   aliased coefficients. The assignment uses `<<-`, so every later node sees
-   the root's value.
-4. Stop if `w2n(weights) < 2 * minsize` or `depth >= maxdepth` (`:536-547`).
-   The root has depth 1 (`:679`). A node stopped here has no `test` element.
+   aliased coefficients. The assignment uses `<<-`, so every later node sees the
+   root's value.
+4. Stop if `w2n(weights) < 2 * minsize` or `depth >= maxdepth` (`:536-547`). The
+   root has depth 1 (`:679`). A node stopped here has no `test` element.
 5. Run the instability tests (`:550`). If they error, or if there is no
    `estfun`, the node becomes terminal with `test = NA` (`:569-573`).
-6. Optionally adjust the p-values for multiplicity (section 2.4) and stop if
-   the smallest adjusted p-value is above `alpha` (`:553-561`).
-7. Search for a split in the selected variable (section 2.5). If no candidate
-   is admissible, stop (`:581-588`).
+6. Optionally adjust the p-values for multiplicity (section 2.4) and stop if the
+   smallest adjusted p-value is above `alpha` (`:553-561`).
+7. Search for a split in the selected variable (section 2.5). If no candidate is
+   admissible, stop (`:581-588`).
 8. Recurse into the children (`:596-616`).
 
 ### 2.3 Instability tests (`mob_grow_fluctests`)
@@ -174,36 +176,36 @@ fitted object and the clusters (`modelparty.R:209-381`).
 `nobs` is `sum(weights)` if `caseweights` is set and any weight differs from 1,
 otherwise the number of remaining rows (`:227`). The process is divided by
 `sqrt(nobs)` (`:230`). The meat is `crossprod(process)`, or
-`crossprod(process / sqrt(weights))` under case weights, because the weights
-are already inside the scores (`:236-246`). With clusters the scaled process is
+`crossprod(process / sqrt(weights))` under case weights, because the weights are
+already inside the scores (`:236-246`). With clusters the scaled process is
 summed by cluster first (`:243-244`). The decorrelation matrix `J12` is the
 symmetric square root (via `eigen`) of the inverse meat for `"opg"`, the bread
-for `"info"`, or bread times meat times bread for `"sandwich"`
-(`:195-203`, `:247-251`). The process becomes `process %*% t(J12)`
-(`:252`). If `control$parm` is set, only those columns are kept (`:255-258`).
+for `"info"`, or bread times meat times bread for `"sandwich"` (`:195-203`,
+`:247-251`). The process becomes `process %*% t(J12)` (`:252`). If
+`control$parm` is set, only those columns are kept (`:255-258`).
 
 **Variables tested.** All variables if `mtry` is at least the number of
-variables. Otherwise a random sample of `mtry` of them (`:218`). A variable
-with fewer than two distinct values in the node is skipped and keeps
-`stat = 0`, `pval = NA` (`:308`).
+variables. Otherwise a random sample of `mtry` of them (`:218`). A variable with
+fewer than two distinct values in the node is skipped and keeps `stat = 0`,
+`pval = NA` (`:308`).
 
 **Numeric variables, supLM.** (`:348-369`)
 
 - Order rows by the variable (`order()`, stable for ties) or, with
   `breakties = TRUE`, by the variable plus uniform jitter (`:349-355`).
-- Cumulate the process. The time index `tt0` is `1:n`, or the cumulative
-  weights under case weights with non-unit weights (`:356-358`).
-- Trimming: `from = ceiling(nobs * trim)` when `trim <= 1`, else `trim`;
-  then `from = max(from, minsize)` and `to = nobs - from` (`:262-264`).
+- Cumulate the process. The time index `tt0` is `1:n`, or the cumulative weights
+  under case weights with non-unit weights (`:356-358`).
+- Trimming: `from = ceiling(nobs * trim)` when `trim <= 1`, else `trim`; then
+  `from = max(from, minsize)` and `to = nobs - from` (`:262-264`).
 - The statistic is the maximum over `from <= tt0 <= to` of
   `rowSums(cumproc^2) / (t * (1 - t))` with `t = tt0 / nobs` (`:359-367`).
 - The p-value is `logp.supLM(stat, k, lambda)` with
-  `lambda = ((nobs - from) * to) / (from * (nobs - to))` (`:265`, `:368`).
-  For `k <= 40` it uses Hansen's (1997) response-surface table
-  `mob_beta_suplm` (`mob-pvalue.R`, 1000 by 3, 25 rows per k) with
-  interpolation in `tau` (`:279-300`). For `k > 40` it uses Estrella (2003)
-  with an ad hoc interpolation below `1.5 * k` (`:270-277`). This table is
-  in partykit, not strucchange.
+  `lambda = ((nobs - from) * to) / (from * (nobs - to))` (`:265`, `:368`). For
+  `k <= 40` it uses Hansen's (1997) response-surface table `mob_beta_suplm`
+  (`mob-pvalue.R`, 1000 by 3, 25 rows per k) with interpolation in `tau`
+  (`:279-300`). For `k > 40` it uses Estrella (2003) with an ad hoc
+  interpolation below `1.5 * k` (`:270-277`). This table is in partykit, not
+  strucchange.
 
 **Unordered factors, chi-squared.** (`:309-347`) Order by the factor, drop
 unused levels in the node, compute per-level segment weights. The statistic is
@@ -213,8 +215,8 @@ unused levels in the node, compute per-level segment weights. The statistic is
 **Ordered factors.** With the default `ordinal = "chisq"` they are tested
 exactly like unordered factors (`:313`). `ordinal = "L2"` uses
 `strucchange::ordL2BB`, which simulates critical values (`:340-342`).
-`ordinal = "max"` uses `mvtnorm::pmvnorm` (`:331-338`). Both of these
-depend on random numbers.
+`ordinal = "max"` uses `mvtnorm::pmvnorm` (`:331-338`). Both of these depend on
+random numbers.
 
 **Return value.** Raw p-values `exp(log p)`, the statistics, and `best`, the
 index of the smallest log p-value with `NA` ignored and ties going to the first
@@ -229,10 +231,10 @@ With `bonferroni = TRUE` and `m` the number of non-`NA` p-values
 - `p_adj = min(1, m * p)` otherwise.
 
 So the "Bonferroni" adjustment is a Sidak correction above 0.001 and a
-Bonferroni correction below it. The node splits only if the adjusted p-value
-of `best` is at most `alpha` (`:560`). The stored `test` matrix holds the
-statistics and the adjusted p-values. The raw p-values are not kept
-(`:576`). `info$p.value` is the adjusted p-value of `best` (`:561`).
+Bonferroni correction below it. The node splits only if the adjusted p-value of
+`best` is at most `alpha` (`:560`). The stored `test` matrix holds the
+statistics and the adjusted p-values. The raw p-values are not kept (`:576`).
+`info$p.value` is the adjusted p-value of `best` (`:561`).
 
 ### 2.5 Split search (`mob_grow_findsplit`)
 
@@ -247,8 +249,8 @@ either side has `w2n < minsize`.
 `uz[which.min(dev)]`, or the midpoint of it and the next unique value if
 `numsplit = "center"` (`:447-456`). Ties in `dev` go to the first candidate.
 
-**Ordered factor.** Unused levels are dropped (`:466`). Candidates are the
-first `nl - 1` levels, each sending levels up to and including it left
+**Ordered factor.** Unused levels are dropped (`:466`). Candidates are the first
+`nl - 1` levels, each sending levels up to and including it left
 (`mob_grow_getlevels`, `:701-723`). The break is the position of the chosen
 level among the original levels (`:492-497`).
 
@@ -256,57 +258,55 @@ level among the original levels (`:492-497`).
 child, without search (`:460-462`). Otherwise all `2^(nl - 1) - 1` binary
 partitions are enumerated with the last level always on the right
 (`mob_grow_getlevels`, `:709-718`). The result is an index vector over the
-original levels: 1 for the left kid, 2 for the right, `NA` for levels absent
-in the node (`:498-507`).
+original levels: 1 for the left kid, 2 for the right, `NA` for levels absent in
+the node (`:498-507`).
 
 Two quirks to replicate or flag:
 
 - For a factor with exactly one candidate partition the objective is set to 1
   without fitting (`:475`).
-- The right-hand fit for factors passes `cluster[zs]` instead of
-  `cluster[!zs]` (`:479`). This only matters for cluster-aware fitters.
+- The right-hand fit for factors passes `cluster[zs]` instead of `cluster[!zs]`
+  (`:479`). This only matters for cluster-aware fitters.
 
 If every candidate is `Inf`, the split fails and the node becomes terminal
 (`:441-447`, `:486-490`, `:585-587`).
 
 ### 2.6 Recursion, node ids and pruning
 
-Children are numbered depth-first in preorder. The first child gets
-`id + 1`. Each later child gets one more than the largest id in the previous
-child's subtree (`mob_grow`, `:600-615`). Observations are routed with
-`kidids_split` (`split.R:132-160`): numeric breaks use `.bincode` with
-`right = TRUE`, so `z <= break` goes to kid 1. Ordered factors are routed
-through their integer codes. Index splits map each level code through `index`.
+Children are numbered depth-first in preorder. The first child gets `id + 1`.
+Each later child gets one more than the largest id in the previous child's
+subtree (`mob_grow`, `:600-615`). Observations are routed with `kidids_split`
+(`split.R:132-160`): numeric breaks use `.bincode` with `right = TRUE`, so
+`z <= break` goes to kid 1. Ordered factors are routed through their integer
+codes. Index splits map each level code through `index`.
 
-Post-pruning (`mob_prune`, `modelparty.R:625-676`) runs only if
-`control$prune` is a function. It repeatedly looks at inner nodes whose kids
-are all terminal and calls `prune(objfun, df, nobs)` with:
+Post-pruning (`mob_prune`, `modelparty.R:625-676`) runs only if `control$prune`
+is a function. It repeatedly looks at inner nodes whose kids are all terminal
+and calls `prune(objfun, df, nobs)` with:
 
 - `objfun = c(parent objfun, sum of kids' objfun)`;
 - `df = c(k, n_kids * k + as.integer(dfsplit))`, where `k` is the root's
   coefficient count;
 - `nobs = c(parent nobs, n)`.
 
-When it returns `TRUE` the kids are removed and node ids are renumbered.
-`"aic"` and `"bic"` for `mob()` assume a negative log-likelihood
-(`:102-114`). `lmtree()` uses `nobs * log(rss)` forms (`lmtree.R:178-195`).
-Note that the `mob()` BIC rule uses `log(n)` of the whole sample, not
-`nobs[2]`.
+When it returns `TRUE` the kids are removed and node ids are renumbered. `"aic"`
+and `"bic"` for `mob()` assume a negative log-likelihood (`:102-114`).
+`lmtree()` uses `nobs * log(rss)` forms (`lmtree.R:178-195`). Note that the
+`mob()` BIC rule uses `log(n)` of the whole sample, not `nobs[2]`.
 
-After pruning, `estfun` and `object` are dropped from node info unless listed
-in `control$terminal` or `control$inner` (`:685-694`).
+After pruning, `estfun` and `object` are dropped from node info unless listed in
+`control$terminal` or `control$inner` (`:685-694`).
 
 ## 3. Tree data structures needed in Python
 
 partykit represents a tree as nested `partynode` objects (`node.R:2-31`,
 `partynode()`) holding `id`, `split`, `kids`, `surrogates` and `info`, wrapped
-in a `party` object with the data and the fitted node per observation
-(`mob()`, `modelparty.R:125-150`). MOB never builds surrogates.
+in a `party` object with the data and the fitted node per observation (`mob()`,
+`modelparty.R:125-150`). MOB never builds surrogates.
 
 A split is a `partysplit` (`split.R:2-74`, `partysplit()`) with `varid`,
 `breaks`, `index`, `right`, `prob` and `info`. MOB uses `varid`, and either
-`breaks` (numeric and ordered) or `index` (nominal). `right` is always
-`TRUE`.
+`breaks` (numeric and ordered) or `index` (nominal). `right` is always `TRUE`.
 
 The node `info` for a modelparty holds `coefficients`, `objfun`, `object`,
 `estfun`, `nobs`, `p.value` and `test` (`mob.Rnw`, section "Fitted party
@@ -437,26 +437,25 @@ Design notes:
 
 - `fit` always receives a full weight vector, never `None`, matching
   `mob_partynode()` (`:163-164`). Zero weights are allowed.
-- `caseweights` is an explicit argument because `glmfit` and the dispersion
-  in its scores depend on it (`glmtree.R:30-35`, `:103-107`).
-- `vcov=True` asks for `FitResult.hessian`, minus the derivative of the
-  summed scores over the non-aliased columns in `estfun`'s order (None for
-  failed and `no_estfun` fits), from which `ModelTree.vcov` builds the
-  cluster-robust sandwich (docs/api-design.md, sections 5.2 and 5.3). The
-  core never asks for it while growing. The full fitted object stays
-  inside the model implementation.
+- `caseweights` is an explicit argument because `glmfit` and the dispersion in
+  its scores depend on it (`glmtree.R:30-35`, `:103-107`).
+- `vcov=True` asks for `FitResult.hessian`, minus the derivative of the summed
+  scores over the non-aliased columns in `estfun`'s order (None for failed and
+  `no_estfun` fits), from which `ModelTree.vcov` builds the cluster-robust
+  sandwich (docs/api-design.md, sections 5.2 and 5.3). The core never asks for
+  it while growing. The full fitted object stays inside the model
+  implementation.
 - `FitResult` is immutable so fits can be cached and compared in tests.
-- Split search calls `fit` with `estfun=False` and `vcov=False`, so a model
-  can skip the expensive parts, as the vignette recommends.
+- Split search calls `fit` with `estfun=False` and `vcov=False`, so a model can
+  skip the expensive parts, as the vignette recommends.
 - Core MOB code depends only on `NodeModel`. Prediction and log-likelihood are
   separate protocols so a minimal model stays small.
 
 ### 4.1 Optional: scoring all numeric split candidates at once
 
-Refitting both sides of every candidate makes split search quadratic in the
-node size (docs/performance.md). A model may provide a batch scorer, which
-`mob()` uses for numeric split variables when it exists and
-`restart = TRUE`:
+Refitting both sides of every candidate makes split search quadratic in the node
+size (docs/performance.md). A model may provide a batch scorer, which `mob()`
+uses for numeric split variables when it exists and `restart = TRUE`:
 
 ```python
 @dataclass(frozen=True)
@@ -481,93 +480,95 @@ class BatchSplitModel(NodeModel, Protocol):
     ) -> SplitObjectives | None: ...
 ```
 
-The arguments are the node's data, as `fit` receives it, plus the sort
-order of the split variable and one cut per admissible candidate. Rows with
-zero weight are included and ride along with their `z` value. Returning
-None declines, and every candidate is fitted as usual.
+The arguments are the node's data, as `fit` receives it, plus the sort order of
+the split variable and one cut per admissible candidate. Rows with zero weight
+are included and ride along with their `z` value. Returning None declines, and
+every candidate is fitted as usual.
 
 The contract:
 
-- `left[i] + right[i]` approximates the summed objective that `fit` would
-  give, and `error[i]` bounds the absolute difference, including the
-  rounding of the exact fit itself. The bound must hold: split search relies
-  on it to decide which candidates cannot win.
-- NaN in any of the three for a candidate means "fit this one exactly".
-  Use it for anything doubtful: rank-deficient or ill-conditioned sides,
-  sides too small to estimate.
+- `left[i] + right[i]` approximates the summed objective that `fit` would give,
+  and `error[i]` bounds the absolute difference, including the rounding of the
+  exact fit itself. The bound must hold: split search relies on it to decide
+  which candidates cannot win.
+- NaN in any of the three for a candidate means "fit this one exactly". Use it
+  for anything doubtful: rank-deficient or ill-conditioned sides, sides too
+  small to estimate.
 
 How split search uses it (`split_search.find_split`): the candidates whose
 interval `approx ± error` reaches below the smallest upper bound
 `min(approx + error)`, widened by `REFIT_MARGIN = 1e-6` relative to the best
-approximation, plus at least the `REFIT_MIN = 5` smallest approximations,
-plus every NaN candidate, are refitted with `fit`. The winner is the first
-minimum of the resulting objective vector. Every candidate left unrefitted
-has an approximation above every refitted candidate's exact value, so the
-winner and the tie rule (first candidate) are those of the exact search.
+approximation, plus at least the `REFIT_MIN = 5` smallest approximations, plus
+every NaN candidate, are refitted with `fit`. The winner is the first minimum of
+the resulting objective vector. Every candidate left unrefitted has an
+approximation above every refitted candidate's exact value, so the winner and
+the tie rule (first candidate) are those of the exact search.
 `SplitSearch.objective` holds exact values for refitted candidates and the
 approximations for the rest.
 
-The batch scorer is not used with `restart = FALSE`, where each fit starts
-from the previous candidate's coefficients, or for factor variables, which
-have few candidates. Under `modeltrees.reference_path()` it is never used.
+The batch scorer is not used with `restart = FALSE`, where each fit starts from
+the previous candidate's coefficients, or for factor variables, which have few
+candidates. Under `modeltrees.reference_path()` it is never used.
 
-`LmModel` implements it with cumulative weighted cross-products
-(`models/lm.py`, `LmModel.split_objectives`): per side, the RSS is
-`r'Wr - b'A^-1 b` with `A = X'WX` and `b = X'Wr` from prefix sums (left) and
-suffix sums (right) over the sorted rows, where `r` is the residual of the
-node's own fit, so that the sums are on the scale of the RSS. `A` is scaled
-by its diagonal and solved by a symmetric eigendecomposition; sides with a
-condition number above 1e8 or a zero diagonal entry are NaN. `GlmModel` has
-no batch scorer (docs/performance.md, Step 3, lists the options).
+`LmModel` implements it with cumulative weighted cross-products (`models/lm.py`,
+`LmModel.split_objectives`): per side, the RSS is `r'Wr - b'A^-1 b` with
+`A = X'WX` and `b = X'Wr` from prefix sums (left) and suffix sums (right) over
+the sorted rows, where `r` is the residual of the node's own fit, so that the
+sums are on the scale of the RSS. `A` is scaled by its diagonal and solved by a
+symmetric eigendecomposition; sides with a condition number above 1e8 or a zero
+diagonal entry are NaN. `GlmModel` has no batch scorer (docs/performance.md,
+Step 3, lists the options).
 
 ### 4.2 Fit status, failures and extra parameters
 
-partykit has no failure protocol: an error in the fit function stops
-`mob()`, and a fit function signals missing scores by returning
-`estfun = NULL`. The extension models (docs/extensions-spec.md) need more,
-and docs/decisions.md decides that a failed fit never stops the tree. So
-`FitResult` carries a status (`node_model.FitStatus`):
+partykit has no failure protocol: an error in the fit function stops `mob()`,
+and a fit function signals missing scores by returning `estfun = NULL`. The
+extension models (docs/extensions-spec.md) need more, and docs/decisions.md
+decides that a failed fit never stops the tree. So `FitResult` carries a status
+(`node_model.FitStatus`):
 
-| status | meaning | in split search | at a node |
-| --- | --- | --- | --- |
-| `ok` | an estimate with scores (when `estfun=True`) | objective used | tested as usual |
-| `failed` | no usable estimate | the candidate is inadmissible, objective Inf | terminal, `StopReason.FIT_FAILED`, `NodeFitFailedWarning` |
-| `no_estfun` | an estimate without scores, partykit's `estfun = NULL` | objective used | terminal, `StopReason.NO_ESTFUN`, `test_failed` set |
+| status      | meaning                                                | in split search                              | at a node                                                 |
+| ----------- | ------------------------------------------------------ | -------------------------------------------- | --------------------------------------------------------- |
+| `ok`        | an estimate with scores (when `estfun=True`)           | objective used                               | tested as usual                                           |
+| `failed`    | no usable estimate                                     | the candidate is inadmissible, objective Inf | terminal, `StopReason.FIT_FAILED`, `NodeFitFailedWarning` |
+| `no_estfun` | an estimate without scores, partykit's `estfun = NULL` | objective used                               | terminal, `StopReason.NO_ESTFUN`, `test_failed` set       |
 
 Details:
 
-- A model reports a failure by returning `failed_fit(coef_names, reason,
-  **extras)`: NaN coefficients, objective Inf, no scores,
-  `converged = False`. Exceptions are not caught by `mob()`; a model that
-  wants a failure to be recoverable returns this result. `GlmModel` and
+- A model reports a failure by returning
+  `failed_fit(coef_names, reason,
+  **extras)`: NaN coefficients, objective Inf,
+  no scores, `converged = False`. Exceptions are not caught by `mob()`; a model
+  that wants a failure to be recoverable returns this result. `GlmModel` and
   `LmModel` never do, so their trees stop on an error as partykit's do.
 - `reason` says why, and `extras` holds model-specific diagnostics (theta,
   warnings, boundary counts). The core stores both and does not read them.
 - Split search: a candidate is inadmissible if either side's fit failed.
-  `SplitSearch.n_failed` counts such candidates. With `restart = FALSE` a
-  failed candidate's coefficients are not passed on as starting values; the
-  next candidate starts from the last successful one. The one-candidate
-  factor rule (objective 1 without fitting) fits nothing, so it cannot fail.
+  `SplitSearch.n_failed` counts such candidates. With `restart = FALSE` a failed
+  candidate's coefficients are not passed on as starting values; the next
+  candidate starts from the last successful one. The one-candidate factor rule
+  (objective 1 without fitting) fits nothing, so it cannot fail.
 - A failed node fit is checked right after the fit (and the root's default
-  `minsize`), before the stopping rules: the node is terminal, has no tests
-  and keeps the failed `FitResult`. A failed root gives a one-node tree.
+  `minsize`), before the stopping rules: the node is terminal, has no tests and
+  keeps the failed `FitResult`. A failed root gives a one-node tree.
 - `no_estfun` is checked where partykit checks for `NULL` scores, after
   `minsize` and `maxdepth` (`mob_grow`, `:536-550`), and the node records
-  `test = NA` (`test_failed`) as partykit does (`:569-573`). A fit with
-  status `ok` but `estfun = None` stays `StopReason.TEST_FAILED`, as before.
+  `test = NA` (`test_failed`) as partykit does (`:569-573`). A fit with status
+  `ok` but `estfun = None` stays `StopReason.TEST_FAILED`, as before.
 - Batch split objectives (section 4.1) cannot see failures. If a refitted
-  candidate fails, every other admissible candidate is fitted exactly, so
-  the winner is still the exact search's. A model whose fits can fail can
-  also opt out of the batch path entirely with the attribute
-  `batch_split = False` (`node_model.uses_batch_split`).
-- Extra parameters: a model that estimates parameters besides its
-  coefficients, which are not tested and have no score columns, declares
-  them in the attribute `extra_df` (default 0, `node_model.extra_df`). It
-  counts in the model's log-likelihood df (`loglik`), not in pruning:
-  pruning uses `k = len(root coefficients)` per node, so `df = (k, n_kids *
-  k + dfsplit)`, as partykit's `mob_prune` (modelparty.R:646-647). The
-  negative binomial model sets `extra_df = 1` for theta (docs/decisions.md).
-  `minsize` counts the coefficients only, as partykit does.
+  candidate fails, every other admissible candidate is fitted exactly, so the
+  winner is still the exact search's. A model whose fits can fail can also opt
+  out of the batch path entirely with the attribute `batch_split = False`
+  (`node_model.uses_batch_split`).
+- Extra parameters: a model that estimates parameters besides its coefficients,
+  which are not tested and have no score columns, declares them in the attribute
+  `extra_df` (default 0, `node_model.extra_df`). It counts in the model's
+  log-likelihood df (`loglik`), not in pruning: pruning uses
+  `k = len(root coefficients)` per node, so `df = (k, n_kids *
+  k + dfsplit)`,
+  as partykit's `mob_prune` (modelparty.R:646-647). The negative binomial model
+  sets `extra_df = 1` for theta (docs/decisions.md). `minsize` counts the
+  coefficients only, as partykit does.
 
 ## 5. Open questions
 
@@ -582,27 +583,26 @@ Details:
 3. **Response types.** Binomial responses arrive as factors and `glm.fit`
    converts them through `family$initialize`. Should the Python API accept
    categorical y and convert at the boundary, or require 0/1?
-4. **RNG-dependent options.** `mtry < Inf`, `breakties = TRUE`,
-   `ordinal = "L2"` and `ordinal = "max"` all consume R's random numbers
-   (`:218`, `:352`, `:342`, `:333`). Exact tree matches against R are not
-   possible for these. Should they be ported with statistical rather than
-   exact tests, or deferred?
+4. **RNG-dependent options.** `mtry < Inf`, `breakties = TRUE`, `ordinal = "L2"`
+   and `ordinal = "max"` all consume R's random numbers (`:218`, `:352`, `:342`,
+   `:333`). Exact tree matches against R are not possible for these. Should they
+   be ported with statistical rather than exact tests, or deferred?
 5. **Unknown-shape models.** For negative binomial with unknown theta, does
-   theta belong in the tested parameter vector? `glmfit` treats
-   "Negative Binomial" as a known-dispersion family and tests only the
-   regression coefficients (`glmtree.R:99`). The thesis uses `party`'s
-   `StatModel` interface (`trusch.md`, section on negbinModel) and should be
-   checked before phase 3.
+   theta belong in the tested parameter vector? `glmfit` treats "Negative
+   Binomial" as a known-dispersion family and tests only the regression
+   coefficients (`glmtree.R:99`). The thesis uses `party`'s `StatModel`
+   interface (`trusch.md`, section on negbinModel) and should be checked before
+   phase 3.
 6. **Multinomial coefficients.** A multinomial model has a matrix of
-   coefficients. The proposal flattens it to a vector with names, which fits
-   the `estfun` contract. Is the flattening order (by category, then
-   regressor) acceptable?
+   coefficients. The proposal flattens it to a vector with names, which fits the
+   `estfun` contract. Is the flattening order (by category, then regressor)
+   acceptable?
 7. **The factor `cluster` quirk.** Should the right-hand fit in factor split
    search replicate `cluster[zs]` (`:479`), or use the corrected `!zs`? It only
    affects cluster-aware models.
 8. **`vcov = "sandwich"` fallback.** If no object is requested, partykit
    silently uses `"opg"` (`:232`). With `vcov="sandwich"` and the default
-   `terminal = "object"` an object is available, but with `terminal = NULL`
-   it is not. Should Python replicate the silent fallback or raise?
-9. **Multiway splits.** `catsplit = "multiway"` creates more than two kids.
-   Is that needed in the first port, or can splits be binary only?
+   `terminal = "object"` an object is available, but with `terminal = NULL` it
+   is not. Should Python replicate the silent fallback or raise?
+9. **Multiway splits.** `catsplit = "multiway"` creates more than two kids. Is
+   that needed in the first port, or can splits be binary only?
