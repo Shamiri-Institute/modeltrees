@@ -271,3 +271,83 @@ def test_perturbed_fit_with_differing_flags_is_caught(what: str, change: Any) ->
     change(case.node(112))
     with pytest.raises(_Differs, match=f"node 112: {what}:"):
         case.fit(node, case.node(112), "node 112")
+
+
+# blind_13_glm: node 67 is completely separated by x1 and its coefficients
+# are not compared; node 69, the nearest to the boundary of the nodes that
+# are not separated, keeps the coefficient comparison (docs/api-port.md,
+# section 21).
+
+
+def _glm_node(node_id: int) -> tuple[_Case, Node]:
+    """R's blind_13 node and the port's fit on its rows."""
+    case = _Case("blind_13_glm")
+    case.f = copy.deepcopy(case.f)
+    e = case.node(node_id)
+    rows = np.array(e["rows"], dtype=np.intp)
+    assert case.x is not None
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        fit = fixture_model(case.f).fit(
+            case.y[rows],
+            case.x[rows],
+            start=None,
+            weights=case.w[rows],
+            offset=None,
+            cluster=None,
+            caseweights=case.f["control"]["caseweights"],
+            estfun=False,
+            vcov=False,
+        )
+    node = Node(
+        id=node_id,
+        depth=e["depth"],
+        rows=rows,
+        nobs=e["nobs"],
+        fit=fit,
+        stop_reason=StopReason(e["stop_reason"]),
+    )
+    return case, node
+
+
+@pytest.mark.parametrize(("node_id", "separated"), [(67, True), (69, False)])
+def test_unperturbed_glm_node_matches(node_id: int, separated: bool) -> None:
+    case, node = _glm_node(node_id)
+    e = case.node(node_id)
+    coefficients = np.array(e["coefficients"], dtype=float)
+    assert (case.separated_glm(e, coefficients) is not None) is separated
+    case.fit(node, e, f"node {node_id}")
+
+
+def test_perturbed_objective_of_a_separated_glm_node_is_caught() -> None:
+    case, node = _glm_node(67)
+    e = case.node(67)
+    e["objfun"] *= 1 + PERTURBATION
+    with pytest.raises(_Differs, match="node 67: objective"):
+        case.fit(node, e, "node 67")
+
+
+def test_perturbed_fitted_value_of_a_separated_glm_node_is_caught() -> None:
+    case, node = _glm_node(67)
+    e = case.node(67)
+    coefficients = np.array(e["coefficients"], dtype=float)
+    rows = case.separated_glm(e, coefficients)
+    assert rows is not None
+    eta, mu = case.glm_means(node.fit.coefficients, rows)
+    r_eta, r_mu = case.glm_means(coefficients, rows)
+    compare_separated(eta, mu, r_eta, r_mu, "node 67")
+    r_mu = r_mu.copy()
+    r_mu[np.argmax(r_mu)] *= 1 - PERTURBATION
+    with pytest.raises(_Differs, match="node 67: fitted values"):
+        compare_separated(eta, mu, r_eta, r_mu, "node 67")
+
+
+@pytest.mark.parametrize("index", [0, 1])
+def test_perturbed_coefficient_of_a_glm_node_not_separated_is_caught(
+    index: int,
+) -> None:
+    case, node = _glm_node(69)
+    e = case.node(69)
+    e["coefficients"][index] *= 1 + PERTURBATION
+    with pytest.raises(_Differs, match="node 69: coefficients"):
+        case.fit(node, e, "node 69")

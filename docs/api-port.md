@@ -1160,7 +1160,15 @@ same 100 one-ulp draws of x1, their worst coefficient error is at most 0.39 of
 the standing allowance (node 83), so rounding of that size does not break
 them.
 
+**Sensitivity** (`tests/test_blind_cases.py`, default run). The tests fit nodes
+67 and 69 on their rows. Both unperturbed nodes match, node 67 under the rule
+and node 69 under the coefficient comparison. A 1e-6 relative change of R's
+objective is caught, and so is a 1e-6 relative change of the largest fitted
+mean. A 1e-6 relative change of a coefficient of a non-separated node of the
+same case (node 69, the nearest to the boundary) is still caught as a
+coefficient difference, for the intercept and for the slope.
+
 **What changed.** `tests/blind_compare.py` (`SEPARATION_TOL`,
-`_Case.separated_glm`, `_Case.glm_means`). No
+`_Case.separated_glm`, `_Case.glm_means`) and `tests/test_blind_cases.py`. No
 standing fixture test, no tolerance of a comparison with R in them, and
 nothing in `src/` changed.
