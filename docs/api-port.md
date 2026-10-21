@@ -906,3 +906,51 @@ Task 6k fixes what the blind differential run of task 6j found
    pruning compared (it adds one per leaf). With the extra df gone,
    `blind_36_negbin` first diverges at node 86's theta_se, a rounding
    difference (item 5).
+5. **Weakly identified theta, in the blind-case comparison only.**
+   `tests/blind_compare.py` compares theta, theta_irls and theta_se at
+   `WEAK_THETA_RTOL = 1e-6` when R or the port reports glm.nb's
+   "alternation limit reached" (theta.ml's "iteration limit reached" keeps
+   the standing `THETA_LOOSE_RTOL`), and does not require the same
+   alternation-limit flag when the final thetas agree to `SAME_THETA_RTOL =
+   1e-10` relative. The standing fixture tests are unchanged. Evidence
+   (log-likelihood at the port's means, at the port's and at R's theta):
+
+   | node | theta | SE / theta | theta, theta_irls, theta_se vs R | log-likelihood difference |
+   | --- | --- | --- | --- | --- |
+   | `blind_29_negbin` 4 | 4924 | 16.6 | 4.8e-8, 2.8e-7, 2.0e-7 | 4.7e-10 (1.1e-12 relative) |
+   | `blind_36_negbin` 86 | 272 | 14.1 | 3.2e-9, 3.9e-9, 1.4e-8 | 2.0e-11 (7.5e-14) |
+   | `blind_36_negbin` 112 | 176 | 14.3 | 4.5e-15, 5.6e-10, 7.6e-10 | 1.1e-12 (1.4e-14) |
+
+   The standard error is 14 to 17 times theta and the likelihood is flat
+   in theta to rounding, so its digits beyond about 1e-7 are not
+   determined by the data. At node 112 the port reports "alternation limit
+   reached" and R does not: both trajectories jitter by 1e-8 to 2e-7 per
+   alternation around glm.nb's stopping threshold `epsilon = 1e-8`, R's
+   step happened to fall below it at alternation 24 and the port's did not
+   by 25 (tests/fixtures/blind_cases/README.md), and the final thetas agree
+   to 4.5e-15. Coefficients, objectives, scores, `converged` and `iter` keep
+   the usual comparison and agree.
+6. **Completely separated leaves, in the blind-case comparison only.** For
+   a safe logit leaf with `separation == "complete"`, `blind_compare`
+   compares the linear predictor `X beta` on the leaf's rows at
+   `SEPARATED_RTOL` (the intercept direction, which the standing tests
+   already compare at that tolerance), the fitted means at `rtol = 1e-8,
+   atol = 1e-10`, and the objective at `rtol = 1e-8` without `atol` (it is
+   about 8e-10, below `ATOL`, so this is a tightening), instead of each
+   coefficient at `atol = 1e-10`. Evidence at node 3 (y = 1 on every row,
+   intercept 26.566 after glm.fit's 25 iterations):
+   - `blind_43_safelogit`: R's slopes move the linear predictor by at most
+     2.2e-7, the port's by 8.5e-16; the linear predictors differ by 1.9e-8
+     relative;
+   - `blind_47_safelogit`: 4.4e-9 and 5.5e-10; 1.7e-7 relative;
+   - in both, `1 - mu` is 2.9e-12 on every row, so the slopes change the
+     fitted means by about 1e-19, below their rounding: the port's and R's
+     fitted means are equal on every row, and the objectives are equal bit
+     for bit.
+7. **Sensitivity** (`tests/test_blind_cases.py`): a 1e-6 relative change
+   of R's value is still caught for theta, theta_irls and theta_se in a
+   well-identified node (`blind_29_negbin` node 3, theta 4.83, SE 1.65), for
+   the objective of the separated leaf and for one fitted mean of it
+   (`blind_43_safelogit`, `blind_47_safelogit` node 3).
+8. **Standing tests.** All six blind cases match R on every component and
+   are in `MATCHING`; the xfail set is empty.

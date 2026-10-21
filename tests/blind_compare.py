@@ -15,6 +15,21 @@ CLAUDE.md, with the helpers and tolerances of the standing tests:
 7. ``vcov`` on the leaves of unweighted clustered cases against
    ``sandwich::vcovCL`` (HC0 and HC1, ``cadjust = TRUE``).
 
+Two comparisons here differ from the standing tests, for quantities the
+data do not determine beyond rounding (docs/api-port.md, section 19), and
+nowhere else:
+
+- negative binomial theta under a weak-identification warning (theta.ml's
+  iteration limit or glm.nb's alternation limit, from R or the port):
+  theta, theta_irls and theta_se at ``WEAK_THETA_RTOL`` (theta.ml's
+  iteration limit keeps the standing ``THETA_LOOSE_RTOL``), and the
+  alternation-limit flag need not agree when the final thetas agree to
+  ``SAME_THETA_RTOL``;
+- completely separated safe logit leaves: the linear predictor on the
+  leaf's rows at ``SEPARATED_RTOL`` and the fitted means at the usual
+  tolerance, instead of each coefficient (the slopes are not identified),
+  and the objective (of order exp(-eta)) relatively, without ``ATOL``.
+
 :func:`compare` stops at the first divergence and raises
 :class:`Divergence` with the component.
 """
@@ -54,6 +69,14 @@ from modeltrees.tree import Node
 
 RTOL = 1e-8
 ATOL = 1e-10
+# theta, theta_irls and theta_se when R or the port warns that theta is
+# weakly identified.
+WEAK_THETA_RTOL = 1e-6
+ALTERNATION_LIMIT = "alternation limit reached"
+WEAK_THETA = frozenset({NEAR_POISSON, ALTERNATION_LIMIT})
+# Final thetas this close make a differing alternation-limit flag a
+# stopping decision decided by rounding.
+SAME_THETA_RTOL = 1e-10
 BLIND = FIXTURES / "blind_cases"
 CASES = sorted(p.stem for p in (BLIND / "trees").glob("*.json"))
 
@@ -336,23 +359,25 @@ class _Case:
             )
             _approx(fit.objfun, e["objfun"], RTOL, ATOL, f"{where}: objective")
             _allclose(fit.estfun, np.array(e["estfun"]), RTOL, ATOL, f"{where}: scores")
-            loose = info["theta_warning"] == NEAR_POISSON
-            rtol = THETA_LOOSE_RTOL if loose else RTOL
-            for key in ("theta", "theta_irls", "theta_se"):
-                _approx(fit.extras[key], info[key], rtol, ATOL, f"{where}: {key}")
-            for key in ("theta_warning", "converged", "iter"):
-                _check(
-                    fit.extras[key] == info[key],
-                    f"{where}: {key} {fit.extras[key]!r} vs R {info[key]!r}",
-                )
+            self.theta(fit, info, where)
             return
         if self.model_name == "safelogit":
-            complete = fit.extras["separation"] == "complete"
-            rtol = SEPARATED_RTOL if complete else RTOL
-            _allclose(
-                fit.coefficients, coefficients, rtol, ATOL, f"{where}: coefficients"
-            )
-            _approx(fit.objfun, e["objfun"], RTOL, ATOL, f"{where}: objective")
+            if fit.extras["separation"] == "complete":
+                x = self.node_data(e)[1]
+                compare_separated(
+                    *_linear_predictor(x, fit.coefficients),
+                    *_linear_predictor(x, coefficients),
+                    where,
+                )
+                # The objective is of order exp(-eta), far below ATOL, so it
+                # is compared relatively.
+                atol = 0.0
+            else:
+                _allclose(
+                    fit.coefficients, coefficients, RTOL, ATOL, f"{where}: coefficients"
+                )
+                atol = ATOL
+            _approx(fit.objfun, e["objfun"], RTOL, atol, f"{where}: objective")
             for key in ("status", "separation", "n_boundary", "converged", "boundary"):
                 _check(
                     fit.extras[key] == info[key],
@@ -405,6 +430,33 @@ class _Case:
             fit.extras["classes_present"] == _labels(info["classes_present"]),
             f"{where}: classes present",
         )
+
+    def theta(self, fit: FitResult, info: dict[str, Any], where: str) -> None:
+        got_warning, r_warning = fit.extras["theta_warning"], info["theta_warning"]
+        if r_warning == NEAR_POISSON:
+            rtol = THETA_LOOSE_RTOL
+        elif r_warning in WEAK_THETA or got_warning in WEAK_THETA:
+            rtol = WEAK_THETA_RTOL
+        else:
+            rtol = RTOL
+        for key in ("theta", "theta_irls", "theta_se"):
+            _approx(fit.extras[key], info[key], rtol, ATOL, f"{where}: {key}")
+        theta, r_theta = fit.extras["theta"], info["theta"]
+        stopped_by_rounding = (
+            ALTERNATION_LIMIT in (got_warning, r_warning)
+            and r_theta is not None
+            and abs(theta - r_theta) <= SAME_THETA_RTOL * abs(r_theta)
+        )
+        if not stopped_by_rounding:
+            _check(
+                got_warning == r_warning,
+                f"{where}: theta_warning {got_warning!r} vs R {r_warning!r}",
+            )
+        for key in ("converged", "iter"):
+            _check(
+                fit.extras[key] == info[key],
+                f"{where}: {key} {fit.extras[key]!r} vs R {info[key]!r}",
+            )
 
     # 4.
     def tree(self, tree: mt.ModelTree) -> None:
@@ -599,6 +651,24 @@ class _Case:
                 _check(
                     bool(np.all(np.abs(got.matrix - expected) <= tol)), f"{where}: vcov"
                 )
+
+
+def _linear_predictor(
+    x: np.ndarray, coefficients: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """The logit leaf's linear predictor and fitted means on its rows."""
+    eta = x @ np.where(np.isnan(coefficients), 0.0, coefficients)
+    return eta, 1 / (1 + np.exp(-eta))
+
+
+def compare_separated(
+    eta: np.ndarray, mu: np.ndarray, r_eta: np.ndarray, r_mu: np.ndarray, where: str
+) -> None:
+    """A completely separated leaf: its slopes are not identified, so the
+    linear predictor (the intercept direction IRLS runs along) is compared
+    at SEPARATED_RTOL and the fitted means at the usual tolerance."""
+    _allclose(eta, r_eta, SEPARATED_RTOL, 0.0, f"{where}: linear predictor")
+    _allclose(mu, r_mu, RTOL, ATOL, f"{where}: fitted values")
 
 
 def compare(name: str) -> None:

@@ -9,9 +9,24 @@ the case diverges anywhere else first, and xfail is strict, so a case that
 starts to match R must move to ``MATCHING``.
 """
 
+import copy
+from functools import cache
+from typing import Any
+
+import numpy as np
 import pytest
-from blind_compare import CASES, Divergence, compare
+from blind_compare import (
+    CASES,
+    Divergence,
+    _Case,
+    _Differs,
+    _linear_predictor,
+    compare,
+    compare_separated,
+)
 from slow import SLOW
+
+import modeltrees as mt
 
 # (case, slow): cases that match R on every component.
 MATCHING = [
@@ -19,51 +34,20 @@ MATCHING = [
     # weights, which the instability tests run as partykit does (task 6k).
     ("blind_03_lm", False),
     ("blind_13_glm", True),
+    # Weakly identified theta (glm.nb's alternation limit): theta at
+    # WEAK_THETA_RTOL, and the flag where the final thetas agree.
+    ("blind_29_negbin", True),
+    # Pruning counts coefficients only (task 6k), then as blind_29.
+    ("blind_36_negbin", True),
+    # Completely separated leaves: linear predictor and fitted values
+    # instead of the non-identified slopes.
+    ("blind_43_safelogit", False),
+    ("blind_47_safelogit", False),
 ]
 
-# (case, first diverging component, start of the difference, reason, slow)
-EXPECTED = [
-    (
-        "blind_29_negbin",
-        "node sizes and coefficients",
-        "node 4: theta:",
-        (
-            "node 4's theta (4924, SE 81787, glm.nb alternation limit) differs by "
-            "4.7e-8 relative: not identified beyond rounding"
-        ),
-        True,
-    ),
-    (
-        "blind_36_negbin",
-        "node sizes and coefficients",
-        "node 86: theta_se:",
-        (
-            "node 86's theta_se (theta 272, SE 3826, glm.nb alternation limit) "
-            "differs by 1.4e-8 relative: not identified beyond rounding"
-        ),
-        True,
-    ),
-    (
-        "blind_43_safelogit",
-        "node sizes and coefficients",
-        "node 3: coefficients:",
-        (
-            "node 3 is completely separated (constant response): its slopes are "
-            "rounding residue, 2e-16 against R's -7.7e-8"
-        ),
-        False,
-    ),
-    (
-        "blind_47_safelogit",
-        "node sizes and coefficients",
-        "node 3: coefficients:",
-        (
-            "node 3 is completely separated (constant response): its slopes are "
-            "rounding residue, -5.1e-11 against R's -1.2e-9"
-        ),
-        False,
-    ),
-]
+# (case, first diverging component, start of the difference, reason, slow).
+# Empty since task 6k; a case that diverges from R goes here, xfail strict.
+EXPECTED: list[tuple[str, str, str, str, bool]] = []
 
 
 def test_every_blind_case_is_listed() -> None:
@@ -109,3 +93,65 @@ def test_blind_case(name: str, component: str, detail: str) -> None:
             # A different first divergence is a failure, not the known one.
             raise AssertionError(f"unexpected divergence: {d}") from None
         raise
+
+
+# Sensitivity: the comparisons of blind_compare that allow for quantities
+# the data do not determine still catch a 1e-6 relative change of an
+# identified quantity.
+
+PERTURBATION = 1e-6
+
+
+@cache
+def _grown(name: str) -> mt.ModelTree:
+    return _Case(name).grow()
+
+
+def _perturbed_case(name: str, node_id: int, change: Any) -> _Case:
+    case = _Case(name)
+    case.f = copy.deepcopy(case.f)
+    change(next(n for n in case.f["nodes"] if n["id"] == node_id))
+    return case
+
+
+def test_unperturbed_separated_leaf_matches() -> None:
+    case = _Case("blind_43_safelogit")
+    case.nodes(_grown("blind_43_safelogit"))
+
+
+def test_perturbed_objective_of_a_separated_leaf_is_caught() -> None:
+    def change(node: dict[str, Any]) -> None:
+        node["objfun"] *= 1 + PERTURBATION
+
+    case = _perturbed_case("blind_43_safelogit", 3, change)
+    with pytest.raises(_Differs, match="node 3: objective"):
+        case.nodes(_grown("blind_43_safelogit"))
+
+
+@pytest.mark.parametrize("name", ["blind_43_safelogit", "blind_47_safelogit"])
+def test_perturbed_fitted_value_of_a_separated_leaf_is_caught(name: str) -> None:
+    case = _Case(name)
+    node = case.node(3)
+    fit = _grown(name)._grown.node(3).fit
+    assert fit.extras["separation"] == "complete"
+    x = case.node_data(node)[1]
+    eta, mu = _linear_predictor(x, fit.coefficients)
+    r_eta, r_mu = _linear_predictor(x, np.array(node["coefficients"], dtype=float))
+    compare_separated(eta, mu, r_eta, r_mu, "node 3")
+    r_mu = r_mu.copy()
+    r_mu[0] *= 1 - PERTURBATION
+    with pytest.raises(_Differs, match="node 3: fitted values"):
+        compare_separated(eta, mu, r_eta, r_mu, "node 3")
+
+
+@SLOW
+@pytest.mark.parametrize("key", ["theta", "theta_irls", "theta_se"])
+def test_perturbed_theta_of_an_identified_node_is_caught(key: str) -> None:
+    # blind_29 node 3: theta 4.83 with standard error 1.65 and no warning.
+    def change(node: dict[str, Any]) -> None:
+        assert node["model_info"]["theta_warning"] is None
+        node["model_info"][key] *= 1 + PERTURBATION
+
+    case = _perturbed_case("blind_29_negbin", 3, change)
+    with pytest.raises(_Differs, match=f"node 3: {key}:"):
+        case.nodes(_grown("blind_29_negbin"))
