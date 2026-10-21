@@ -994,3 +994,53 @@ on every component (item 8).
 9. **Fixture README.** The blind-case paragraph of `r/generate_all.R` now says
    the cases are standing tests; `Rscript r/generate_all.R` changed only that
    paragraph of `tests/fixtures/README.md` (no JSON or CSV changed).
+
+## 20. Two blind cases on a CI runner
+
+Two standing blind-case tests failed on one CI runner (ubuntu, Python 3.13)
+and passed on the development machine (Linux, Python 3.13.2) and elsewhere.
+
+### `blind_13_glm` node 67: a completely separated glm leaf
+
+CI reported `node sizes and coefficients: node 67 coefficients
+20.78637167846448 vs R 20.786371258859024` (abs 4.2e-7, relative 2.0e-8,
+standing `rtol = 1e-8`). On the development machine:
+
+| quantity        | port                                     | R                                        |
+| --------------- | ---------------------------------------- | ---------------------------------------- |
+| coefficients    | 20.78637125847394, 24.615747326791794    | 20.786371258859024, 24.615747327000108   |
+| difference      | 3.9e-10, 2.1e-10 (0.0019, 0.00085 of the allowance) |                               |
+| objective       | 1.8516521649303286e-10                   | equal bit for bit                        |
+| IRLS iterations | 24, converged                            |                                          |
+
+The node has 7 rows (20 weighted observations) and is completely separated
+by x1: y = 0 at x1 = -2.03, -1.85 and y = 1 at x1 >= 0.136. At R's
+coefficients every fitted probability is within 3.4e-11 of 0 or 1
+(`min(mu, 1 - mu)` from 2.6e-25 to 3.3e-11; three rows below glm.fit's
+`10 * .Machine$double.eps`, so glm.fit warns "fitted probabilities
+numerically 0 or 1").
+
+The convergence-offset rule of docs/extensions-port.md, section 7, does not
+apply. At R's coefficients the exact gradient of the log-likelihood
+(`sum w (y - mu) x`, with `y - mu` and `mu (1 - mu)` from `expit(-+eta)`) is
+(7.2e-11, 1.2e-10) and the information `X' W X` is 1e-10 in scale
+(condition number 2.7), so the predicted offset `-H^-1 g` of minus the
+log-likelihood is (0.862, 1.007): 2e6 times the CI difference and 2e9 times
+the local one. It is the next IRLS step, not a distance to an optimum: there
+is no finite MLE, and minus the log-likelihood keeps falling along it
+(1.9e-10 at R's coefficients, 6.8e-11, 1.2e-12 and 8.4e-15 after 1, 5 and
+10 steps). The port's IRLS walks along this direction by about
+(0.862, 1.007) per iteration and stops at iteration 24, when the relative
+deviance change falls below `epsilon`; R stops at the same iteration.
+
+So the step stopped there, without a tolerance derived from the offset: no
+glm comparison changed. The first diverging quantity is node 67's intercept,
+the first quantity compared at the node. Measured for the record: the end
+point of the 24 iterations is set by rounding. Perturbing x1 by one ulp on
+random rows (200 draws) moves the port's intercept by up to 4.2e-7 (median
+1.8e-9, more than 1e-7 in 13.5 % of draws), and `reference_path()` moves it
+by 1.7e-9, so the CI value lies within the port's own rounding spread.
+Comparing such a leaf on what the data determine, as task 6k does for
+separated safe logit leaves (section 19, item 6), would need its own
+decision; `test_blind_case_matches[blind_13_glm]` is unchanged and still
+fails on that runner.
