@@ -28,7 +28,13 @@ nowhere else:
 - completely separated safe logit leaves: the linear predictor on the
   leaf's rows at ``SEPARATED_RTOL`` and the fitted means at the usual
   tolerance, instead of each coefficient (the slopes are not identified),
-  and the objective (of order exp(-eta)) relatively, without ``ATOL``.
+  and the objective (of order exp(-eta)) relatively, without ``ATOL``;
+- completely separated binomial and poisson glm nodes (every
+  positive-weight fitted mean at R's coefficients within
+  ``SEPARATION_TOL`` of the boundary, 0 or 1 for binomial, 0 for poisson):
+  the same comparison on the positive-weight rows. Their coefficients are
+  not compared: there is no finite MLE and where IRLS stops is set by
+  rounding (docs/api-port.md, section 21).
 
 :func:`compare` stops at the first divergence and raises
 :class:`Divergence` with the component.
@@ -59,6 +65,7 @@ from modeltrees.instability import (
     VariableKind,
     fluctuation_tests,
 )
+from modeltrees.models.families import get_family
 from modeltrees.models.multinom import (
     multinom_evaluate,
     multinom_hessian,
@@ -82,6 +89,9 @@ WEAK_THETA = frozenset({NEAR_POISSON, ALTERNATION_LIMIT})
 # where theta moves by up to 1.4e-9 per alternation (docs/api-port.md,
 # section 20).
 ROUNDED_STOP_RTOL = 2e-8
+# A glm node is completely separated when every positive-weight fitted mean
+# at R's coefficients is this close to the boundary of the family's mean.
+SEPARATION_TOL = 1e-10
 BLIND = FIXTURES / "blind_cases"
 CASES = sorted(p.stem for p in (BLIND / "trees").glob("*.json"))
 
@@ -351,6 +361,24 @@ class _Case:
     def fit(self, g: Node, e: dict[str, Any], where: str) -> None:
         fit = g.fit
         coefficients = nan_array(e["coefficients"])
+        if self.model_name == "glm":
+            separated = self.separated_glm(e, coefficients)
+            if separated is not None:
+                # The coefficients of a completely separated node are not
+                # compared: it has no finite MLE, IRLS walks towards
+                # infinity until the deviance change falls below epsilon,
+                # and where it stops is set by rounding (blind_13 node 67:
+                # 3.9e-10 from R here, 4.2e-7 on a CI runner, up to 4.2e-7
+                # under one-ulp changes of x1; docs/api-port.md, section
+                # 21). The objective, of order exp(-|eta|), is compared
+                # relatively, without ATOL.
+                compare_separated(
+                    *self.glm_means(fit.coefficients, separated),
+                    *self.glm_means(coefficients, separated),
+                    where,
+                )
+                _approx(fit.objfun, e["objfun"], RTOL, 0.0, f"{where}: objective")
+                return
         if self.model_name in ("lm", "glm"):
             _allclose(
                 fit.coefficients, coefficients, RTOL, ATOL, f"{where}: coefficients"
@@ -435,6 +463,32 @@ class _Case:
             fit.extras["classes_present"] == _labels(info["classes_present"]),
             f"{where}: classes present",
         )
+
+    def glm_means(
+        self, coefficients: np.ndarray, rows: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """The glm node's linear predictor and fitted means on ``rows``."""
+        assert self.x is not None
+        eta = self.x[rows] @ np.where(np.isnan(coefficients), 0.0, coefficients)
+        if self.off is not None:
+            eta = eta + self.off[rows]
+        return eta, get_family(self.f["family"]["family"]).linkinv(eta)
+
+    def separated_glm(
+        self, e: dict[str, Any], coefficients: np.ndarray
+    ) -> np.ndarray | None:
+        """The positive-weight rows of a completely separated binomial or
+        poisson node, None for any other node."""
+        family = self.f["family"]["family"]
+        if family not in ("binomial", "poisson"):
+            return None
+        rows = np.array(e["rows"], dtype=np.intp)
+        rows = rows[self.w[rows] > 0]
+        mu = self.glm_means(coefficients, rows)[1]
+        distance = np.minimum(mu, 1 - mu) if family == "binomial" else mu
+        if rows.size == 0 or not bool(np.all(distance <= SEPARATION_TOL)):
+            return None
+        return rows
 
     def theta(self, fit: FitResult, info: dict[str, Any], where: str) -> None:
         got_warning, r_warning = fit.extras["theta_warning"], info["theta_warning"]

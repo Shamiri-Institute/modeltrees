@@ -1046,7 +1046,7 @@ by 1.7e-9, so the CI value lies within the port's own rounding spread.
 Comparing such a leaf on what the data determine, as task 6k does for
 separated safe logit leaves (section 19, item 6), would need its own
 decision; `test_blind_case_matches[blind_13_glm]` is unchanged and still
-fails on that runner.
+fails on that runner. Section 21 made that decision.
 
 ### `blind_36_negbin` node 112: the alternation-limit flag
 
@@ -1118,3 +1118,49 @@ or theta_se is caught, with the message carrying both sides' numbers. A
   separated leaf, so the convergence-offset rule does not apply (see the
   `blind_13_glm` subsection above). Its test still fails on that runner.
 - No standing fixture test and nothing in `src/` changed.
+
+## 21. Completely separated glm nodes in the blind-case comparison
+
+Section 20 found that `blind_13_glm` node 67 is completely separated, so its
+coefficients are not determined to the standing `rtol = 1e-8`. The rule of task
+6k for separated safe logit leaves (section 19, item 6) now applies to glm
+nodes too, in `tests/blind_compare.py` only.
+
+**The rule.** A glm node is completely separated when its family is binomial
+or poisson and every positive-weight fitted mean at R's coefficients is
+within `SEPARATION_TOL = 1e-10` of the boundary: `min(mu, 1 - mu)` for
+binomial, `mu` for poisson. The safe logit comparison takes the same decision
+from the fit's `separation == "complete"`. For such a node the comparison is,
+on the positive-weight rows, the linear predictor `X beta + offset` at
+`SEPARATED_RTOL = 1e-3`, the fitted means `linkinv(eta)` at `rtol = 1e-8,
+atol = 1e-10`, and the objective at `rtol = 1e-8` without `atol` (it is of
+order `exp(-|eta|)`, 1.9e-10 at node 67, below `ATOL`). Every other glm node,
+including those near but not at the boundary, and every gaussian node keep
+the comparison of each coefficient at `rtol = 1e-8, atol = 1e-10`.
+
+**Why the coefficients of a separated node are not compared.** There is no
+finite MLE. IRLS walks along the direction of separation until the relative
+deviance change falls below `epsilon`, and where it stops is set by rounding.
+At node 67:
+
+- every fitted probability at R's coefficients is within 3.4e-11 of 0 or 1;
+- the objective equals R's bit for bit (1.8516521649303286e-10);
+- the coefficients differ from R's by 3.9e-10 and 2.1e-10 on the development
+  machine and by 4.2e-7 (intercept) on a CI runner;
+- a one-ulp change of x1 on random rows moves the port's intercept by up to
+  4.2e-7 (section 20). Rerun here on 100 draws, the worst coefficient error is
+  2.0 times the standing allowance.
+
+**The separated nodes.** In `blind_13_glm`, nodes 67, 91, 96 and 117 meet the
+rule (largest `min(mu, 1 - mu)` 3.3e-11, 6.3e-11, 4.5e-11 and 4.2e-11). No node
+of `blind_22_glm` (poisson) does. Nine other nodes of `blind_13_glm` are near
+the boundary without meeting the rule (largest `min(mu, 1 - mu)` from 1.0e-10
+at node 69 to 3.2e-8 at node 24) and keep the coefficient comparison. Over the
+same 100 one-ulp draws of x1, their worst coefficient error is at most 0.39 of
+the standing allowance (node 83), so rounding of that size does not break
+them.
+
+**What changed.** `tests/blind_compare.py` (`SEPARATION_TOL`,
+`_Case.separated_glm`, `_Case.glm_means`). No
+standing fixture test, no tolerance of a comparison with R in them, and
+nothing in `src/` changed.
