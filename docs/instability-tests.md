@@ -273,7 +273,14 @@ can be added without changing existing calls.
       R fails too, inside `chol()` ("the leading minor of order 4 is not
       positive" in `sim_cluster_few_lmtree_cluster.json`, node 3: 3 clusters,
       4 coefficients), and `try()` swallows it, so partykit stops without any
-      message. With one cluster and more than one parameter R fails earlier,
+      message. That failure is decided by rounding: with `G < k` the meat
+      has rank `G` and is exactly singular under any weights, and `chol()`
+      fails or not on its rounding noise. In the second blind run (task 6l,
+      tests/fixtures/blind_cases/README.md) R failed at 68 of the 70 such
+      nodes it tested and succeeded at 2 (`blind_22_glm` node 9,
+      `blind_52_multinom` node 6), where it split on statistics of order
+      1e16. The port stops at `G < k` always, which is R's usual outcome.
+      With one cluster and more than one parameter R fails earlier,
       at `J12 %*% t(process)` (`:252`): `tapply` over one cluster makes
       `apply` return a vector, so the meat is 1 by 1. The outcome is the
       same, the node is terminal.

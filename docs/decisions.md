@@ -16,8 +16,12 @@ notes/phase1-questions.md. Match R unless a decision says otherwise.
   affects only the instability tests: scores are summed within clusters before
   the covariance estimate, as in mob_grow_fluctests (modelparty.R:240-245).
   Coefficient fits and split search ignore it. With fewer clusters than
-  parameters the covariance estimate is singular and partykit silently stops
-  splitting, so Python warns and makes the node terminal. At exactly as many
+  parameters the meat has rank G and is exactly singular, and whether
+  partykit's chol() succeeds on it is decided by rounding. In the second
+  blind run (task 6l) R failed at 68 of the 70 such nodes it tested and
+  succeeded at 2, where it split on statistics of order 1e16. Python stops
+  at G < k always, which is R's usual outcome: it warns and makes the node
+  terminal. At exactly as many
   clusters as parameters the outcome depends on the weights: partykit sums
   `process / sqrt(weights)` within clusters (modelparty.R:244), and those sums
   add up to zero only when sqrt(weights) is constant over the node (unit or
