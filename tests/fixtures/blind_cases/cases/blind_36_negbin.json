@@ -1,0 +1,76 @@
+{
+  "k": 36,
+  "j": 12,
+  "model": "negbin",
+  "name": "blind_36_negbin",
+  "seed": 32529904,
+  "family": null,
+  "planted": true,
+  "clustered": false,
+  "weighted": true,
+  "offset": false,
+  "separated": false,
+  "n_classes": null,
+  "lose_class": false,
+  "n": 961,
+  "regressors": ["x1", "x2"],
+  "partitioning": [
+    {
+      "name": "z1",
+      "type": "numeric",
+      "n_levels": null,
+      "dist": "normal",
+      "cluster_level": false
+    },
+    {
+      "name": "z2",
+      "type": "numeric",
+      "n_levels": null,
+      "dist": "normal",
+      "cluster_level": false
+    },
+    {
+      "name": "z3",
+      "type": "numeric",
+      "n_levels": null,
+      "dist": "normal",
+      "cluster_level": false
+    },
+    {
+      "name": "z4",
+      "type": "nominal",
+      "n_levels": 7,
+      "dist": null,
+      "cluster_level": false
+    }
+  ],
+  "control": {
+    "alpha": 0.10000000000000001,
+    "bonferroni": false,
+    "minsize": null,
+    "maxdepth": null,
+    "prune": "AIC",
+    "numsplit": "center"
+  },
+  "effect": {
+    "variable": 3,
+    "type": "intercept",
+    "size": -0.46370529416017231,
+    "quantile": 0.63629751559346914
+  },
+  "n_clusters": null,
+  "theta": 2.5500150997890159,
+  "separation": null,
+  "lost_class": null,
+  "formula": "y ~ x1 + x2 | z1 + z2 + z3 + z4",
+  "r_call": "partykit::mob(formula = y ~ x1 + x2 | z1 + z2 + z3 + z4, data = blind_36_negbin, weights = w, fit = negbinfit, epsilon = 1e-08, maxit = 25L, control = partykit::mob_control(alpha = 0.1, bonferroni = FALSE, minsize = NULL, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = \"AIC\", restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = \"vector\", xtype = \"matrix\", terminal = c(\"estfun\", \"object\"), inner = c(\"estfun\", \"object\"), model = TRUE, numsplit = \"center\", catsplit = \"binary\", vcov = \"opg\", ordinal = \"chisq\", nrep = 10000, applyfun = NULL, cores = NULL))",
+  "r_outcome": "ok",
+  "r_seconds": 174.57500000000002,
+  "n_nodes": 119,
+  "n_terminal": 60,
+  "decision_margins": {
+    "min_abs_p_value_minus_alpha": 0.02753603124316914,
+    "min_relative_split_objective_gap": 8.7884705287516934e-05
+  },
+  "warnings": ["iteration limit reached", "alternation limit reached", "NaNs produced"]
+}

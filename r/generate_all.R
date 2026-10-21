@@ -476,6 +476,32 @@ readme <- c(readme,
   "adjustment on a few p-value vectors, and the Hansen table itself.",
   "",
   "```r", pv$r_call, "```", "")
+
+# The blind differential run's mismatching cases (task 6j) are copied from
+# that run, not generated here; they are listed and kept.
+blind_dir <- file.path(out_dir, "blind_cases")
+blind_trees <- sort(list.files(file.path(blind_dir, "trees"), pattern = "[.]json$"))
+if (length(blind_trees)) {
+  readme <- c(readme,
+    "## Blind differential run cases",
+    "",
+    "Copied unchanged from the blind differential run of task 6j, not generated",
+    "here: the cases where the port and R differ, each with its data, R tree",
+    "(tree fixture format, `data_csv` relative to `blind_cases/`), drawn",
+    "settings and, for clustered cases, `sandwich::vcovCL` per leaf.",
+    "`blind_cases/README.md` has the run and the analysis of each case;",
+    "`tests/test_blind_cases.py` marks them xfail with the first diverging",
+    "component.",
+    "")
+  for (f in blind_trees) {
+    fx <- jsonlite::fromJSON(file.path(blind_dir, "trees", f), simplifyVector = FALSE)
+    readme <- c(readme,
+      sprintf("- `blind_cases/trees/%s`: %s Data `blind_cases/%s`, %d rows. %d inner and %d terminal nodes.",
+        f, fx$description, fx$data_csv, fx$n, fx$summary$n_inner, fx$summary$n_terminal))
+  }
+  readme <- c(readme, "")
+  written <- c(written, file.path("blind_cases", list.files(blind_dir, recursive = TRUE)))
+}
 writeLines(readme, file.path(out_dir, "README.md"), useBytes = TRUE)
 written <- c(written, "README.md")
 

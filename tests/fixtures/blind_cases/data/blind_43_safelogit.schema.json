@@ -1,0 +1,51 @@
+{
+  "dataset": "blind_43_safelogit",
+  "description": "Blind differential run, case 43 (safelogit, seed 1859485392).",
+  "source": "simulated",
+  "seed": 1859485392,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 828,
+  "csv": "blind_43_safelogit.csv",
+  "columns": [
+    {
+      "name": "y",
+      "type": "integer"
+    },
+    {
+      "name": "x1",
+      "type": "double"
+    },
+    {
+      "name": "x2",
+      "type": "double"
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "z2",
+      "type": "ordered",
+      "levels": ["o1", "o2", "o3", "o4"]
+    },
+    {
+      "name": "z3",
+      "type": "double"
+    },
+    {
+      "name": "z4",
+      "type": "ordered",
+      "levels": ["o1", "o2", "o3", "o4", "o5", "o6"]
+    },
+    {
+      "name": "z5",
+      "type": "factor",
+      "levels": ["k", "p", "m", "c", "a", "n", "l"]
+    },
+    {
+      "name": "school",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "notes/blind/r/cases.R, draw_case()"
+}

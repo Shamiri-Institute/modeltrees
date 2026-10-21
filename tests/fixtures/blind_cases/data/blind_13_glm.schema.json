@@ -1,0 +1,42 @@
+{
+  "dataset": "blind_13_glm",
+  "description": "Blind differential run, case 13 (glm, seed 250857512).",
+  "source": "simulated",
+  "seed": 250857512,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 1015,
+  "csv": "blind_13_glm.csv",
+  "columns": [
+    {
+      "name": "y",
+      "type": "factor",
+      "levels": ["no", "yes"]
+    },
+    {
+      "name": "x1",
+      "type": "double"
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "z2",
+      "type": "double"
+    },
+    {
+      "name": "z3",
+      "type": "factor",
+      "levels": ["p", "n", "s", "t"]
+    },
+    {
+      "name": "w",
+      "type": "integer"
+    },
+    {
+      "name": "school",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "notes/blind/r/cases.R, draw_case()"
+}

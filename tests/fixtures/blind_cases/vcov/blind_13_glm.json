@@ -1,0 +1,1839 @@
+{
+  "case": "blind_13_glm",
+  "tree": "trees/blind_13_glm.json",
+  "weighted": true,
+  "oracle": "no: sandwich is not an oracle under case weights (docs/sandwich-fixtures.md 1.5); recorded, not compared",
+  "leaves": [
+    {
+      "id": 5,
+      "rows": [40, 86, 134, 211, 217, 238, 317, 411, 453, 514, 531, 570, 607, 637, 730, 736, 750, 753, 806, 847, 850, 899, 964, 966, 967, 991, 998],
+      "n": 27,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.28773859296977483, 0.36989858478670684],
+            [0.36989858478670679, 0.53713132944554465]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.29924813668856581, 0.38469452817817501],
+            [0.38469452817817507, 0.55861658262336633]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "rows": [568, 617, 680, 768, 811, 881, 915],
+      "n": 7,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.69927502240173911, -0.51122635126654303],
+            [-0.51122635126654292, 0.37755122133693764]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.83913002688208682, -0.61347162151985168],
+            [-0.61347162151985168, 0.45306146560432492]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "rows": [132, 283, 421, 427, 703, 709, 755, 827, 946, 992],
+      "n": 10,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.3332719333667985, -0.061939538306247148],
+            [-0.061939538306246794, 2.1105962222561998]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.37493092503764924, -0.069681980594529416],
+            [-0.069681980594528889, 2.3744207500382273]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "rows": [316, 356, 410, 525, 684, 759, 989],
+      "n": 7,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [1186.6578100386396, -3359.2786395804515],
+            [-3359.2786395812955, 9515.7084691608397]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [1423.9893720459886, -4031.1343674954633],
+            [-4031.134367496536, 11418.8501629901]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "rows": [80, 113, 125, 171, 198, 249, 281, 550, 585, 807, 823, 834, 970],
+      "n": 13,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.44835767664503812, 0.57789106397088064],
+            [0.57789106397088064, 0.94185338458065504]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.48911746543095058, 0.63042661524096077],
+            [0.63042661524096066, 1.0274764195425325]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "rows": [163, 193, 339, 457, 551, 597, 657, 773, 851, 890, 1002],
+      "n": 11,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [1.3156995530821829, -0.88733370957548585],
+            [-0.88733370957548563, 0.59843540515677385]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [1.4618883923135368, -0.98592634397276191],
+            [-0.98592634397276191, 0.66492822795197093]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "rows": [81, 89, 116, 130, 168, 255, 261, 397, 425, 546, 619, 706, 754, 873, 903, 1004, 1013],
+      "n": 17,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.67720375367906316, 0.15806383482749956],
+            [0.15806383482749947, 0.036893145481716801]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.72235067059100089, 0.16860142381599938],
+            [0.16860142381599946, 0.039352688513831217]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "rows": [174, 210, 241, 314, 501, 544, 642, 944, 985],
+      "n": 9,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [5.5727331182122812, -4.5792986182990756],
+            [-4.5792986182990756, 3.7629607215575751]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [6.3688378493854634, -5.2334841351989434],
+            [-5.2334841351989434, 4.3005265389229406]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "rows": [97, 175, 186, 221, 603, 633, 665, 999, 1010],
+      "n": 9,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.17777912845049545, -0.39535239791975924],
+            [-0.39535239791975924, 0.87920062501099538]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.20317614680056617, -0.45183131190829623],
+            [-0.45183131190829623, 1.0048007142982804]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "rows": [5, 20, 49, 100, 141, 385, 408, 434, 505, 506, 715, 726, 987, 1009],
+      "n": 14,
+      "status": "ok",
+      "n_clusters": 5,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [10.383937579340648, -31.401901818297556],
+            [-31.401901818297574, 101.04371652521357]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [11.249265710952349, -34.018726969822289],
+            [-34.018726969822339, 109.46402623564794]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "rows": [55, 280, 346, 490, 528, 658, 720, 739, 752, 869],
+      "n": 10,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [3747.2895288739765, -7735.0588869764242],
+            [-7735.0588869763078, 15969.706315580477]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [4215.7007199856162, -8701.9412478533923],
+            [-8701.9412478518789, 17965.919605035335]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "rows": [18, 51, 67, 118, 154, 184, 292, 299, 382, 442, 445, 573, 588, 590, 635, 689, 770, 959],
+      "n": 18,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.041720213909533815, -0.14081264218633599],
+            [-0.14081264218633607, 0.47526602434244863]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.044327727278879681, -0.14961343232298202],
+            [-0.14961343232298202, 0.50497015086385155]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "rows": [61, 110, 114, 155, 183, 360, 448, 831, 929, 993, 997],
+      "n": 11,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.9438029117451876, -0.80926576672271722],
+            [-0.80926576672271744, 0.69390661264171638]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [1.0486699019390975, -0.89918418524746357],
+            [-0.8991841852474638, 0.77100734737968468]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "rows": [207, 475, 541, 583, 663, 745, 751, 818, 843, 924],
+      "n": 10,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.0027494527308691633, 0.039990031800867736],
+            [0.039990031800867736, 0.58164398821814867]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.0030931343222278113, 0.044988785775976203],
+            [0.044988785775976203, 0.65434948674541715]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "rows": [23, 150, 325, 376, 796, 842, 895, 896, 907],
+      "n": 9,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [86.415320490816711, 633.51466171708864],
+            [633.51466171708864, 4644.3249221434944]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [98.760366275219084, 724.01675624810116],
+            [724.01675624810116, 5307.7999110211358]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "rows": [3, 34, 70, 98, 117, 185, 208, 224, 262, 270, 304, 329, 338, 342, 375, 463, 473, 503, 549, 592, 646, 656, 675, 758, 803, 864, 883, 889, 1001, 1006, 1012],
+      "n": 31,
+      "status": "ok",
+      "n_clusters": 1,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "rows": [158, 181, 297, 431, 441, 507, 508, 512, 599, 614, 638, 662, 668, 910, 922],
+      "n": 15,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [7.0367290819832267, -6.5264222001312824],
+            [-6.5264222001312824, 6.2325202587192594]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [7.5780159344434761, -7.0284546770644587],
+            [-7.0284546770644569, 6.711944894005355]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 38,
+      "rows": [32, 123, 172, 228, 302, 468, 724, 785, 857],
+      "n": 9,
+      "status": "ok",
+      "n_clusters": 1,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "rows": [4, 69, 96, 178, 182, 215, 275, 313, 358, 362, 477, 659],
+      "n": 12,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.042051959139679254, 0.040835012018011874],
+            [0.040835012018011929, 0.039653282400144742]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.046257155053647192, 0.044918513219813064],
+            [0.04491851321981305, 0.043618610640159296]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "rows": [180, 344, 367, 444, 629, 685, 700, 734, 855],
+      "n": 9,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [10.465782022945875, -9.269031410153298],
+            [-9.2690314101532962, 8.209127907946991]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [11.960893740509574, -10.593178754460912],
+            [-10.59317875446091, 9.381860466225131]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "rows": [143, 161, 223, 303, 574, 732, 737, 885, 913, 1008],
+      "n": 10,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.42842517499571919, -0.61156530004062537],
+            [-0.61156530004062526, 0.87299285392727022]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.48197832187018419, -0.68801096254570338],
+            [-0.68801096254570349, 0.98211696066817888]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 45,
+      "rows": [8, 45, 66, 156, 257, 265, 273, 433, 443, 513, 522, 532, 589, 686, 725, 735, 767, 769, 790, 808, 877, 884, 977, 982],
+      "n": 24,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.28799250894039174, 0.34035059718037997],
+            [0.34035059718038002, 0.40222757677706644]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.30108307752859109, 0.35582107887039749],
+            [0.35582107887039749, 0.42051064844875119]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 48,
+      "rows": [42, 115, 403, 584, 782, 783, 957, 979, 1000],
+      "n": 9,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [2.7436979823417809, 1.4278707694162189],
+            [1.4278707694162192, 0.74309014595444389]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [3.1356548369620358, 1.6318523079042502],
+            [1.6318523079042502, 0.84924588109079302]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 49,
+      "rows": [26, 39, 56, 157, 230, 696, 718, 722, 723, 972],
+      "n": 10,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.63147260116725146, 0.89958800469226718],
+            [0.89958800469226741, 1.2815418700527841]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.71040667631315779, 1.0120365052788007],
+            [1.0120365052788007, 1.4417346038093819]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 52,
+      "rows": [165, 225, 231, 271, 301, 417, 435, 464, 529, 748, 787, 815],
+      "n": 12,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.86338549501154571, -0.28305527400277453],
+            [-0.28305527400277453, 0.092797815811944379]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.94972404451270054, -0.311360801403052],
+            [-0.311360801403052, 0.10207759739313882]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 53,
+      "rows": [57, 107, 128, 136, 146, 213, 361, 469, 485, 557, 714, 777, 789, 825, 838, 870, 893],
+      "n": 17,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.55276814921797734, 0.44736410366159485],
+            [0.44736410366159474, 0.36205892385105887]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.58961935916584252, 0.47718837723903462],
+            [0.47718837723903462, 0.3861961854411296]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 54,
+      "rows": [53, 54, 122, 127, 137, 188, 218, 220, 276, 293, 296, 308, 383, 399, 402, 407, 436, 489, 649, 674, 760, 792, 799, 801, 814, 844, 853, 866, 886, 968],
+      "n": 30,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.59545965586028304, -0.51315449647208322],
+            [-0.51315449647208322, 0.44222565652929169]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.61672607214100739, -0.5314814427746577],
+            [-0.5314814427746577, 0.45801942997676648]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 56,
+      "rows": [25, 43, 58, 74, 75, 94, 95, 152, 173, 192, 200, 243, 248, 266, 305, 318, 331, 340, 349, 355, 372, 393, 396, 398, 418, 423, 456, 461, 470, 478, 483, 486, 488, 494, 520, 540, 547, 548, 567, 575, 593, 622, 634, 655, 661, 666, 673, 687, 731, 744, 762, 765, 822, 836, 905, 940, 971, 973, 976, 978],
+      "n": 60,
+      "status": "ok",
+      "n_clusters": 1,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        }
+      ]
+    },
+    {
+      "id": 60,
+      "rows": [12, 64, 205, 232, 254, 269, 277, 307, 341, 400, 412, 420, 466, 539, 564, 579, 640, 676, 911, 928, 963, 980],
+      "n": 22,
+      "status": "ok",
+      "n_clusters": 1,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        }
+      ]
+    },
+    {
+      "id": 63,
+      "rows": [7, 227, 250, 256, 263, 284, 404, 465, 480, 559, 566, 586, 591, 632, 652, 840, 859, 934, 962],
+      "n": 19,
+      "status": "ok",
+      "n_clusters": 1,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        }
+      ]
+    },
+    {
+      "id": 65,
+      "rows": [72, 99, 145, 148, 242, 381, 391, 491, 504, 594, 710, 727, 747, 891, 975],
+      "n": 15,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.89439906693737969, -0.1606433418355544],
+            [-0.16064334183555434, 0.030878404775421947]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.96319899516333196, -0.17300052197675081],
+            [-0.17300052197675084, 0.033253666681223641]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 67,
+      "rows": [85, 101, 153, 430, 495, 537, 611],
+      "n": 7,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.55802638567034102, 0.63793535275125601],
+            [0.63793535275125601, 0.96084225047807981]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.66963166280440911, 0.76552242330150744],
+            [0.76552242330150722, 1.1530107005736958]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 69,
+      "rows": [52, 159, 234, 272, 288, 581, 602, 624, 909, 974],
+      "n": 10,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [11.314993499203363, -14.341299797426686],
+            [-14.341299797426689, 18.177021479875702]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [12.729367686603785, -16.13396227210502],
+            [-16.13396227210502, 20.449149164860163]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 70,
+      "rows": [46, 162, 187, 196, 460, 498, 604, 908, 941],
+      "n": 9,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.077211715175739534, -0.12883501319530694],
+            [-0.12883501319530694, 0.22519474635837536]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.088241960200845154, -0.14724001508035076],
+            [-0.14724001508035078, 0.25736542440957183]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 71,
+      "rows": [30, 87, 552, 580, 721, 846, 914],
+      "n": 7,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [77.455040565588433, 255.27703148867002],
+            [255.27703148866732, 849.57082203557968]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [92.946048678704457, 306.33243778639826],
+            [306.33243778639513, 1019.4849864426762]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "rows": [48, 93, 109, 133, 142, 166, 199, 226, 236, 260, 267, 274, 289, 295, 300, 312, 334, 347, 351, 354, 370, 380, 390, 415, 419, 422, 481, 510, 518, 553, 554, 569, 582, 626, 631, 645, 728, 788, 802, 812, 824, 833, 849, 852, 856, 888, 904, 916, 923, 932, 939, 949, 952, 953, 960, 984],
+      "n": 56,
+      "status": "ok",
+      "n_clusters": 1,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        }
+      ]
+    },
+    {
+      "id": 76,
+      "rows": [13, 33, 138, 169, 179, 235, 264, 337, 348, 350, 368, 371, 440, 446, 451, 467, 484, 623, 639, 651, 695, 821, 918, 947],
+      "n": 24,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.69049620866690131, 0.77627716518220335],
+            [0.77627716518220313, 1.0198851548686485]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.72188239996994241, 0.81156249087230325],
+            [0.81156249087230325, 1.0662435709990417]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "rows": [68, 119, 285, 315, 326, 452, 455, 717, 906, 994],
+      "n": 10,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.34197791133051825, 0.23734900771722067],
+            [0.23734900771722495, 0.41947339948819151]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.38472515024670884, 0.26701763368193171],
+            [0.26701763368193671, 0.47190757442418629]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 81,
+      "rows": [233, 258, 291, 493, 683, 729, 786, 793, 862],
+      "n": 9,
+      "status": "ok",
+      "n_clusters": 1,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        }
+      ]
+    },
+    {
+      "id": 83,
+      "rows": [11, 124, 203, 389, 426, 536, 704, 746, 778, 829, 897, 933],
+      "n": 12,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [31.119413077571593, 25.788621059688019],
+            [25.788621059688019, 21.372448175131083]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [34.231354385328757, 28.367483165656822],
+            [28.367483165656829, 23.509692992644194]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 85,
+      "rows": [19, 73, 102, 164, 432, 458, 459, 502, 628, 794, 832, 876],
+      "n": 12,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [2.847636674290885, 1.7031540333115132],
+            [1.7031540333115134, 1.8931090312739214]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [3.1324003417199737, 1.8734694366426645],
+            [1.8734694366426647, 2.0824199344013135]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 86,
+      "rows": [31, 76, 319, 320, 379, 450, 650, 749, 894],
+      "n": 9,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.84986530720143938, 0.62374970495013171],
+            [0.62374970495013182, 0.46293024610010153]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.97127463680164494, 0.71285680565729337],
+            [0.71285680565729337, 0.52906313840011598]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 89,
+      "rows": [14, 15, 78, 112, 126, 160, 239, 252, 253, 279, 413, 428, 471, 482, 497, 560, 587, 605, 641, 660],
+      "n": 20,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.81067367960575487, -0.33731513809330138],
+            [-0.33731513809330133, 0.39331451524285799]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.85571110625051883, -0.35605486798737362],
+            [-0.35605486798737362, 0.41516532164523889]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 91,
+      "rows": [10, 105, 219, 366, 454, 523, 738, 1003],
+      "n": 8,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [6.5551123392343058, 7.1199532926670539],
+            [7.1199532926670539, 7.7334654642536034]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [7.6476310624400252, 8.3066121747782304],
+            [8.3066121747782304, 9.022376374962537]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 95,
+      "rows": [170, 204, 216, 306, 323, 365, 386, 511, 535, 621, 839, 945, 965],
+      "n": 13,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.53238840878861704, -0.7480385956574257],
+            [-0.7480385956574257, 1.1176365062994875]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.58078735504212764, -0.81604210435355518],
+            [-0.81604210435355518, 1.2192398250539862]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 96,
+      "rows": [197, 394, 515, 517, 601, 677, 917, 986],
+      "n": 8,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [1.3704553913163049, -2.6523497465679502],
+            [-2.6523497465679502, 11.338307895261643]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [1.5988646232023553, -3.0944080376626077],
+            [-3.0944080376626086, 13.228025877805251]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 97,
+      "rows": [50, 65, 91, 149, 212, 290, 538, 572, 644, 653, 780, 875, 919],
+      "n": 13,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [8.2063397652450831, 7.3283777310340996],
+            [7.3283777310340952, 6.5449270645518824]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [8.9523706529946292, 7.9945938884008312],
+            [7.994593888400833, 7.1399204340565987]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 99,
+      "rows": [108, 140, 392, 636, 733, 761, 763, 887, 931, 983],
+      "n": 10,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.14719137455284198, 0.1351021845896638],
+            [0.13510218458966386, 0.52284741794828238]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.16559029637194722, 0.15198995766337178],
+            [0.15198995766337178, 0.58820334519181761]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 100,
+      "rows": [38, 131, 191, 322, 577, 615, 692],
+      "n": 7,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [1.623928406632523, -0.35593209239727674],
+            [-0.3559320923972768, 0.19779519815626637]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [1.9487140879590279, -0.42711851087673225],
+            [-0.42711851087673225, 0.23735423778751966]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 101,
+      "rows": [176, 177, 310, 409, 516, 571, 609, 647, 667, 669, 701, 795, 837, 969],
+      "n": 14,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.72656248097144061, 0.79473884261564409],
+            [0.79473884261564409, 10.544498398166628]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.78710935438572738, 0.86096707950028151],
+            [0.86096707950028128, 11.423206598013847]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 104,
+      "rows": [29, 63, 77, 214, 247, 294, 327, 565, 598, 741],
+      "n": 10,
+      "status": "ok",
+      "n_clusters": 3,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.58731498737031707, 0.41053711365604661],
+            [0.41053711365604661, 0.29855011682382904]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.6607293607916066, 0.46185425286305243],
+            [0.46185425286305243, 0.33586888142680765]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 105,
+      "rows": [71, 369, 616, 670, 784, 858, 954, 981],
+      "n": 8,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [6.7139246822033538, 10.058810574767168],
+            [10.058810574767218, 19.298496910972652]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [7.8329121292372248, 11.735279003894995],
+            [11.73527900389508, 22.514913062801419]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 106,
+      "rows": [1, 9, 41, 106, 190, 240, 309, 321, 576, 900, 912, 951],
+      "n": 12,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.88163381782108696, 0.88223831893303628],
+            [0.8822383189330365, 1.4032356721070447]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.96979719960319577, 0.97046215082634024],
+            [0.97046215082634002, 1.5435592393177497]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 110,
+      "rows": [0, 21, 36, 83, 104, 111, 194, 206, 209, 237, 244, 246, 259, 311, 333, 352, 357, 377, 406, 414, 429, 439, 487, 496, 499, 509, 519, 526, 533, 534, 543, 562, 578, 596, 608, 618, 664, 679, 688, 691, 698, 712, 713, 716, 742, 757, 764, 791, 797, 804, 810, 848, 854, 860, 880, 882, 892, 898, 902, 921, 943, 950, 955, 958, 995, 1007],
+      "n": 66,
+      "status": "ok",
+      "n_clusters": 2,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.00046141675529860342, 0.0038416087289044687],
+            [0.0038416087289044718, 0.031984008938914926]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.00046862639210014378, 0.0039016338652936014],
+            [0.0039016338652936031, 0.032483759078585472]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 112,
+      "rows": [6, 17, 22, 139, 189, 298, 335, 364, 378, 424, 521, 527, 612, 613, 678, 697, 702, 719, 743, 798, 820, 841, 845, 867, 868, 871, 942, 948, 988],
+      "n": 29,
+      "status": "ok",
+      "n_clusters": 1,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        }
+      ]
+    },
+    {
+      "id": 113,
+      "rows": [84, 129, 151, 251, 282, 328, 384, 388, 563, 625, 705, 756, 774, 775, 779, 800, 805, 816, 863, 872, 901, 927, 936, 1011],
+      "n": 24,
+      "status": "ok",
+      "n_clusters": 1,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "error": "non-conformable arrays"
+        }
+      ]
+    },
+    {
+      "id": 116,
+      "rows": [27, 35, 62, 90, 103, 201, 229, 268, 374, 462, 474, 524, 556, 610, 681, 781, 813, 878, 879, 956],
+      "n": 20,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.34958571552008344, -0.06038852790157944],
+            [-0.06038852790157944, 0.013851884271272989]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.36900714416008812, -0.063743446118333838],
+            [-0.063743446118333824, 0.014621433397454834]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 117,
+      "rows": [28, 44, 324, 476, 694, 776, 809],
+      "n": 7,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [2.3916816084090318, -4.4822347057303062],
+            [-4.4822347057303062, 11.610491580713106]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [2.8700179300908379, -5.378681646876367],
+            [-5.3786816468763661, 13.932589896855722]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 119,
+      "rows": [24, 120, 195, 202, 373, 472, 643, 817, 930, 935, 937],
+      "n": 11,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.56965918876099331, -0.62526864808409099],
+            [-0.62526864808409099, 0.75664890617688874]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.63295465417888142, -0.69474294231565659],
+            [-0.6947429423156567, 0.84072100686320961]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 121,
+      "rows": [37, 79, 88, 121, 135, 144, 167, 332, 343, 479, 492, 530, 561, 600, 606, 630, 648, 693, 920, 925, 938, 996, 1005],
+      "n": 23,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [2.2353536849911761, 1.9029871594100818],
+            [1.9029871594100811, 1.7640945619714934]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [2.3417990985621824, 1.9936055955724652],
+            [1.9936055955724661, 1.8480990649225173]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 123,
+      "rows": [330, 336, 447, 558, 595, 699, 708, 771, 830, 865, 990],
+      "n": 11,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [2.2369931609014335, 1.069326454531853],
+            [1.0693264545318533, 0.52709411941188911]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [2.485547956557149, 1.1881405050353926],
+            [1.1881405050353924, 0.58566013267987682]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 125,
+      "rows": [47, 286, 353, 500, 542, 545, 555, 627, 671, 682, 707, 826, 1014],
+      "n": 13,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [1.1934002068167231, -2.490548748018655],
+            [-2.490548748018655, 5.7366766619955456]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [1.3018911347091524, -2.716962270565805],
+            [-2.716962270565805, 6.2581927221769575]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 126,
+      "rows": [278, 287, 363, 395, 401, 672, 711, 766, 926],
+      "n": 9,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.1252670659654348, 0.21595303211480152],
+            [0.21595303211480135, 4.5387548638425574]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.14316236110335398, 0.2468034652740588],
+            [0.24680346527405875, 5.187148415820066]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 128,
+      "rows": [16, 59, 60, 147, 345, 359, 405, 449, 654, 690, 740, 772, 819, 828, 835, 874, 961],
+      "n": 17,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [0.12579038045235716, -0.24579269618310587],
+            [-0.24579269618310587, 0.65448505664163037]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [0.13417640581584764, -0.2621788759286463],
+            [-0.26217887592864636, 0.6981173937510724]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 129,
+      "rows": [2, 82, 92, 222, 245, 387, 416, 437, 438, 620, 861],
+      "n": 11,
+      "status": "ok",
+      "n_clusters": 4,
+      "k": 2,
+      "coefficient_names": ["(Intercept)", "x1"],
+      "refit_call": "stats::glm(y ~ x1, family = binomial(link = \"logit\"), data = leaf, weights = w, control = glm.control(epsilon = 1e-8, maxit = 25))",
+      "refit_vs_tree_coefficients_max_rel": 0,
+      "vcovcl": [
+        {
+          "type": "HC0",
+          "cadjust": true,
+          "matrix": [
+            [1.1788714363059545, -0.68766589857608562],
+            [-0.68766589857608573, 0.87858945124404697]
+          ]
+        },
+        {
+          "type": "HC1",
+          "cadjust": true,
+          "matrix": [
+            [1.3098571514510604, -0.7640732206400952],
+            [-0.76407322064009509, 0.97621050138227439]
+          ]
+        }
+      ]
+    }
+  ]
+}

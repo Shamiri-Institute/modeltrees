@@ -1,0 +1,84 @@
+{
+  "k": 29,
+  "j": 5,
+  "model": "negbin",
+  "name": "blind_29_negbin",
+  "seed": 1576914726,
+  "family": null,
+  "planted": true,
+  "clustered": false,
+  "weighted": true,
+  "offset": true,
+  "separated": false,
+  "n_classes": null,
+  "lose_class": false,
+  "n": 412,
+  "regressors": ["x1", "x2"],
+  "partitioning": [
+    {
+      "name": "z1",
+      "type": "nominal",
+      "n_levels": 6,
+      "dist": null,
+      "cluster_level": false
+    },
+    {
+      "name": "z2",
+      "type": "numeric",
+      "n_levels": null,
+      "dist": "rounded",
+      "cluster_level": false
+    },
+    {
+      "name": "z3",
+      "type": "nominal",
+      "n_levels": 3,
+      "dist": null,
+      "cluster_level": false
+    },
+    {
+      "name": "z4",
+      "type": "numeric",
+      "n_levels": null,
+      "dist": "rounded",
+      "cluster_level": false
+    },
+    {
+      "name": "z5",
+      "type": "numeric",
+      "n_levels": null,
+      "dist": "uniform",
+      "cluster_level": false
+    }
+  ],
+  "control": {
+    "alpha": 0.10000000000000001,
+    "bonferroni": true,
+    "minsize": 57,
+    "maxdepth": null,
+    "prune": "BIC",
+    "numsplit": "center"
+  },
+  "effect": {
+    "variable": 3,
+    "type": "intercept",
+    "size": -1.1834096313687041,
+    "quantile": 0.5362914502620697,
+    "levels": "p"
+  },
+  "n_clusters": null,
+  "theta": 3.9443328571040182,
+  "separation": null,
+  "lost_class": null,
+  "formula": "y ~ x1 + x2 | z1 + z2 + z3 + z4 + z5",
+  "r_call": "partykit::mob(formula = y ~ x1 + x2 | z1 + z2 + z3 + z4 + z5, data = blind_29_negbin, weights = w, offset = log(exposure), fit = negbinfit, epsilon = 1e-08, maxit = 25L, control = partykit::mob_control(alpha = 0.1, bonferroni = TRUE, minsize = 57L, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = \"BIC\", restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = \"vector\", xtype = \"matrix\", terminal = c(\"estfun\", \"object\"), inner = c(\"estfun\", \"object\"), model = TRUE, numsplit = \"center\", catsplit = \"binary\", vcov = \"opg\", ordinal = \"chisq\", nrep = 10000, applyfun = NULL, cores = NULL))",
+  "r_outcome": "ok",
+  "r_seconds": 9.0150000000000006,
+  "n_nodes": 7,
+  "n_terminal": 4,
+  "decision_margins": {
+    "min_abs_p_value_minus_alpha": 0.071549945900023643,
+    "min_relative_split_objective_gap": 0.00029100984754880333
+  },
+  "warnings": ["iteration limit reached", "alternation limit reached"]
+}

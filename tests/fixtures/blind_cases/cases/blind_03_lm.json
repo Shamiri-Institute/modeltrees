@@ -1,0 +1,69 @@
+{
+  "k": 3,
+  "j": 3,
+  "model": "lm",
+  "name": "blind_03_lm",
+  "seed": 28957036,
+  "family": null,
+  "planted": true,
+  "clustered": true,
+  "weighted": true,
+  "offset": false,
+  "separated": false,
+  "n_classes": null,
+  "lose_class": false,
+  "n": 2953,
+  "regressors": ["x1", "x2"],
+  "partitioning": [
+    {
+      "name": "z1",
+      "type": "ordered",
+      "n_levels": 3,
+      "dist": null,
+      "cluster_level": false
+    },
+    {
+      "name": "z2",
+      "type": "numeric",
+      "n_levels": null,
+      "dist": "uniform",
+      "cluster_level": true
+    },
+    {
+      "name": "z3",
+      "type": "ordered",
+      "n_levels": 3,
+      "dist": null,
+      "cluster_level": false
+    }
+  ],
+  "control": {
+    "alpha": 0.050000000000000003,
+    "bonferroni": false,
+    "minsize": 67,
+    "maxdepth": 5,
+    "prune": null,
+    "numsplit": "left"
+  },
+  "effect": {
+    "variable": 2,
+    "type": "slope",
+    "size": 1.1668880406534299,
+    "quantile": 0.58571689687669282
+  },
+  "n_clusters": 37,
+  "theta": null,
+  "separation": null,
+  "lost_class": null,
+  "formula": "y ~ x1 + x2 | z1 + z2 + z3",
+  "r_call": "partykit::lmtree(formula = y ~ x1 + x2 | z1 + z2 + z3, data = blind_03_lm, weights = w, cluster = school, alpha = 0.05, bonferroni = FALSE, minsize = 67L, maxdepth = 5L, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = \"vector\", xtype = \"matrix\", terminal = c(\"estfun\", \"object\"), inner = c(\"estfun\", \"object\"), model = TRUE, numsplit = \"left\", catsplit = \"binary\", vcov = \"opg\", ordinal = \"chisq\", nrep = 10000, applyfun = NULL, cores = NULL)",
+  "r_outcome": "ok",
+  "r_seconds": 1.5440000000000005,
+  "n_nodes": 25,
+  "n_terminal": 13,
+  "decision_margins": {
+    "min_abs_p_value_minus_alpha": 0.0050453436671127269,
+    "min_relative_split_objective_gap": 1.0764774732691573e-05
+  },
+  "warnings": []
+}

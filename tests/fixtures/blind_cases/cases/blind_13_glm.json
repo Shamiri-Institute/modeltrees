@@ -1,0 +1,69 @@
+{
+  "k": 13,
+  "j": 1,
+  "model": "glm",
+  "name": "blind_13_glm",
+  "seed": 250857512,
+  "family": "binomial",
+  "planted": true,
+  "clustered": true,
+  "weighted": true,
+  "offset": false,
+  "separated": false,
+  "n_classes": null,
+  "lose_class": false,
+  "n": 1015,
+  "regressors": "x1",
+  "partitioning": [
+    {
+      "name": "z1",
+      "type": "numeric",
+      "n_levels": null,
+      "dist": "rounded",
+      "cluster_level": true
+    },
+    {
+      "name": "z2",
+      "type": "numeric",
+      "n_levels": null,
+      "dist": "uniform",
+      "cluster_level": false
+    },
+    {
+      "name": "z3",
+      "type": "nominal",
+      "n_levels": 4,
+      "dist": null,
+      "cluster_level": false
+    }
+  ],
+  "control": {
+    "alpha": 0.01,
+    "bonferroni": true,
+    "minsize": null,
+    "maxdepth": null,
+    "prune": "AIC",
+    "numsplit": "left"
+  },
+  "effect": {
+    "variable": 1,
+    "type": "slope",
+    "size": -0.97088722349144518,
+    "quantile": 0.32418142743408679
+  },
+  "n_clusters": 15,
+  "theta": null,
+  "separation": null,
+  "lost_class": null,
+  "formula": "y ~ x1 | z1 + z2 + z3",
+  "r_call": "partykit::glmtree(formula = y ~ x1 | z1 + z2 + z3, data = blind_13_glm, family = binomial(link = \"logit\"), weights = w, cluster = school, epsilon = 1e-08, maxit = 25, alpha = 0.01, bonferroni = TRUE, minsize = NULL, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = \"AIC\", restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = \"vector\", xtype = \"matrix\", terminal = c(\"estfun\", \"object\"), inner = c(\"estfun\", \"object\"), model = TRUE, numsplit = \"left\", catsplit = \"binary\", vcov = \"opg\", ordinal = \"chisq\", nrep = 10000, applyfun = NULL, cores = NULL)",
+  "r_outcome": "ok",
+  "r_seconds": 13.81,
+  "n_nodes": 129,
+  "n_terminal": 65,
+  "decision_margins": {
+    "min_abs_p_value_minus_alpha": 0.0049258635819974337,
+    "min_relative_split_objective_gap": 1.8451893468421359e-05
+  },
+  "warnings": ["glm.fit: algorithm did not converge", "glm.fit: fitted probabilities numerically 0 or 1 occurred"]
+}

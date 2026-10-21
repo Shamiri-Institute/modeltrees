@@ -987,3 +987,20 @@ adjustment on a few p-value vectors, and the Hansen table itself.
 logp.supLM(statistic, k, lambda) extracted from partykit:::mob_partynode; lambda from (nobs, trim, minsize) as in mob_grow_fluctests
 ```
 
+## Blind differential run cases
+
+Copied unchanged from the blind differential run of task 6j, not generated
+here: the cases where the port and R differ, each with its data, R tree
+(tree fixture format, `data_csv` relative to `blind_cases/`), drawn
+settings and, for clustered cases, `sandwich::vcovCL` per leaf.
+`blind_cases/README.md` has the run and the analysis of each case;
+`tests/test_blind_cases.py` marks them xfail with the first diverging
+component.
+
+- `blind_cases/trees/blind_03_lm.json`: Blind differential run, case 3 (lm, seed 28957036). Data `blind_cases/data/blind_03_lm.csv`, 2953 rows. 12 inner and 13 terminal nodes.
+- `blind_cases/trees/blind_13_glm.json`: Blind differential run, case 13 (glm, seed 250857512). Data `blind_cases/data/blind_13_glm.csv`, 1015 rows. 64 inner and 65 terminal nodes.
+- `blind_cases/trees/blind_29_negbin.json`: Blind differential run, case 29 (negbin, seed 1576914726). Data `blind_cases/data/blind_29_negbin.csv`, 412 rows. 3 inner and 4 terminal nodes.
+- `blind_cases/trees/blind_36_negbin.json`: Blind differential run, case 36 (negbin, seed 32529904). Data `blind_cases/data/blind_36_negbin.csv`, 961 rows. 59 inner and 60 terminal nodes.
+- `blind_cases/trees/blind_43_safelogit.json`: Blind differential run, case 43 (safelogit, seed 1859485392). Data `blind_cases/data/blind_43_safelogit.csv`, 828 rows. 1 inner and 2 terminal nodes.
+- `blind_cases/trees/blind_47_safelogit.json`: Blind differential run, case 47 (safelogit, seed 951672132). Data `blind_cases/data/blind_47_safelogit.csv`, 785 rows. 1 inner and 2 terminal nodes.
+

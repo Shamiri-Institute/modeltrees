@@ -1,0 +1,91 @@
+{
+  "k": 47,
+  "j": 11,
+  "model": "safelogit",
+  "name": "blind_47_safelogit",
+  "seed": 951672132,
+  "family": null,
+  "planted": false,
+  "clustered": false,
+  "weighted": false,
+  "offset": false,
+  "separated": true,
+  "n_classes": null,
+  "lose_class": false,
+  "n": 785,
+  "regressors": ["x1", "x2"],
+  "partitioning": [
+    {
+      "name": "z1",
+      "type": "numeric",
+      "n_levels": null,
+      "dist": "uniform",
+      "cluster_level": false
+    },
+    {
+      "name": "z2",
+      "type": "ordered",
+      "n_levels": 3,
+      "dist": null,
+      "cluster_level": false
+    },
+    {
+      "name": "z3",
+      "type": "nominal",
+      "n_levels": 7,
+      "dist": null,
+      "cluster_level": false
+    },
+    {
+      "name": "z4",
+      "type": "numeric",
+      "n_levels": null,
+      "dist": "normal",
+      "cluster_level": false
+    },
+    {
+      "name": "z5",
+      "type": "nominal",
+      "n_levels": 8,
+      "dist": null,
+      "cluster_level": false
+    },
+    {
+      "name": "z6",
+      "type": "ordered",
+      "n_levels": 4,
+      "dist": null,
+      "cluster_level": false
+    }
+  ],
+  "control": {
+    "alpha": 0.01,
+    "bonferroni": false,
+    "minsize": null,
+    "maxdepth": 3,
+    "prune": "AIC",
+    "numsplit": "center"
+  },
+  "effect": null,
+  "n_clusters": null,
+  "theta": null,
+  "separation": {
+    "variable": 3,
+    "frac": 0.25014477402437479,
+    "type": "constant",
+    "value": 1,
+    "n_rows": 238
+  },
+  "lost_class": null,
+  "formula": "y ~ x1 + x2 | z1 + z2 + z3 + z4 + z5 + z6",
+  "r_call": "partykit::mob(formula = y ~ x1 + x2 | z1 + z2 + z3 + z4 + z5 + z6, data = blind_47_safelogit, fit = safelogitfit, epsilon = 1e-08, maxit = 25L, separation_tol = 1e-06, control = partykit::mob_control(alpha = 0.01, bonferroni = FALSE, minsize = NULL, maxdepth = 3L, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = \"AIC\", restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = \"vector\", xtype = \"matrix\", terminal = c(\"estfun\", \"object\"), inner = c(\"estfun\", \"object\"), model = TRUE, numsplit = \"center\", catsplit = \"binary\", vcov = \"opg\", ordinal = \"chisq\", nrep = 10000, applyfun = NULL, cores = NULL))",
+  "r_outcome": "ok",
+  "r_seconds": 0.88900000000000023,
+  "n_nodes": 3,
+  "n_terminal": 2,
+  "decision_margins": {
+    "min_abs_p_value_minus_alpha": 0.01,
+    "min_relative_split_objective_gap": 0.21575039053501566
+  },
+  "warnings": []
+}

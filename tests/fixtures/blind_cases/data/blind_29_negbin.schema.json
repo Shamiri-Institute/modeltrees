@@ -1,0 +1,54 @@
+{
+  "dataset": "blind_29_negbin",
+  "description": "Blind differential run, case 29 (negbin, seed 1576914726).",
+  "source": "simulated",
+  "seed": 1576914726,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 412,
+  "csv": "blind_29_negbin.csv",
+  "columns": [
+    {
+      "name": "y",
+      "type": "integer"
+    },
+    {
+      "name": "x1",
+      "type": "double"
+    },
+    {
+      "name": "x2",
+      "type": "double"
+    },
+    {
+      "name": "z1",
+      "type": "factor",
+      "levels": ["m", "k", "r", "y", "o", "e"]
+    },
+    {
+      "name": "z2",
+      "type": "double"
+    },
+    {
+      "name": "z3",
+      "type": "factor",
+      "levels": ["w", "b", "p"]
+    },
+    {
+      "name": "z4",
+      "type": "double"
+    },
+    {
+      "name": "z5",
+      "type": "double"
+    },
+    {
+      "name": "w",
+      "type": "integer"
+    },
+    {
+      "name": "exposure",
+      "type": "double"
+    }
+  ],
+  "generator_code": "notes/blind/r/cases.R, draw_case()"
+}
