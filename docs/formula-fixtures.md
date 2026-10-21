@@ -138,3 +138,16 @@ output (sha256 of every file under `tests/fixtures/`), and no file that
 existed before changed except `tests/fixtures/README.md`, which gained the
 convention for logical and missing values, the five datasets in the data
 table and the section on the formula tree fixtures.
+
+## 6. The public layer against the fixtures
+
+`tests/test_formula_fixtures.py`; the results and the decisions are in
+docs/api-port.md, section 18. In short: every oracle fixture matches R,
+from all three input backends, with no change to the design layer. The one
+difference is the logical split of section 3, item 2. There R stops and the
+port grows the tree of the 0/1 variable, which equals R's numeric
+companion. A row whose factor has a level the model frame dropped
+(`f = e`, `zf = q`) is unseen at predict time, and R stops on it too. With
+the regressor `x` also missing, partykit 1.3-0 returned a node and a
+length warning from `fitted_node` instead: `model.frame` drops the row and
+the node id is recycled. Such rows are left out of the fixture.

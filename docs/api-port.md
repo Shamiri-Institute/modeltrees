@@ -815,3 +815,50 @@ Task 6f, step 1: `modeltrees/_parallel.py`, `find_split(parallel=...)` and
     worker of another process pool, and two parallel trees in a row; `n_jobs=-1`;
     `restart=False` with one warning and no pool. No parallel tree differed
     from its serial tree in any bit.
+
+## 18. The formula features against R
+
+Task 6i, step B: `tests/test_formula_fixtures.py` against the eleven
+fixtures of `tests/fixtures/formula_trees/` (docs/formula-fixtures.md).
+Each fixture's data is read into a polars frame (factors as `pl.Enum` with
+the schema's levels, ordered factors through `kinds`, logicals as
+Booleans, `NA` as null) and grown by the entry point with the fixture's
+formula, weights and control; seven are repeated from a pandas frame
+(categoricals, NaN for missing numbers) and from a dict of numpy arrays
+(labels with None, `levels=` for the declared orders), which give the
+polars tree bit for bit.
+
+1. **No parity bug.** On every oracle fixture the used-row mask equals the
+   rows R kept (`na_action`), the coefficient names equal R's exactly
+   (`fb`, `fa`, `fc` for a factor declared d, b, a, c; `fd` ... `fc`
+   without an intercept; `bTRUE`; `bFALSE`, `bTRUE`, `x`; `(Intercept)`
+   for the one-part formulas), the kept and dropped levels equal the model
+   frame's, and structure, splits, rows, nobs, stop reasons, coefficients,
+   objectives, scores, raw and adjusted p-values, statistics, split-search
+   objectives, logLik, `fitted_node` and `predict(type="node")` on the
+   training rows match at the tolerances of `tests/test_tree.py` (rtol
+   1e-8, atol 1e-10). `predict` on the new rows (a subset of the levels,
+   the data's declared levels) equals R's node exactly and response at rtol
+   1e-8, as `tests/test_predict_fixtures.py`. `_design.py`, `_formula.py`
+   and `_predict.py` are unchanged.
+2. **A split on a logical partitioning variable: R stops, the port
+   splits.** partykit 1.3-0 tests a logical as numeric but searches its
+   split as a factor and then fails in `kidids_split` ("variable 2 is not
+   integer", docs/formula-fixtures.md, section 3, item 2). The port keeps
+   design section 1.4 (a Boolean is the numeric 0/1, printed `zb = false` /
+   `zb = true`), a documented deliberate difference. The test asserts R's
+   error and that the Boolean tree equals R's tree on the same data with
+   the variable stored as 0/1 (`sim_formula_logical_numeric_lmtree_split`)
+   and the port's tree of that 0/1 column bit for bit. Where no split
+   selects the logical (`sim_formula_logical_lmtree_logical`), its test
+   statistics are R's.
+3. **Levels dropped with missing rows are unseen at predict.** A new row
+   with `f = e` or `zf = q`, levels that occur only in rows the model frame
+   dropped, raises `UnseenLevelError`, as R stops ("factor f has new level
+   e", "factor zf has new level q"; checked in R on complete rows, not
+   recorded in a fixture). This is section 11, item 1. So the training
+   frame predicted as new data needs `unseen="null"` when its dropped rows
+   hold such levels.
+4. **Printed splits** equal the lines of partykit's print, apart from the
+   documented braces of a nominal split (section 9, item 2) and the
+   Boolean conditions of item 2.
