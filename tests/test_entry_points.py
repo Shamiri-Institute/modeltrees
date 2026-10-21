@@ -45,6 +45,7 @@ def test_public_names() -> None:
         "SplitRule",
         "TestResult",
         "LogLik",
+        "LeafVcov",
         "TreeSummary",
         "RecordedWarning",
         "MobControl",

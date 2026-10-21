@@ -71,24 +71,34 @@ def make_table(
 
 
 def coef_columns(
-    tree: "ModelTree", layout: str
+    tree: "ModelTree",
+    layout: str,
+    std_errors: Mapping[int, np.ndarray] | None = None,
 ) -> dict[str, Sequence[Any] | np.ndarray]:
-    """The leaf coefficient table's columns (section 3.3)."""
+    """The leaf coefficient table's columns (section 3.3), with the robust
+    standard errors per leaf (in coefficient order) when given."""
     leaves = [tree.node(i) for i in tree.leaves]
     if layout == "long":
         node: list[int] = []
         term: list[str] = []
         estimate: list[float] = []
+        std_error: list[float] = []
         for info in leaves:
-            for name, value in info.coefficients.items():
+            se = None if std_errors is None else std_errors[info.id]
+            for j, (name, value) in enumerate(info.coefficients.items()):
                 node.append(info.id)
                 term.append(name)
                 estimate.append(value)
-        return {
+                if se is not None:
+                    std_error.append(float(se[j]))
+        long: dict[str, Sequence[Any] | np.ndarray] = {
             "node": np.asarray(node, dtype=np.int64),
             "term": term,
             "estimate": np.asarray(estimate, dtype=np.float64),
         }
+        if std_errors is not None:
+            long["std_error"] = np.asarray(std_error, dtype=np.float64)
+        return long
     columns: dict[str, Sequence[Any] | np.ndarray] = {
         "node": np.asarray([i.id for i in leaves], dtype=np.int64),
         "n_rows": np.asarray([i.n_rows for i in leaves], dtype=np.int64),
@@ -101,6 +111,11 @@ def coef_columns(
         columns[name] = np.asarray(
             [i.coefficients[name] for i in leaves], dtype=np.float64
         )
+    if std_errors is not None:
+        for j, name in enumerate(names):
+            columns[f"std_error_{name}"] = np.asarray(
+                [std_errors[i.id][j] for i in leaves], dtype=np.float64
+            )
     for key in report_keys(tree):
         columns[key] = [i.extras.get(key) for i in leaves]
     return columns

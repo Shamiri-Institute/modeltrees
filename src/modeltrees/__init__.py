@@ -22,6 +22,7 @@ from modeltrees._api import (
 )
 from modeltrees._loglik import LogLik
 from modeltrees._reference import reference_path
+from modeltrees._vcov import LeafVcov
 from modeltrees.errors import (
     DataError,
     FitError,
@@ -47,6 +48,7 @@ __all__ = [
     "FitError",
     "FormulaError",
     "GlmFitWarning",
+    "LeafVcov",
     "LogLik",
     "MissingDataWarning",
     "MobControl",

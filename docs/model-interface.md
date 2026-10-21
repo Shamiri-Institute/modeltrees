@@ -382,11 +382,12 @@ class FitResult:
     coef_names: tuple[str, ...]
     objfun: float                     # additive objective, smaller is better
     estfun: FloatArray | None         # shape (n, k_nonaliased), weights included
-    vcov: FloatArray | None = None    # only needed for vcov "info" or "sandwich"
+    vcov: FloatArray | None = None    # reserved for vcov "info" or "sandwich"
     converged: bool = True
     status: FitStatus = FitStatus.OK  # ok, failed or no_estfun (section 4.2)
     reason: str | None = None         # why the fit failed or has no scores
     extras: Mapping[str, Any] = {}    # model-specific: theta, warnings, ...
+    hessian: FloatArray | None = None # with vcov=True: -d(sum estfun)/d theta
 
 
 class NodeModel(Protocol):
@@ -438,9 +439,12 @@ Design notes:
   `mob_partynode()` (`:163-164`). Zero weights are allowed.
 - `caseweights` is an explicit argument because `glmfit` and the dispersion
   in its scores depend on it (`glmtree.R:30-35`, `:103-107`).
-- `vcov=True` replaces R's `object = TRUE` request for the `"info"` and
-  `"sandwich"` options. The model returns the covariance matrix itself.
-  The full fitted object stays inside the model implementation.
+- `vcov=True` asks for `FitResult.hessian`, minus the derivative of the
+  summed scores over the non-aliased columns in `estfun`'s order (None for
+  failed and `no_estfun` fits), from which `ModelTree.vcov` builds the
+  cluster-robust sandwich (docs/api-design.md, sections 5.2 and 5.3). The
+  core never asks for it while growing. The full fitted object stays
+  inside the model implementation.
 - `FitResult` is immutable so fits can be cached and compared in tests.
 - Split search calls `fit` with `estfun=False` and `vcov=False`, so a model
   can skip the expensive parts, as the vignette recommends.

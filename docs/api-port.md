@@ -469,3 +469,112 @@ JSON is unchanged). The suites that glob `extension_trees/` now grow it.
    ("Reference-absent multinomial tree ... in its own directory"), since
    that text is in `r/generate_all.R` and the task allowed one changed
    line there.
+
+## 15. Hessians and `vcov`
+
+Task 6e, steps 1 to 3: `FitResult.hessian` (design sections 5.2 and 5.3),
+`modeltrees/_vcov.py` (5.1) and `ModelTree.vcov` with
+`coef_table(se="robust")`.
+
+### 15.1 The Hessians
+
+1. **`FitResult.hessian`** is the last field, default None, so existing
+   constructors are unchanged. `check_vcov` is removed: every model
+   answers `vcov=True`, and the core still passes `vcov=False` everywhere.
+2. **Exactly symmetric.** `X' (w X)` is symmetric only to rounding, so the
+   models return `(H + H') / 2` (`models._common.weighted_crossprod`; the
+   multinomial model symmetrizes `multinom_hessian`'s result, leaving
+   Newton's method untouched).
+3. **`vcov=True` takes the full glm.fit path** in `GlmModel` and
+   `SafeLogitModel`, as `estfun=True` does; the split-search shortcut is
+   used only when neither is asked for. The Hessian of `vcov=True` alone
+   equals that of `estfun=True, vcov=True`.
+4. **Which weights.** The glm.fit-based models use `GlmFit.weights`, the
+   working weights from the start of the last IRLS iteration, as their
+   scores and R's `summary.glm` do. The Hessian is therefore not exactly
+   the derivative of the scores at the estimate: the tests bound the
+   difference by `|X|' |W_early - W_exact| |X| / dispersion` ("the lag")
+   and check that the lag is below 1e-4 of the largest entry on converged
+   fits (observed up to 4e-5, `glm_poisson_zeros_offset_weighted`). The
+   lag accounts for the whole finite-difference gap on every fixture.
+5. **Negative binomial.** The log link is not canonical, so the Hessian
+   (vcov(glm.nb)'s bread, the expected information at `theta_irls`) is
+   the derivative of the summed scores with the response held at the
+   fitted means. The derivative at the data adds `sum_i w_i (y_i - mu_i)
+   (mu_i / theta) / (1 + mu_i / theta)^2 x_i x_i'`; both are tested.
+6. **Quasi-separation does not show in the condition number.** In
+   `node_fits/safelogit_quasi` the diverging `d4` coefficient has
+   information 2e-6 against 57 and 42 for the others, but its row is
+   nearly uncorrelated with them, so the Hessian scaled by its diagonal has
+   condition number 1.5 (unscaled 2.7e7). `LeafVcov.status` is then "ok"
+   with a huge variance for `d4`; design section 5.3's "LeafVcov.status
+   says so" holds only when the separation also makes the scaled matrix
+   ill conditioned. The separation is reported in the leaf's `extras`.
+7. **Tests** (`tests/test_hessians.py`): every model against a central
+   difference of its summed scores written out (relative step 1e-5,
+   tolerance 1e-7 of the largest entry, plus the lag), on the glm.fit
+   fixtures (lm and glm), `node_fits/negbin_*`, `safelogit_*` and
+   `multinom_*`; the inverse against statsmodels' `cov_params()` (WLS, GLM,
+   GLM with `NegativeBinomial(alpha = 1 / theta_irls)`, Logit, MNLogit) at
+   its dispersion, within twice the first-order change of the inverse by
+   the lag plus 1e-8; and the Hessian and inverse against the vcovcl
+   fixtures' `hessian` and `vcov_model` (rtol 1e-8; for multinomial within
+   twice the change from R's convergence offset, as in section 16).
+
+### 15.2 The sandwich
+
+1. **`sandwich()` does not warn.** It returns a `Sandwich` with
+   `too_few_clusters`; `ModelTree.vcov` emits the `TooFewClustersWarning`
+   naming the node, and only when clusters are used (without clusters G is
+   the number of rows).
+2. **Singular.** Besides a failed Cholesky factorization (or a
+   non-positive diagonal), a scaled condition number above `1 / eps`
+   counts as singular: LAPACK's Cholesky succeeds on a rank-deficient
+   matrix whose last pivot is rounding noise, and the inverse would have
+   no correct digit.
+3. **G = 1** gives NaN and status "unavailable" for both `cadjust` values:
+   the summed scores are zero at the estimate, so the meat is empty
+   whether or not `G / (G - 1)` is applied. HC1 with `n <= k` is
+   "unavailable" too.
+4. **Without clusters, G is the leaf's `nobs`**: the sum of the case
+   weights under case weights (the rows repeated `w_i` times are each a
+   cluster), the positive-weight rows otherwise. So `cadjust` multiplies by
+   `nobs / (nobs - 1)`, which is sandwich's `n / (n - 1)` for unit weights.
+5. **`caseweights=False`**: the scores are not divided by the weights and
+   `n` and G count the positive-weight rows, as `w2n` does.
+
+### 15.3 `ModelTree.vcov`
+
+1. **Signature.** As design section 5.1: `node_id` positional, `cluster`,
+   `type` and `cadjust` keyword-only. `cluster=True` is accepted and
+   requires the tree's clusters (ValueError otherwise).
+2. **Other clusters by name** are read from the training data, so the
+   tree keeps a reference to it (the narwhals wrapper of the user's frame,
+   or the mapping), not a copy. A changed frame gives the changed column.
+   An array has one value per input row. Missing values on the rows the
+   tree used raise `DataError`; on dropped rows they are allowed. A tree
+   grown by `mob()` takes arrays only (`TypeError` for a name).
+3. **What the tree keeps** for the refits: the coded response, the
+   weights and the tree's clusters over the used rows (new keyword
+   arguments of the `ModelTree` constructor, None in trees built without
+   them, whose `vcov` raises `TypeError`).
+4. **Refit warnings.** `GlmFitWarning`s of the refit are suppressed: the
+   same fit warned while the tree was grown and is in `tree.warnings`.
+5. **The refit check** compares each coefficient with the stored one
+   relative to the larger of the two magnitudes (1e-10), and the NaN
+   pattern; a difference emits one `ModelTreesWarning` per node naming it,
+   and the covariance is the refit's. Every node of every fixture tree
+   passes without a warning.
+6. **`n_clusters`** is counted on the node's positive-weight rows; it is
+   None without clusters, also for unavailable fits.
+7. **`reason`** for a fit without scores is the fit's status and reason
+   (`"the fit has status no_estfun: complete separation: ..."`).
+8. **`coef_table(se="robust")`** uses `vcov()` with its defaults; it has
+   no arguments for other clusters or types (use `vcov` for those). In the
+   wide layout the `std_error_<term>` columns follow the coefficient
+   columns, before the report columns; in the long layout `std_error`
+   follows `estimate`. Section 12, item 2 (NotImplementedError) no longer
+   applies.
+9. **`LeafVcov`** joins `modeltrees.__all__` (section 10, item 1). It is
+   defined in `modeltrees/_vcov.py` and has a `std_errors` property.
+   `matrix` is read-only.

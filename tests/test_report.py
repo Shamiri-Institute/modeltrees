@@ -66,8 +66,6 @@ def test_backend_rules() -> None:
 
 def test_argument_errors() -> None:
     tree = mt.lmtree("y ~ x | z", _data())
-    with pytest.raises(NotImplementedError, match="vcov"):
-        tree.coef_table(se="robust")
     with pytest.raises(ValueError, match="se"):
         tree.coef_table(se="model")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="layout"):

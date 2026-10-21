@@ -24,7 +24,7 @@ from modeltrees._design import (
     build_design,
     r_double_label,
 )
-from modeltrees._frame import DataInput, Kind
+from modeltrees._frame import DataInput, Frame, Kind, array_column
 from modeltrees._loglik import LogLik, tree_loglik
 from modeltrees._predict import (
     PredictType,
@@ -46,14 +46,21 @@ from modeltrees._report import (
     summary_tables,
 )
 from modeltrees._response import CodedResponse, ResponseRule, code_response
-from modeltrees.errors import NodeFitFailedWarning
+from modeltrees._vcov import LeafVcov, VcovType, expand, sandwich
+from modeltrees.errors import (
+    DataError,
+    GlmFitWarning,
+    ModelTreesWarning,
+    NodeFitFailedWarning,
+    TooFewClustersWarning,
+)
 from modeltrees.instability import VariableKind
 from modeltrees.models.glm import GlmModel
 from modeltrees.models.lm import LmModel
 from modeltrees.models.multinom import MultinomModel
 from modeltrees.models.negbin import NegBinModel
 from modeltrees.models.safelogit import SafeLogitModel
-from modeltrees.node_model import NodeModel
+from modeltrees.node_model import FitStatus, NodeModel
 from modeltrees.pruning import PruneRule
 from modeltrees.split_search import Split
 from modeltrees.tree import GrownTree, MobControl, Node
@@ -62,6 +69,9 @@ from modeltrees.tree import mob as _grow
 # R prints numeric split points rounded to getOption("digits") - 2 = 5
 # decimals (print.partynode, character_split).
 _BREAK_DECIMALS = 5
+# vcov() warns when a node's refit coefficients differ from the stored ones
+# by more than this, relative (docs/api-design.md, section 5.2).
+_REFIT_RTOL = 1e-10
 
 
 @dataclass(frozen=True)
@@ -221,6 +231,10 @@ class ModelTree:
         offset: NDArray[np.float64] | None,
         boolean: frozenset[str] = frozenset(),
         backend: str | None = None,
+        y: NDArray[Any] | None = None,
+        weights: NDArray[np.float64] | None = None,
+        cluster: NDArray[Any] | None = None,
+        frame: Frame | None = None,
     ) -> None:
         self._grown = grown
         self._model = model
@@ -240,6 +254,13 @@ class ModelTree:
             for v in grown.variables
         )
         self._backend = backend
+        # What vcov() refits from, over the used rows: the coded response,
+        # the weights and the tree's clusters; and the training data, for a
+        # cluster column given by name.
+        self._y = y
+        self._weights = weights
+        self._cluster = cluster
+        self._frame = frame
         self._frozen = True
 
     def __setattr__(self, name: str, value: Any) -> None:
@@ -557,24 +578,217 @@ class ModelTree:
 
         ``layout="wide"``: ``node``, ``n_rows``, ``nobs``, ``status``,
         ``stop_reason``, one column per coefficient (NaN for aliased or
-        unidentified ones), then the model's report columns.
-        ``layout="long"``: ``node``, ``term``, ``estimate``. The frame is in
-        the backend of the data the tree was grown from, polars for arrays
-        (a dict of numpy arrays without polars), or ``backend``: "polars",
-        "pandas", "pyarrow" or "numpy". No p-values are given: the leaves
-        were selected on the same data (section 5.4).
+        unidentified ones), with ``se="robust"`` one ``std_error_<term>``
+        column per coefficient, then the model's report columns.
+        ``layout="long"``: ``node``, ``term``, ``estimate``, and with
+        ``se="robust"`` ``std_error``. The standard errors are those of
+        :meth:`vcov` with its defaults (the tree's clusters, HC1 with
+        cadjust), NaN where the covariance is not "ok". The frame is in the
+        backend of the data the tree was grown from, polars for arrays (a
+        dict of numpy arrays without polars), or ``backend``: "polars",
+        "pandas", "pyarrow" or "numpy".
+
+        No p-values or confidence intervals are given: the leaves were
+        selected by tests on the same data, so standard errors are
+        conditional on the tree and too small for inference about the
+        subgroups (section 5.4). Grow the tree on one part of the data and
+        estimate on the other for honest inference.
         """
-        if se is not None:
-            if se == "robust":
-                raise NotImplementedError(
-                    "robust standard errors come with vcov(), which is not "
-                    "available yet"
-                )
+        if se not in (None, "robust"):
             raise ValueError(f"se must be None or 'robust', got {se!r}")
         if layout not in ("wide", "long"):
             raise ValueError(f"layout must be 'wide' or 'long', got {layout!r}")
+        std_errors = None
+        if se == "robust":
+            std_errors = {
+                i: np.sqrt(np.diag(v.matrix))
+                for i, v in self._vcov(None, None, "HC1", True, stacklevel=4).items()
+            }
         return make_table(
-            coef_columns(self, layout), resolve_backend(backend, self._backend)
+            coef_columns(self, layout, std_errors),
+            resolve_backend(backend, self._backend),
+        )
+
+    def vcov(
+        self,
+        node_id: int | None = None,
+        *,
+        cluster: str | ArrayLike | bool | None = None,
+        type: VcovType = "HC1",
+        cadjust: bool = True,
+    ) -> dict[int, LeafVcov]:
+        """Cluster-robust covariances of node coefficients (section 5).
+
+        ``V = H^-1 (c sum_g s_g s_g') H^-1``, with ``H`` the node model's
+        Hessian and ``s_g`` its scores summed within cluster ``g``, from a
+        refit of each requested node on its rows. ``c`` is ``G / (G - 1)``
+        with ``cadjust`` and also ``(n - 1) / (n - k)`` with ``type="HC1"``,
+        G the clusters with positive weight in the node, n its ``nobs`` and
+        k its estimated coefficients. Without clusters each row is its own
+        cluster; under case weights that is the sandwich of the data with
+        each row repeated ``w_i`` times.
+
+        ``node_id`` None gives every leaf; an inner node is allowed too.
+        ``cluster`` None uses the tree's clusters if it was grown with them,
+        else none; False forces no clusters; True requires the tree's; a
+        column name (of the training data) or an array over the input rows
+        gives other clusters, for example a coarser level than the tests
+        used. They must not be missing on the rows the tree used.
+
+        The default, HC1 with ``cadjust``, is the same for every model and
+        equals statsmodels' ``cov_type="cluster"``. R's
+        ``sandwich::vcovCL`` defaults to HC1 only for ``lm`` fits and to HC0
+        for every other model, glm included: to compare a glmtree,
+        negbintree, safelogittree or multinomtree leaf with R, pass
+        ``type="HC0"``.
+
+        Each :class:`LeafVcov` has status "ok", "singular" (the Hessian
+        scaled by its diagonal is not positive definite, or has a condition
+        number above 1 / eps) or "unavailable" (the fit failed or has no
+        scores, as a completely separated safe logit or a multinomial leaf
+        without the reference class, or a single cluster). With ``G <= k``
+        clusters the meat has rank below k and a
+        :class:`TooFewClustersWarning` names the node. Negative binomial
+        covariances are conditional on theta, as ``vcov(glm.nb)``.
+
+        The leaves were selected by tests on the same data, so these
+        covariances are conditional on the tree and too small for
+        inference about the subgroups (section 5.4); grow on one part of
+        the data and estimate on the other for honest inference.
+        """
+        if type not in ("HC0", "HC1"):
+            raise ValueError(f"type must be 'HC0' or 'HC1', got {type!r}")
+        return self._vcov(node_id, cluster, type, bool(cadjust), stacklevel=3)
+
+    def _vcov(
+        self,
+        node_id: int | None,
+        cluster: str | ArrayLike | bool | None,
+        type: VcovType,
+        cadjust: bool,
+        *,
+        stacklevel: int,
+    ) -> dict[int, LeafVcov]:
+        if self._y is None or self._weights is None:
+            raise TypeError("this tree keeps no training data to refit its nodes")
+        ids = self.leaves if node_id is None else (self.node(node_id).id,)
+        clusters = self._vcov_cluster(cluster)
+        return {
+            i: self._node_vcov(i, clusters, type, cadjust, stacklevel + 1) for i in ids
+        }
+
+    def _vcov_cluster(
+        self, cluster: str | ArrayLike | bool | None
+    ) -> NDArray[Any] | None:
+        """The clusters over the used rows, or None (section 5.1)."""
+        if cluster is None:
+            return self._cluster
+        if cluster is False:
+            return None
+        if cluster is True:
+            if self._cluster is None:
+                raise ValueError(
+                    "cluster=True, but the tree was grown without clusters"
+                )
+            return self._cluster
+        if isinstance(cluster, str):
+            if self._frame is None:
+                raise TypeError(
+                    "a tree grown by mob() takes other clusters as an array, "
+                    "not a column name"
+                )
+            column = self._frame.column(cluster)
+            name = repr(cluster)
+        else:
+            column = array_column("(cluster)", cluster)
+            name = "(cluster)"
+            if column.values.shape[0] != self.n_rows:
+                raise DataError(
+                    f"cluster has {column.values.shape[0]} values but the data has "
+                    f"{self.n_rows} rows"
+                )
+        missing = column.missing & self._used_rows
+        if missing.any():
+            raise DataError(
+                f"cluster {name} is missing on {int(missing.sum())} of the rows "
+                "the tree used"
+            )
+        return column.values[self._used_rows]
+
+    def _node_vcov(
+        self,
+        node_id: int,
+        clusters: NDArray[Any] | None,
+        type: VcovType,
+        cadjust: bool,
+        stacklevel: int,
+    ) -> LeafVcov:
+        node = self._grown.node(node_id)
+        assert self._y is not None and self._weights is not None
+        rows = node.rows
+        weights = self._weights[rows]
+        with _warnings.catch_warnings():
+            # The node's fit warned while the tree was grown, and the
+            # warnings were recorded then.
+            _warnings.simplefilter("ignore", GlmFitWarning)
+            fit = self._model.fit(
+                self._y[rows],
+                None if self._x is None else self._x[rows],
+                start=None,
+                weights=weights,
+                offset=None if self._offset is None else self._offset[rows],
+                cluster=None if self._cluster is None else self._cluster[rows],
+                caseweights=self.control.caseweights,
+                estfun=True,
+                vcov=True,
+            )
+        stored = node.fit.coefficients
+        got = fit.coefficients
+        same_nan = np.array_equal(np.isnan(stored), np.isnan(got))
+        finite = ~np.isnan(stored) & ~np.isnan(got)
+        with np.errstate(invalid="ignore"):
+            diff = np.abs(got[finite] - stored[finite])
+            scale = np.maximum(np.abs(got[finite]), np.abs(stored[finite]))
+        if not same_nan or np.any(diff > _REFIT_RTOL * scale):
+            rel = float(np.max(diff / np.where(scale > 0, scale, 1.0), initial=0.0))
+            detail = "NaN in other places" if not same_nan else f"{rel:.1e} relative"
+            _warnings.warn(
+                f"the refit of node {node_id} for vcov() differs from its stored "
+                f"coefficients ({detail}); the covariance is the refit's",
+                ModelTreesWarning,
+                stacklevel=stacklevel + 1,
+            )
+        result = sandwich(
+            fit.hessian,
+            fit.estfun,
+            weights=weights,
+            cluster=None if clusters is None else clusters[rows],
+            caseweights=self.control.caseweights,
+            type=type,
+            cadjust=cadjust,
+        )
+        reason = result.reason
+        if fit.status is not FitStatus.OK:
+            reason = f"the fit has status {fit.status.value}: {fit.reason}"
+        elif result.too_few_clusters and clusters is not None:
+            k = int(np.sum(~np.isnan(got)))
+            _warnings.warn(
+                f"node {node_id} has {result.n_clusters:g} clusters for {k} "
+                "coefficients, so its cluster-robust covariance has rank below "
+                f"{k} and is unreliable",
+                TooFewClustersWarning,
+                stacklevel=stacklevel + 1,
+            )
+        return LeafVcov(
+            node=node_id,
+            names=fit.coef_names,
+            matrix=expand(result, ~np.isnan(got)),
+            n_clusters=None
+            if clusters is None
+            else int(np.unique(clusters[rows][weights > 0]).shape[0]),
+            status=result.status,
+            reason=reason,
+            condition=result.condition,
         )
 
     def loglik(self) -> LogLik:
@@ -799,6 +1013,10 @@ def _formula_tree(
         offset=design.offset,
         boolean=_boolean_variables(design),
         backend=design.backend,
+        y=coded.values,
+        weights=design.weights,
+        cluster=design.cluster,
+        frame=Frame(data),
     )
 
 
@@ -1099,6 +1317,11 @@ def mob(
         used_rows=np.ones(grown.fitted_node.shape[0], dtype=np.bool_),
         x=xv,
         offset=off,
+        y=np.asarray(y),
+        weights=np.ones(grown.fitted_node.shape[0])
+        if weights is None
+        else np.asarray(weights, dtype=np.float64),
+        cluster=None if cluster is None else np.asarray(cluster),
     )
 
 

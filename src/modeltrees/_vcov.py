@@ -172,3 +172,42 @@ def _factor(
     except np.linalg.LinAlgError:
         return condition, None
     return condition, (chol, d)
+
+
+@dataclass(frozen=True)
+class LeafVcov:
+    """The cluster-robust covariance of one node's coefficients
+    (docs/api-design.md, section 5.1), from :meth:`ModelTree.vcov`.
+
+    ``matrix`` covers every coefficient in ``names`` order, with NaN rows
+    and columns for aliased or unidentified ones, and is NaN throughout
+    unless ``status`` is "ok". ``n_clusters`` is G, the clusters with
+    positive weight in the node, None without clusters. ``condition`` is
+    the condition number of the Hessian scaled by its diagonal (NaN
+    without a Hessian).
+    """
+
+    node: int
+    names: tuple[str, ...]
+    matrix: FloatArray
+    n_clusters: int | None
+    status: VcovStatus
+    reason: str | None
+    condition: float
+
+    @property
+    def std_errors(self) -> dict[str, float]:
+        """The square roots of the diagonal, by coefficient name."""
+        d = np.sqrt(np.diag(self.matrix))
+        return {name: float(v) for name, v in zip(self.names, d, strict=True)}
+
+
+def expand(s: Sandwich, keep: NDArray[np.bool_]) -> FloatArray:
+    """The sandwich over every coefficient: NaN rows and columns where
+    ``keep`` is False, and everywhere unless the status is "ok"."""
+    k_all = keep.shape[0]
+    out = np.full((k_all, k_all), np.nan)
+    if s.status == "ok":
+        out[np.ix_(keep, keep)] = s.matrix
+    out.setflags(write=False)
+    return out
