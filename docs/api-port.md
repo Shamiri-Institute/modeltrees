@@ -790,3 +790,26 @@ Task 6f, step 1: `modeltrees/_parallel.py`, `find_split(parallel=...)` and
     `BrokenProcessPool`). Custom models must be importable by the workers
     (defined in a module, not in `__main__` of an interactive session).
 
+11. **Tests** (task 6f, step 2; `tests/test_parallel.py`).
+    `tests/conftest.py` sets the three BLAS variables to 1 for the whole
+    test process before numpy loads (the suite's results are unchanged; a
+    test checks that every loaded OpenBLAS reports one thread). With the
+    threshold at 0, every glm, negbin, safe logit and multinomial tree
+    fixture in `trees/`, `extension_trees/` and `cluster_trees/` (34 trees:
+    the clustered, the weighted, `sim_cluster_glmtree_binomial_cluster_weights`
+    with both, and the reference-absent `sim_multinom_noref_onesplit`;
+    the `restart=False` fixture is tested separately) grown with
+    `n_jobs=2` and `4` equals the serial tree exactly: every dataclass
+    field of every node, floats and numeric arrays compared by their bytes
+    (so NaN payloads and signed zeros too), including `fit`, `test`,
+    `split_search.objective` and `n_failed`, and `fitted_node`. Every
+    search with at least two candidate fits went through the pool (counted
+    on unpruned trees). No fixture has a failed candidate, so a model whose
+    split fits fail for side sizes 3 mod 7 checks `n_failed` and the
+    objectives. Also: a nominal variable with 10 levels (511 partitions);
+    an exception raised in a worker reaching the caller with its type,
+    message and remote traceback, with no child process left and the
+    environment restored; an unpicklable model; `mob(n_jobs=2)` inside a
+    worker of another process pool, and two parallel trees in a row; `n_jobs=-1`;
+    `restart=False` with one warning and no pool. No parallel tree differed
+    from its serial tree in any bit.
