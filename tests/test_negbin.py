@@ -22,6 +22,7 @@ from typing import Any
 import numpy as np
 import pytest
 from fixtures_io import FIXTURES, load_json, nan_array
+from slow import mark_slow_trees
 from tree_fixtures import cluster, inputs, variables
 
 from modeltrees.instability import VariableKind
@@ -221,7 +222,7 @@ SEARCH_NODES = [
 ]
 
 
-@pytest.mark.parametrize(("name", "node_id"), SEARCH_NODES)
+@pytest.mark.parametrize(("name", "node_id"), mark_slow_trees(SEARCH_NODES))
 def test_split_search(name: str, node_id: int) -> None:
     """Split search on the fixture node's rows, before growing any tree."""
     fixture = _tree_fixture(name)
@@ -279,7 +280,7 @@ def _assert_split(got: Any, expected: dict[str, Any] | None) -> None:
         assert got.breaks == expected["breaks"]
 
 
-@pytest.mark.parametrize("name", TREES)
+@pytest.mark.parametrize("name", mark_slow_trees(TREES))
 def test_tree_nodes(name: str) -> None:
     fixture = _tree_fixture(name)
     got = _grown(name)
@@ -307,7 +308,7 @@ def test_tree_nodes(name: str) -> None:
         _assert_model_info(g.fit.extras, e["model_info"])
 
 
-@pytest.mark.parametrize("name", TREES)
+@pytest.mark.parametrize("name", mark_slow_trees(TREES))
 def test_tree_tests_and_searches(name: str) -> None:
     for g, e in zip(_grown(name).nodes, _tree_fixture(name)["nodes"], strict=True):
         status = e["test"]["status"] if e["test"] else "not_run"
@@ -334,7 +335,7 @@ def test_tree_tests_and_searches(name: str) -> None:
         np.testing.assert_allclose(got[finite], exp[finite], rtol=RTOL, atol=ATOL)
 
 
-@pytest.mark.parametrize("name", TREES)
+@pytest.mark.parametrize("name", mark_slow_trees(TREES))
 def test_tree_summary(name: str) -> None:
     fixture = _tree_fixture(name)
     got = _grown(name)
@@ -353,6 +354,7 @@ def test_tree_summary(name: str) -> None:
     assert len(leaves) * k + summary["n_inner"] == summary["loglik_df"]
 
 
+@pytest.mark.slow
 def test_near_poisson_leaves_are_compared_loosely() -> None:
     # The fixture the spec names: two leaves where theta.ml stopped at its
     # iteration limit, with theta about 1.7e4 and 8.4e4.

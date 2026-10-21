@@ -26,3 +26,9 @@ dev = [
     "scipy-stubs>=1.18.1.1",
     "statsmodels>=0.15.0",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: takes more than about 5 seconds (tree growth for the larger negative binomial and multinomial fixtures, parallel fixture trees, benchmarks); excluded by default, run with -m slow or -m \"\"",
+]
+addopts = ["-m", "not slow"]

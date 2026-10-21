@@ -222,6 +222,7 @@ def _serial(directory: str, name: str) -> GrownTree:
     return _grow_fixture(directory, name, None)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("n_jobs", [2, 4])
 @pytest.mark.parametrize(("directory", "name"), NON_LM_TREES)
 def test_fixture_trees_equal_the_serial_tree(

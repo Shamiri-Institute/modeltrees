@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 import pytest
 from grown_trees import ALL_TREES, fixture, grow, model, tree_inputs
+from slow import mark_slow_trees
 
 from modeltrees._loglik import tree_loglik
 from modeltrees.models.glm import GlmModel
@@ -42,11 +43,15 @@ REPORT_KEYS: dict[type, tuple[str, ...]] = {
 
 
 def _trees_with(method: str, *, oracle: bool = False) -> list[Any]:
-    return [
-        pytest.param(d, n, id=f"{d}/{n}")
-        for d, n in ALL_TREES
-        if hasattr(model(fixture(d, n)), method) and not (oracle and n == NOT_ORACLE)
-    ]
+    return mark_slow_trees(
+        [
+            pytest.param(d, n, id=f"{d}/{n}")
+            for d, n in ALL_TREES
+            if hasattr(model(fixture(d, n)), method)
+            and not (oracle and n == NOT_ORACLE)
+        ],
+        name_at=1,
+    )
 
 
 # logLik.

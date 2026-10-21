@@ -159,6 +159,7 @@ def _grow_separated(
     return tree, caught
 
 
+@pytest.mark.slow
 def test_warnings_are_recorded_merged_and_reemitted_once() -> None:
     tree, caught = _grow_separated()
     assert tree.warnings, "the data should make glm.fit warn"
@@ -173,6 +174,7 @@ def test_warnings_are_recorded_merged_and_reemitted_once() -> None:
         assert w.filename == __file__
 
 
+@pytest.mark.slow
 def test_user_error_filter_applies_to_reemitted_warnings() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error", GlmFitWarning)

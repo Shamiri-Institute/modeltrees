@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 import pytest
 from grown_trees import ALL_TREES, fixture, grow, model
+from slow import mark_slow_trees
 
 from modeltrees._api import ModelTree, NodeInfo, SplitRule
 
@@ -32,7 +33,7 @@ def _expected_nodes(f: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(f["nodes"], key=lambda n: n["id"])
 
 
-@pytest.mark.parametrize(("directory", "name"), ALL_TREES)
+@pytest.mark.parametrize(("directory", "name"), mark_slow_trees(ALL_TREES, name_at=1))
 def test_structure_and_splits_match_the_fixture(directory: str, name: str) -> None:
     if name == "sim_gaussian_lmtree_zero_weights":
         pytest.skip("not an R oracle (docs/decisions.md)")
@@ -69,7 +70,7 @@ def test_structure_and_splits_match_the_fixture(directory: str, name: str) -> No
     assert tree.depth == max(n["depth"] for n in expected)
 
 
-@pytest.mark.parametrize(("directory", "name"), ALL_TREES)
+@pytest.mark.parametrize(("directory", "name"), mark_slow_trees(ALL_TREES, name_at=1))
 def test_node_views_carry_the_core_values(directory: str, name: str) -> None:
     tree = _wrap(directory, name)
     for info, node in zip(tree.nodes, grow(directory, name).nodes, strict=True):
@@ -157,6 +158,7 @@ def test_fitted_node_is_zero_for_dropped_rows() -> None:
     assert np.all(tree.fitted_node[~used] == 0)
 
 
+@pytest.mark.slow
 def test_extras_hold_the_report_and_warnings() -> None:
     tree = _wrap("extension_trees", "sim_negbin_weights")
     for info in tree.nodes:

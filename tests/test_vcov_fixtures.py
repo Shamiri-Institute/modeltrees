@@ -20,6 +20,7 @@ import statsmodels.api as sm  # type: ignore[import-untyped]
 from fixture_frames import polars_frame
 from fixtures_io import FIXTURES, load_json
 from grown_trees import fixture, grow, tree_inputs
+from slow import mark_slow_trees
 from test_api_fixtures import public
 from test_multinom import _r_offset
 
@@ -102,7 +103,9 @@ def test_fixture_coverage() -> None:
 
 @pytest.mark.parametrize(
     ("name", "node_id", "j"),
-    _entries("lm", "glm_binomial", "glm_poisson", "negbin", "safelogit"),
+    mark_slow_trees(
+        _entries("lm", "glm_binomial", "glm_poisson", "negbin", "safelogit")
+    ),
 )
 def test_vcovcl(name: str, node_id: int, j: int) -> None:
     leaf = _leaf(name, node_id)
@@ -146,7 +149,9 @@ def _moved_sandwich(name: str, node_id: int, entry: dict[str, Any]) -> np.ndarra
     return moved.matrix
 
 
-@pytest.mark.parametrize(("name", "node_id", "j"), _entries("multinom"))
+@pytest.mark.parametrize(
+    ("name", "node_id", "j"), mark_slow_trees(_entries("multinom"))
+)
 def test_vcovcl_multinom(name: str, node_id: int, j: int) -> None:
     """nnet's estimate is off the MLE by ``-H^-1 g_R``, so R's matrix is
     ours at the moved coefficients. The tolerance is twice the change of our
@@ -285,7 +290,9 @@ def _leaf_frame(directory: str, name: str, node_id: int) -> pl.DataFrame:
     return df[grow(directory, name).node(node_id).rows]
 
 
-@pytest.mark.parametrize(("directory", "name", "weights"), WEIGHTED)
+@pytest.mark.parametrize(
+    ("directory", "name", "weights"), mark_slow_trees(WEIGHTED, name_at=1)
+)
 def test_frequency_weights_equal_replicated_rows(
     directory: str, name: str, weights: str
 ) -> None:

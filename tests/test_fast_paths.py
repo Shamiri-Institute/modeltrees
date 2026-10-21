@@ -687,6 +687,7 @@ def test_fixture_tree_equals_reference_path(name: str) -> None:
     _assert_same_tree(fast, ref)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("model_name", ["lm", "glm"])
 def test_benchmark_tree_equals_reference_path(model_name: str) -> None:
     rng = np.random.default_rng(13)

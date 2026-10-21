@@ -14,6 +14,7 @@ import pytest
 from fixture_frames import polars_frame
 from fixtures_io import load_json
 from grown_trees import ALL_TREES, fixture, grow, model, tree_inputs
+from slow import mark_slow_trees
 from test_api_fixtures import public
 from tree_fixtures import cluster, variables
 
@@ -228,7 +229,7 @@ def test_refit_check(drift: float, warns: bool) -> None:
     assert all(v.status == "ok" for v in got.values())
 
 
-@pytest.mark.parametrize(("directory", "name"), ALL_TREES)
+@pytest.mark.parametrize(("directory", "name"), mark_slow_trees(ALL_TREES, name_at=1))
 def test_refits_equal_the_stored_fits(directory: str, name: str) -> None:
     """The refit check of section 5.2 on every node of every fixture tree:
     no ModelTreesWarning other than TooFewClustersWarning."""

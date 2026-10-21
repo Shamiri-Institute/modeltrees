@@ -21,6 +21,7 @@ from typing import Any
 import numpy as np
 import pytest
 from fixtures_io import FIXTURES, load_json, nan_array
+from slow import mark_slow_trees
 from tree_fixtures import cluster, data, variables
 
 from modeltrees.instability import (
@@ -310,7 +311,7 @@ SEARCH_NODES = [
 ]
 
 
-@pytest.mark.parametrize(("name", "node_id"), SEARCH_NODES)
+@pytest.mark.parametrize(("name", "node_id"), mark_slow_trees(SEARCH_NODES))
 def test_split_search(name: str, node_id: int) -> None:
     """Split search on the fixture node's rows, before growing any tree."""
     fixture = _tree_fixture(name)
@@ -369,7 +370,7 @@ def _node_data(
     return y[rows], x[rows], w[rows], np.array(e["estfun"])
 
 
-@pytest.mark.parametrize("name", TREES)
+@pytest.mark.parametrize("name", mark_slow_trees(TREES))
 def test_tree_nodes(name: str) -> None:
     fixture = _tree_fixture(name)
     got = _grown(name)
@@ -454,7 +455,7 @@ def test_tests_on_r_scores(name: str, node_id: int) -> None:
     assert t.best == e["test"]["best"]
 
 
-@pytest.mark.parametrize(("name", "node_id"), TESTED_NODES)
+@pytest.mark.parametrize(("name", "node_id"), mark_slow_trees(TESTED_NODES))
 def test_tree_tests(name: str, node_id: int) -> None:
     """The grown tree's statistics, within their change when the
     coefficients move from the MLE by R's offset -H^-1 g_R."""
@@ -482,7 +483,7 @@ def test_tree_tests(name: str, node_id: int) -> None:
     assert g.p_value == g.test.p_value_adjusted[g.test.best]
 
 
-@pytest.mark.parametrize("name", TREES)
+@pytest.mark.parametrize("name", mark_slow_trees(TREES))
 def test_tree_split_searches(name: str) -> None:
     for g, e in zip(_grown(name).nodes, _tree_fixture(name)["nodes"], strict=True):
         if e["split_search"] is None:
@@ -496,7 +497,7 @@ def test_tree_split_searches(name: str) -> None:
         np.testing.assert_allclose(got[finite], exp[finite], rtol=RTOL, atol=ATOL)
 
 
-@pytest.mark.parametrize("name", TREES)
+@pytest.mark.parametrize("name", mark_slow_trees(TREES))
 def test_tree_summary(name: str) -> None:
     fixture = _tree_fixture(name)
     got = _grown(name)

@@ -22,6 +22,7 @@ import pytest
 from fixture_frames import offset_column, ordered_kinds, polars_frame
 from fixtures_io import nan_array
 from grown_trees import ALL_TREES, control, fixture, grow, model, tree_inputs
+from slow import mark_slow_trees
 from test_multinom import _coef_tol, _node_data, _r_offset
 from test_safelogit import SEPARATED_RTOL
 from tree_fixtures import cluster
@@ -37,7 +38,10 @@ ATOL = 1e-10
 PREDICT_RTOL = 1e-12
 DBL_EPSILON = float(np.finfo(np.float64).eps)
 
-ORACLE_TREES = [(d, n) for d, n in ALL_TREES if n != NOT_ORACLE]
+ORACLE_TREES = mark_slow_trees(
+    [(d, n) for d, n in ALL_TREES if n != NOT_ORACLE], name_at=1
+)
+TREES = mark_slow_trees(ALL_TREES, name_at=1)
 
 
 @cache
@@ -112,7 +116,7 @@ def _assert_same_node(got: Node, expected: Node) -> None:
     assert [k.id for k in got.kids] == [k.id for k in expected.kids], where
 
 
-@pytest.mark.parametrize(("directory", "name"), ALL_TREES)
+@pytest.mark.parametrize(("directory", "name"), TREES)
 def test_public_tree_equals_the_array_path_tree(directory: str, name: str) -> None:
     got = public(directory, name)._grown
     expected = grow(directory, name)
@@ -128,7 +132,7 @@ def test_public_tree_equals_the_array_path_tree(directory: str, name: str) -> No
         _assert_same_node(a_node, b_node)
 
 
-@pytest.mark.parametrize(("directory", "name"), ALL_TREES)
+@pytest.mark.parametrize(("directory", "name"), TREES)
 def test_tree_fields(directory: str, name: str) -> None:
     f = fixture(directory, name)
     tree = public(directory, name)
@@ -220,7 +224,7 @@ def _leaf_refit(f: dict[str, Any], leaf: Node) -> Any:
         )
 
 
-@pytest.mark.parametrize(("directory", "name"), ALL_TREES)
+@pytest.mark.parametrize(("directory", "name"), TREES)
 def test_predict_equals_hand_computed_leaf_fits(directory: str, name: str) -> None:
     f = fixture(directory, name)
     tree = public(directory, name)
@@ -280,7 +284,7 @@ def test_predict_equals_hand_computed_leaf_fits(directory: str, name: str) -> No
 # The coefficient table against the fixture.
 
 
-@pytest.mark.parametrize(("directory", "name"), ALL_TREES)
+@pytest.mark.parametrize(("directory", "name"), TREES)
 def test_coef_table_equals_the_leaf_coefficients(directory: str, name: str) -> None:
     tree = public(directory, name)
     table = tree.coef_table()
@@ -453,6 +457,7 @@ def test_too_few_clusters_warning_is_recorded() -> None:
     assert mt.TooFewClustersWarning in {w.category for w in tree.warnings}
 
 
+@pytest.mark.slow
 def test_negbin_warnings_are_merged() -> None:
     tree = public("extension_trees", "sim_negbin_weights")
     glm = [w for w in tree.warnings if w.category is mt.GlmFitWarning]

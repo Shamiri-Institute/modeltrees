@@ -2,6 +2,7 @@
 
 import pytest
 from grown_trees import ALL_TREES, fixture, grow
+from slow import mark_slow_trees
 
 import modeltrees
 from modeltrees import errors
@@ -81,7 +82,9 @@ def test_public_names_are_exported() -> None:
 
 
 @pytest.mark.parametrize(
-    ("directory", "name"), ALL_TREES, ids=[f"{d}/{n}" for d, n in ALL_TREES]
+    ("directory", "name"),
+    mark_slow_trees(ALL_TREES, name_at=1),
+    ids=[f"{d}/{n}" for d, n in ALL_TREES],
 )
 def test_internal_exceptions_never_escape_mob(directory: str, name: str) -> None:
     """Growing every fixture tree raises no instability-test exception.
