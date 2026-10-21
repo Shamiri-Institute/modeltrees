@@ -637,6 +637,16 @@ docs/sandwich-fixtures.md section 1) and `tests/test_predict_fixtures.py`
    (section 15.2, item 3).
 5. **A completely separated safe logit leaf** is "unavailable"; R has no
    fixture for it (its `estfun` is NULL).
+6. **Weighted leaves.** Weighted multinomial vcov has no R oracle.
+   sandwich's `estfun.multinom` reads the weights from `model.frame()` of
+   the refit, which has none, so its scores lack the case weights and
+   `vcovCL` differs from the formula of docs/api-design.md 5.1 by up to
+   0.92 (the second blind run, task 6l,
+   tests/fixtures/blind_cases/README.md). Weighted multinomial leaves are
+   checked against that formula evaluated on our own scores only. For
+   weighted leaves of the other models HC0 equals `vcovCL`, while HC1
+   differs: sandwich's n is the number of rows, ours is the sum of the
+   weights (16.2, item 1).
 
 ### 16.2 Weights, without R
 
