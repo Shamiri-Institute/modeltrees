@@ -966,7 +966,8 @@ on every component (item 8).
    alternation 24 and the port's did not by 25
    (tests/fixtures/blind_cases/README.md), and the final thetas agree to
    4.5e-15. Coefficients, objectives, scores, `converged` and `iter` keep the
-   usual comparison and agree.
+   usual comparison and agree. Section 20 replaced the 1e-10 condition on
+   the flag.
 6. **Completely separated leaves, in the blind-case comparison only.** For a
    safe logit leaf with `separation == "complete"`, `blind_compare` compares the
    linear predictor `X beta` on the leaf's rows at `SEPARATED_RTOL` (the
@@ -1006,12 +1007,12 @@ CI reported `node sizes and coefficients: node 67 coefficients
 20.78637167846448 vs R 20.786371258859024` (abs 4.2e-7, relative 2.0e-8,
 standing `rtol = 1e-8`). On the development machine:
 
-| quantity        | port                                     | R                                        |
-| --------------- | ---------------------------------------- | ---------------------------------------- |
-| coefficients    | 20.78637125847394, 24.615747326791794    | 20.786371258859024, 24.615747327000108   |
-| difference      | 3.9e-10, 2.1e-10 (0.0019, 0.00085 of the allowance) |                               |
-| objective       | 1.8516521649303286e-10                   | equal bit for bit                        |
-| IRLS iterations | 24, converged                            |                                          |
+| quantity        | port                                                | R                                      |
+| --------------- | --------------------------------------------------- | -------------------------------------- |
+| coefficients    | 20.78637125847394, 24.615747326791794               | 20.786371258859024, 24.615747327000108 |
+| difference      | 3.9e-10, 2.1e-10 (0.0019, 0.00085 of the allowance) |                                        |
+| objective       | 1.8516521649303286e-10                              | equal bit for bit                      |
+| IRLS iterations | 24, converged                                       |                                        |
 
 The node has 7 rows (20 weighted observations) and is completely separated
 by x1: y = 0 at x1 = -2.03, -1.85 and y = 1 at x1 >= 0.136. At R's
@@ -1031,7 +1032,9 @@ is no finite MLE, and minus the log-likelihood keeps falling along it
 (1.9e-10 at R's coefficients, 6.8e-11, 1.2e-12 and 8.4e-15 after 1, 5 and
 10 steps). The port's IRLS walks along this direction by about
 (0.862, 1.007) per iteration and stops at iteration 24, when the relative
-deviance change falls below `epsilon`; R stops at the same iteration.
+deviance change falls below `epsilon`. R's coefficients lie 3.9e-10 from
+that iterate and 0.86 from its neighbours, so R stopped at the same
+iteration (the fixture does not record R's count).
 
 So the step stopped there, without a tolerance derived from the offset: no
 glm comparison changed. The first diverging quantity is node 67's intercept,
@@ -1044,3 +1047,74 @@ Comparing such a leaf on what the data determine, as task 6k does for
 separated safe logit leaves (section 19, item 6), would need its own
 decision; `test_blind_case_matches[blind_13_glm]` is unchanged and still
 fails on that runner.
+
+### `blind_36_negbin` node 112: the alternation-limit flag
+
+CI reported `node 112 theta_warning 'alternation limit reached' vs R None`.
+On the development machine the flag differs in the same way, and the rest
+agrees:
+
+| quantity        | port                                                        | R                                                           | relative |
+| --------------- | ----------------------------------------------------------- | ----------------------------------------------------------- | -------- |
+| theta           | 176.19056648210824                                          | 176.19056648210903                                          | 4.5e-15  |
+| theta_irls      | 176.19056658574218                                          | 176.19056648639915                                          | 5.6e-10  |
+| theta_se        | 2513.1948094132904                                          | 2513.1948074926195                                          | 7.6e-10  |
+| theta_warning   | "alternation limit reached"                                 | None                                                        |          |
+| converged, iter | True, 1                                                     | True, 1                                                     |          |
+| coefficients    | 0.9391640111104903, 0.3775521869665963, -0.8756533927907396 | 0.9391640111103011, 0.3775521869671382, -0.8756533927908812 | 1.4e-12  |
+| objective       | 82.80537277430506                                           | 82.80537277430574                                           | 8.2e-15  |
+
+Why the task 6k allowance did not apply on CI. `_Case.theta` compared
+theta, theta_irls and theta_se at `WEAK_THETA_RTOL = 1e-6`, which CI
+passed, and then accepted a differing alternation-limit flag only if the
+final thetas agreed to `SAME_THETA_RTOL = 1e-10`. The 4.5e-15 here is a
+coincidence: glm.nb stops when `|Lm0 - Lm| / d1 + |delta theta| <= 1e-8`,
+with delta absolute (`d2 = 1`). Traced alternation by alternation, the
+port's theta settles by alternation 10 and then moves by 1.9e-8 to 2.4e-7
+per alternation (1.1e-10 to 1.4e-9 relative), in a band 2.7e-7 wide
+(1.6e-9 relative). Its last value happens to land 8e-13 from R's. On
+another platform's rounding the two end points are two draws from that
+band, so 1e-10 is tighter than the jitter of a single alternation and
+fails by chance. The CI message did not carry the thetas.
+
+The tolerance. The node was refitted with its regressors perturbed by one
+ulp on random entries, 2,300 times (300 and 2,000 draws, two seeds), to
+emulate another platform's rounding. 1,154 of these reached the alternation
+limit, at 10 to 26 alternations. The largest relative deviations from R's
+values were 5.5e-9 (theta), 5.5e-9 (theta_irls) and 9.3e-9 (theta_se). The
+widest gap between an end point that reached the limit and one that did
+not was 3.5e-9 for theta and 1.1e-8 for theta_se. When only one side
+reaches the alternation limit, `tests/blind_compare.py` now compares
+theta, theta_irls and theta_se at `ROUNDED_STOP_RTOL = 2e-8`. That is
+twice the largest measured deviation (the factor of `OFFSET_FACTOR` in
+section 7 of docs/extensions-port.md), about 14 times the largest jitter
+step, and 50 times tighter than `WEAK_THETA_RTOL`. When the flags agree,
+nothing changed: theta is compared at `WEAK_THETA_RTOL` under a
+weak-identification warning, and at the standing tolerances otherwise.
+Coefficients, objective, scores, `converged` and `iter` keep the standing
+comparison in every case. The CI thetas are not known. If they differ by
+more than 2e-8, the test still fails there, now with the numbers.
+
+Every theta divergence (theta, theta_irls, theta_se or the flag) now ends
+with both sides' theta, theta_irls, `iter` and `theta_warning`.
+
+Sensitivity (`tests/test_blind_cases.py`, default run). The tests fit node
+112 on its rows (bit for bit the grown tree's fit) and set R's flag to the
+opposite of the port's, so the flags differ on any platform. The
+unperturbed node matches. A 1e-5 relative change of R's theta, theta_irls
+or theta_se is caught, with the message carrying both sides' numbers. A
+1e-6 relative change of the objective or of one coefficient is caught.
+
+### What changed
+
+- `tests/blind_compare.py`: `SAME_THETA_RTOL` (1e-10 on theta, a condition
+  for accepting a differing alternation-limit flag) is replaced by
+  `ROUNDED_STOP_RTOL` (2e-8 on theta, theta_irls and theta_se whenever only
+  one side reports the alternation limit). This tightens theta_irls and
+  theta_se in that case from 1e-6 and loosens the condition on theta from
+  1e-10. Theta divergence messages carry both sides' numbers.
+- `tests/test_blind_cases.py`: the sensitivity tests above.
+- No comparison changed for glm. `blind_13_glm` node 67 is a completely
+  separated leaf, so the convergence-offset rule does not apply (see the
+  `blind_13_glm` subsection above). Its test still fails on that runner.
+- No standing fixture test and nothing in `src/` changed.
