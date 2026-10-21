@@ -573,6 +573,40 @@ Task 6e, steps 1 to 3: `FitResult.hessian` (design sections 5.2 and 5.3),
     it is `d4` (ratio 2.8e-8 against 0.17 and 0.12). The report names only the
     smallest; several diverging coefficients would show one of them.
 
+### 15.4 Exact equality across platforms
+
+1. **The CI failure.** On ubuntu CI,
+   `test_safelogit_hessian_is_minus_the_score_derivative[safelogit_none]` and
+   `[safelogit_quasi]` failed at
+   `assert_array_equal(got.hessian, weighted_crossprod(xk, z.weights))`. The
+   arrays differed by at most 1.4e-14 absolute and 3.8e-16 relative. macOS,
+   Windows and a local Linux machine (OpenBLAS 0.3.34, Haswell kernel) pass.
+2. **Why.** Both sides call the same function,
+   `models._common.weighted_crossprod`, with equal values. The coefficients
+   match exactly (the assertion before it passes on CI), and both glm_fit
+   calls get C-ordered x, so the working weights match too (checked locally).
+   The memory layout differs.
+   `SafeLogitModel.fit` passes `xm_fit[:, cols]`, and boolean indexing
+   along columns returns a Fortran-ordered copy. The test passes `xk = x[keep]`,
+   which is C-ordered. `x.T @ (w[:, None] * x)` then reaches dgemm with
+   other transpose flags and operand strides, and the BLAS may use a
+   different kernel or a different summation order for each layout. This is
+   rounding that depends on the CPU and the BLAS, not nondeterminism: the
+   same layout gives the same result on every run. Locally the two layouts
+   agree bit for bit under every selectable OpenBLAS core type (Haswell,
+   Sandybridge, Nehalem, Prescott). The AVX-512 kernels a CI runner may
+   use could not be tried here.
+3. **The change.** That assertion is now `assert_allclose` with rtol 1e-12
+   and atol 1e-12 times the largest absolute entry of the expected matrix.
+   No numerical code changed. The search of
+   every `assert_array_equal` in `tests/` found no other comparison of two
+   floating-point paths that differ in arithmetic or layout. The others
+   compare integers, booleans, constants, copies, the same code path (the
+   objective-only and full fits, safe logit against glm binomial, zero
+   weights against deleted rows, which are deleted before any arithmetic),
+   or R's fixtures. Serial against `n_jobs` equalities and all tolerances
+   against R are unchanged.
+
 ## 16. `vcov` and `predict` against R
 
 Task 6e, step 4: `tests/test_vcov_fixtures.py` (tests/fixtures/vcovcl/,

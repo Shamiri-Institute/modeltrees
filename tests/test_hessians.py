@@ -660,7 +660,13 @@ def test_safelogit_hessian_is_minus_the_score_derivative(name: str) -> None:
         emit_warnings=False,
     )
     np.testing.assert_array_equal(z.coefficients, got.coefficients)
-    np.testing.assert_array_equal(got.hessian, weighted_crossprod(xk, z.weights))
+    # The model passes weighted_crossprod a Fortran-ordered x (xm_fit[:, cols])
+    # and the test a C-ordered one, so dgemm runs with other transpose flags
+    # and may round differently on some CPUs (1.4e-14 on ubuntu CI).
+    expected = weighted_crossprod(xk, z.weights)
+    np.testing.assert_allclose(
+        got.hessian, expected, rtol=1e-12, atol=1e-12 * np.max(np.abs(expected))
+    )
     beta = got.coefficients
     lag = lag_bound(z.weights, exact_weights(family, beta, xk, wk, ok), xk, 1.0)
     fd = central_difference(glm_score_sum(family, yk, xk, wk, ok, 1.0), beta)
