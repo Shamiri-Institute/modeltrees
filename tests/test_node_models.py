@@ -68,7 +68,7 @@ def _node(name: str, node_id: int) -> dict[str, Any]:
 
 def test_every_tree_and_node_is_covered() -> None:
     assert len(TREE_FILES) == 32
-    assert len(NODES) == 280
+    assert len(NODES) == 282
     assert all(_node(*p.values)["estfun"] is not None for p in NODES)
 
 
@@ -347,9 +347,9 @@ def test_string_response_needs_conversion() -> None:
         )
 
 
-def test_synth_diabetes_response_encoding() -> None:
+def test_sim_diabetes_like_response_encoding() -> None:
     """R's glm.fit encodes the diabetes factor (levels neg, pos) as pos = 1."""
-    tree = _tree("synth_diabetes_glmtree_binomial")
+    tree = _tree("sim_diabetes_like_glmtree_binomial")
     y, _, _, _ = _inputs(tree)
     data, columns = _data(tree["data_csv"])
     assert columns["diabetes"]["levels"] == ["neg", "pos"]

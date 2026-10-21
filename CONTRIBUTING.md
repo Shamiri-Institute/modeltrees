@@ -24,8 +24,8 @@ modeltrees is a port. For every behavior that R has, R decides what is
 correct, and the Python code is tested against values R computed:
 
 1. The R environment lives in `r/`, managed by renv (`r/renv.lock`, with
-   the pinned partykit, strucchange, sandwich, MASS, nnet, mlbench and
-   jsonlite versions). r/README.md describes the R installation.
+   the pinned partykit, strucchange, sandwich, MASS, nnet and jsonlite
+   versions). r/README.md describes the R installation.
 2. `r/fixtures/*.R` and `r/extensions/*.R` define the cases. Each tree
    fixture is grown twice in R, once by partykit unchanged and once with an
    instrumented copy of `mob_partynode` that also records raw p-values,

@@ -31,7 +31,7 @@ from modeltrees._design import Design, build_design
 PANDAS_TREES = [
     ("trees", "sim_gaussian_lmtree_weights"),
     ("trees", "sim_poisson_glmtree_weights"),
-    ("trees", "synth_diabetes_glmtree_binomial"),
+    ("trees", "sim_diabetes_like_glmtree_binomial"),
     ("trees", "sim_cluster_glmtree_binomial_cluster_weights"),
     ("extension_trees", "quine_negbin_intercept"),
     ("extension_trees", "sim_multinom_cluster"),

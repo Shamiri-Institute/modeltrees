@@ -359,19 +359,19 @@ the tree with split rules, node sizes and leaf coefficients, and a footer.
 Generalized linear model tree (family: binomial)
 
 Model formula:
-diabetes ~ glucose | pressure + triceps + insulin + mass + age
+diabetes ~ glucose + mass | pregnant + pressure + triceps + insulin + pedigree + age
 
 Fitted tree:
 [1] root
-|   [2] mass <= 26.3
-|   |   [3] age <= 30: n = 120
-|   |       (Intercept)     glucose
-|   |       -9.1360          0.0571
+|   [2] age <= 35: n = 514
+|       (Intercept) glucose    mass
+|            -8.707 0.04856 0.04861
+|   [3] age > 35
 ...
 Number of inner nodes:    2
 Number of terminal nodes: 3
-Number of parameters per node: 2
-Objective function (negative log-likelihood): 385.03
+Number of parameters per node: 3
+Objective function (negative log-likelihood): 380.2112
 ```
 
 - Numbers use `digits = 4` significant digits by default, as R's

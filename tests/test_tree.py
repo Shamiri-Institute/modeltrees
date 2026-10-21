@@ -171,7 +171,7 @@ def _assert_split(got: Split | None, expected: dict[str, Any] | None) -> None:
 
 
 def test_search_nodes_cover_every_fixture_split() -> None:
-    assert len(SEARCH_NODES) == 134
+    assert len(SEARCH_NODES) == 133
     for name in ORACLE_TREES:
         for node in tree(name)["nodes"]:
             if node["split"] is not None:

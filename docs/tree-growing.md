@@ -151,7 +151,7 @@ Replicated, each with a code comment:
 - **BIC with the full-sample `n`.** `mob()`'s BIC rule uses `log(n)` of the
   full sample, not of the node being pruned (`:110`). lmtree's BIC does the
   same through `nobs[2]` (`lmtree.R:19`). Fixture:
-  `synth_diabetes_glmtree_binomial_bic`.
+  `sim_diabetes_like_glmtree_binomial_bic`.
 - **Sidak above 0.001, Bonferroni below** (`:553-557`), in
   `pvalues.adjust_pvalues` since phase 2.
 - **`minsize` set once at the root.** `<<-` assigns the default from the
@@ -199,14 +199,14 @@ every level passed before the next one was run:
    (`rtol = 1e-8`). The split-search objectives inside the grown tree and
    `fitted_node` (the leaf of every row) match. The node, leaf and depth
    counts and the summed leaf objectives match the fixture `summary`. The
-   pruned trees (`synth_diabetes_glmtree_binomial_aic`, `_aic_nodfsplit`,
+   pruned trees (`sim_diabetes_like_glmtree_binomial_aic`, `_aic_nodfsplit`,
    `_bic` and `sim_binomial_glmtree_aic_pruned`) match after pruning,
    including the renumbered ids.
 
 No tree diverges, so there is no first diverging quantity to report. The
 closest decisions in the fixtures (`decision_margins`) are a relative
 split-objective gap of 4.3e-5 (`sim_gaussian_glmtree_gaussian_weights`) and
-5.6e-5 (the synth_diabetes trees), and a p-value 9.2e-4 from `alpha`
+9.3e-5 (`sim_poisson_glmtree_weights`), and a p-value 9.2e-4 from `alpha`
 (`sim_gaussian_glmtree_gaussian_weights`). The port's objectives agree with
 R's far more closely than these gaps (1e-8 or better), so the matches do not
 depend on luck at a near-tie.

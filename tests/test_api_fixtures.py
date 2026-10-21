@@ -338,27 +338,30 @@ def test_coef_table_matches_the_fixture(directory: str, name: str) -> None:
 
 
 def test_print_glmtree_binomial() -> None:
-    text = str(public("trees", "synth_diabetes_glmtree_binomial"))
+    text = str(public("trees", "sim_diabetes_like_glmtree_binomial"))
     lines = text.splitlines()
     assert lines[:4] == [
         "Generalized linear model tree (family: binomial)",
         "",
         "Model formula:",
-        "diabetes ~ glucose | pressure + triceps + insulin + mass + age",
+        (
+            "diabetes ~ glucose + mass | pregnant + pressure + triceps + insulin + "
+            "pedigree + age"
+        ),
     ]
     assert (
-        "Partitioning variables: pressure (numeric), triceps (numeric), "
-        "insulin (numeric), mass (numeric), age (numeric)"
+        "Partitioning variables: pregnant (numeric), pressure (numeric), "
+        "triceps (numeric), insulin (numeric), pedigree (numeric), age (numeric)"
     ) in lines
     assert "n = 768" in lines
-    assert "|   [2] age <= 35" in lines
-    assert "|   |   [3] mass <= 32.5: n = 271" in lines
-    assert "|   [5] age > 35: n = 246" in lines
+    assert "|   [2] age <= 35: n = 514" in lines
+    assert "|   [3] age > 35" in lines
+    assert "|   |   [4] pedigree <= 0.499: n = 166" in lines
     assert lines[-4:] == [
         "Number of inner nodes:    2",
         "Number of terminal nodes: 3",
-        "Number of parameters per node: 2",
-        "Objective function (negative log-likelihood): 385.0292",
+        "Number of parameters per node: 3",
+        "Objective function (negative log-likelihood): 380.2112",
     ]
 
 

@@ -315,11 +315,6 @@ If you use modeltrees, please cite the method and the software
 
 GPL-3.0-only (LICENSE). The ported R code is licensed GPL-2 or GPL-3 by its
 authors; THIRD_PARTY_NOTICES.md lists every upstream with its license.
-The test data file `tests/fixtures/data/synth_diabetes.csv` is mlbench's
-synthetic `SynthDiabetes` data, a separate work licensed GPL-2 only
-(LICENSES/GPL-2.0-only.txt, tests/fixtures/data/NOTICE-synth_diabetes.md).
-It is used only as test input and is in the repository and the sdist but
-not in the wheel.
 
 ## Development
 
