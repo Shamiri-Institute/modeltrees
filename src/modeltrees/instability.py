@@ -1,3 +1,6 @@
+# Ported from partykit 1.3-0 (GPL-2 | GPL-3), R/modelparty.R (mob_grow_fluctests);
+# root.matrix originates in strucchange 1.6-0 (GPL-2 | GPL-3).
+# See THIRD_PARTY_NOTICES.md.
 """Parameter instability tests for MOB.
 
 Port of ``mob_grow_fluctests`` and ``root.matrix`` from partykit 1.3-0

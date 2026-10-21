@@ -1,3 +1,6 @@
+# Ported from partykit 1.3-0 (GPL-2 | GPL-3), R/modelparty.R (logp.supLM, p-value
+# adjustment).
+# See THIRD_PARTY_NOTICES.md.
 """P-values for the MOB parameter instability tests.
 
 Ports the p-value pieces of partykit 1.3-0 ``mob_grow_fluctests`` and

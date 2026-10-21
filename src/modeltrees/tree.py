@@ -1,3 +1,5 @@
+# Ported from partykit 1.3-0 (GPL-2 | GPL-3), R/modelparty.R (mob_grow, mob_prune).
+# See THIRD_PARTY_NOTICES.md.
 """Model-based recursive partitioning: growing and pruning the tree.
 
 Port of ``mob_grow`` and ``mob_prune`` from partykit 1.3-0

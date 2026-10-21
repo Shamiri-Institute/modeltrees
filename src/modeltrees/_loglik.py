@@ -1,3 +1,5 @@
+# Ported from partykit 1.3-0 (GPL-2 | GPL-3), R/modelparty.R (logLik.modelparty).
+# See THIRD_PARTY_NOTICES.md.
 """The log-likelihood of a grown tree, as ``logLik.modelparty``.
 
 Port of partykit 1.3-0 ``logLik.modelparty`` and ``nobs.modelparty``

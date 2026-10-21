@@ -1,3 +1,6 @@
+# Ported from partykit 1.3-0 (GPL-2 | GPL-3), R/modelparty.R (mob_grow_findsplit,
+# mob_grow_getlevels).
+# See THIRD_PARTY_NOTICES.md.
 """Split search in the selected partitioning variable.
 
 Port of ``mob_grow_findsplit`` and ``mob_grow_getlevels`` from partykit 1.3-0

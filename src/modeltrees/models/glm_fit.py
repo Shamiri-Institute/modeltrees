@@ -1,3 +1,5 @@
+# Ported from R 4.6.1 (GPL-2 or later), src/library/stats/R/glm.R (glm.fit).
+# See THIRD_PARTY_NOTICES.md.
 """Port of R's ``stats::glm.fit`` (R 4.6.1) for the families in
 :mod:`modeltrees.models.families`.
 

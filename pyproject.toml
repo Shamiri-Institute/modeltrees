@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Model-based recursive partitioning (MOB) ported from R's partykit, with negative binomial, safe logit and multinomial node models"
 readme = "README.md"
 license = "GPL-3.0-only"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 authors = [
   { name = "bnm", email = "55702585+bnmoch3@users.noreply.github.com" },
 ]

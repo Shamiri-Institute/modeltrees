@@ -1,3 +1,5 @@
+# Ported from R 4.6.1 (GPL-2 or later), src/library/stats/R/lm.R (lm.fit, lm.wfit).
+# See THIRD_PARTY_NOTICES.md.
 """Ports of R's ``stats::lm.fit`` and ``stats::lm.wfit`` (R 4.6.1).
 
 Both solve through R's pivoting QR (:mod:`modeltrees.models._qr`) with

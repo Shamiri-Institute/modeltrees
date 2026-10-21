@@ -1,3 +1,6 @@
+# Ported from R 4.6.1 (GPL-2 or later), src/library/stats/src/lm.c (Cdqrls) and the
+# LINPACK-derived src/appl/dqrls.f, dqrdc2.f, dqrsl.f.
+# See THIRD_PARTY_NOTICES.md.
 """R's least-squares QR: Householder with limited column pivoting.
 
 Port of ``.Call(C_Cdqrls, x, y, tol)`` from R 4.6.1, which lm.fit, lm.wfit

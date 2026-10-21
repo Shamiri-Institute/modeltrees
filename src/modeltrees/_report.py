@@ -1,3 +1,6 @@
+# Output layout follows partykit 1.3-0 (GPL-2 | GPL-3), print.modelparty and
+# print.partynode.
+# See THIRD_PARTY_NOTICES.md.
 """Tables and printed output of a fitted tree (docs/api-design.md, sections
 3.3 and 3.4).
 

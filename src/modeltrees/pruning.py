@@ -1,3 +1,5 @@
+# Ported from partykit 1.3-0 (GPL-2 | GPL-3), R/modelparty.R (mob_prune) and R/lmtree.R.
+# See THIRD_PARTY_NOTICES.md.
 """Post-pruning rules for MOB.
 
 A rule receives, for an inner node whose kids are all terminal, the pair

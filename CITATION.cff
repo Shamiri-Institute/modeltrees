@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: >-
+  If you use modeltrees, please cite the software and the publications
+  whose methods it implements: Zeileis, Hothorn and Hornik (2008) for
+  model-based recursive partitioning, and Rusch (2012) when you use the
+  negative binomial model.
+title: modeltrees
+abstract: >-
+  Model-based recursive partitioning (MOB) in Python, ported from R's
+  partykit, with negative binomial, safe logit and multinomial node models.
+type: software
+version: 0.1.0
+license: GPL-3.0-only
+authors:
+  - alias: bnm
+references:
+  - type: article
+    title: Model-Based Recursive Partitioning
+    authors:
+      - family-names: Zeileis
+        given-names: Achim
+      - family-names: Hothorn
+        given-names: Torsten
+      - family-names: Hornik
+        given-names: Kurt
+    journal: Journal of Computational and Graphical Statistics
+    volume: 17
+    issue: 2
+    start: 492
+    end: 514
+    year: 2008
+    doi: 10.1198/106186008X319331
+  - type: thesis
+    title: Recursive Partitioning of Models of a Generalized Linear Model Type
+    authors:
+      - family-names: Rusch
+        given-names: Thomas
+    thesis-type: Doctoral thesis
+    institution:
+      name: WU Vienna University of Economics and Business
+    year: 2012
+    doi: 10.57938/f43bea09-fe60-44fb-a995-ba63733c8c69

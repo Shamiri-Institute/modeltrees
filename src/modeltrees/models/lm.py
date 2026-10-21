@@ -1,3 +1,5 @@
+# Ported from partykit 1.3-0 (GPL-2 | GPL-3), R/lmtree.R (lmfit).
+# See THIRD_PARTY_NOTICES.md.
 """The linear regression node model of ``lmtree``.
 
 Port of ``lmfit`` from partykit 1.3-0 (reference/partykit/R/lmtree.R:59-104).

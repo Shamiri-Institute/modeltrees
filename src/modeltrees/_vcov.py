@@ -1,3 +1,5 @@
+# Formulas derived from sandwich 3.1-3 (GPL-2 | GPL-3), R/vcovCL.R (meatCL).
+# See THIRD_PARTY_NOTICES.md.
 """The cluster-robust sandwich of a leaf fit (docs/api-design.md, section 5.1).
 
 Pure linear algebra on a node model's Hessian and scores, so that it can be

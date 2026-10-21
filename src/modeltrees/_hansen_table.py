@@ -1,3 +1,5 @@
+# Data copied from partykit 1.3-0 (GPL-2 | GPL-3), R/mob-pvalue.R (Hansen 1997 table).
+# See THIRD_PARTY_NOTICES.md.
 """Hansen (1997) response surface for supLM p-values, as shipped by partykit.
 
 Copied verbatim from partykit 1.3-0, R/mob-pvalue.R, object mob_beta_suplm

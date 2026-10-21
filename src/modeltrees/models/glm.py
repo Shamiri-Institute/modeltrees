@@ -1,3 +1,5 @@
+# Ported from partykit 1.3-0 (GPL-2 | GPL-3), R/glmtree.R (glmfit).
+# See THIRD_PARTY_NOTICES.md.
 """The GLM node model of ``glmtree``.
 
 Port of ``glmfit`` from partykit 1.3-0 (reference/partykit/R/glmtree.R:57-133)

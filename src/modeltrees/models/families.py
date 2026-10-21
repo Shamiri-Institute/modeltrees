@@ -1,3 +1,6 @@
+# Ported from R 4.6.1 (GPL-2 or later), src/library/stats/R/family.R and src/family.c;
+# negative.binomial from MASS 7.3-66 (GPL-2 | GPL-3).
+# See THIRD_PARTY_NOTICES.md.
 """GLM families with canonical links, as R's stats package defines them.
 
 Ports of ``gaussian()``, ``binomial()`` and ``poisson()`` from R 4.6.1
