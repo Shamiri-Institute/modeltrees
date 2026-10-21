@@ -892,3 +892,17 @@ Task 6k fixes what the blind differential run of task 6j found
 3. **Standing tests.** `blind_03_lm` and `blind_13_glm` left the xfail set
    of `tests/test_blind_cases.py`: they are in `MATCHING` and must match R
    on every component.
+4. **Pruning counts coefficients only.** `tree.mob` prunes with `k =
+   len(root coefficients)` per node, as partykit's `mob_prune`
+   (modelparty.R:646-647), for every model; `extra_df` (1 for negative
+   binomial theta) counts only in `NegBinModel.loglik`'s df, and so in
+   `tree.loglik()`, `aic()` and `bic()`, as `logLik.negbin` does. The oracle
+   is `blind_36_negbin` node 18: with R's objectives and df (3, 7) the AIC
+   rule keeps the split by 0.86, which R does; with theta counted, (4, 9),
+   it would be pruned by 1.14
+   (`test_aic_pruning_keeps_r_split_of_blind_36_node_18`). It is the
+   convention partykit follows for the gaussian dispersion. A consequence:
+   `aic()` of a pruned negative binomial tree is not the quantity the
+   pruning compared (it adds one per leaf). With the extra df gone,
+   `blind_36_negbin` first diverges at node 86's theta_se, a rounding
+   difference (item 5).

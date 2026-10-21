@@ -317,7 +317,8 @@ class NegBinModel:
     and iter, as the R fit function returns them, and every warning.
     """
 
-    # theta counts in the pruning df: k + 1 parameters per node.
+    # theta counts in the log-likelihood df (logLik.negbin's rank + 1), not
+    # in the pruning df, as in partykit.
     extra_df = 1
 
     def __init__(
@@ -438,7 +439,9 @@ class NegBinModel:
         ``"deviance"`` it is the log-likelihood at the leaf's theta, which
         the objective is not.
         """
-        df = (len(result.coefficients) if result.failed else rank(result)) + 1
+        df = (
+            len(result.coefficients) if result.failed else rank(result)
+        ) + self.extra_df
         if result.failed:
             return math.nan, df
         if self.objective == "loglik":

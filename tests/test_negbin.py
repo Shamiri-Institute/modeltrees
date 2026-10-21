@@ -36,7 +36,7 @@ from modeltrees.models.negbin import (
 )
 from modeltrees.node_model import FitResult, FitStatus, extra_df
 from modeltrees.split_search import find_split
-from modeltrees.tree import GrownTree, MobControl, StopReason, mob
+from modeltrees.tree import GrownTree, MobControl, StopReason, _prune_rule, mob
 
 RTOL = 1e-8
 ATOL = 1e-10
@@ -349,7 +349,7 @@ def test_tree_summary(name: str) -> None:
         summary["objfun"], rel=RTOL
     )
     # logLik.modelparty's df: logLik.negbin's rank + 1 per leaf, plus one per
-    # split. That is the pruning df with extra_df = 1 (docs/decisions.md).
+    # split: the coefficients plus extra_df = 1 for theta (docs/decisions.md).
     k = len(fixture["coefficient_names"]) + extra_df(_model(fixture))
     assert len(leaves) * k + summary["n_inner"] == summary["loglik_df"]
 
@@ -429,7 +429,9 @@ def _sim(seed: int, n: int = 200, theta: float = 2.0) -> tuple[np.ndarray, ...]:
     return x, y
 
 
-def test_pruning_counts_theta() -> None:
+def test_pruning_counts_coefficients_only() -> None:
+    """As partykit's mob_prune (modelparty.R:646-647): theta (extra_df)
+    counts in the log-likelihood df only."""
     model = NegBinModel()
     assert extra_df(model) == 1
     fixture = _tree_fixture("quine_negbin_intercept")
@@ -446,8 +448,35 @@ def test_pruning_counts_theta() -> None:
 
     control = dataclasses.replace(_control(fixture), prune=rule)
     mob(model, y, x, variables(fixture), weights=w, control=control)
-    # Intercept only: k = 1 coefficient + theta.
-    assert seen and all(df == (2, 5) for df in seen)
+    # Intercept only: k = 1 coefficient, theta not counted.
+    assert seen and all(df == (1, 3) for df in seen)
+
+
+def test_aic_pruning_keeps_r_split_of_blind_36_node_18() -> None:
+    """The blind run's oracle for the pruning df: R keeps the split of node
+    18 of blind_36_negbin under AIC pruning. With R's own objectives and
+    the port's pruning df (coefficients only) the port's rule keeps it too,
+    by 0.86; counting theta as well would prune it by 1.14."""
+    tree = load_json("blind_cases/trees/blind_36_negbin.json")
+    assert tree["control"]["prune"] == "AIC"
+    nodes = {n["id"]: n for n in tree["nodes"]}
+    parent = nodes[18]
+    kids = [nodes[i] for i in parent["kids"]]
+    assert not parent["terminal"] and all(k["terminal"] for k in kids)
+    objfun = (parent["objfun"], sum(k["objfun"] for k in kids))
+    nobs = (float(parent["nobs"]), float(tree["n"]))
+    k = len(tree["coefficient_names"])
+    dfsplit = int(tree["control"]["dfsplit"])
+    df = (k, len(kids) * k + dfsplit)
+    assert df == (3, 7)
+    model = NegBinModel()
+    rule = _prune_rule("aic", model)
+    assert rule is not None
+    assert not rule(objfun, df, nobs)
+    aic = (2 * objfun[0] + 2 * df[0], 2 * objfun[1] + 2 * df[1])
+    assert aic[0] - aic[1] == pytest.approx(0.862, abs=1e-3)
+    kt = k + extra_df(model)
+    assert rule(objfun, (kt, len(kids) * kt + dfsplit), nobs)
 
 
 def test_zero_weights_equal_deleted_rows() -> None:

@@ -384,10 +384,11 @@ Q4. **Pruning df for negative binomial.** mob's AIC/BIC pruning counts
 counts p + 1 because of theta. Should pruning count theta? No fixture uses
 pruning with negbinfit.
 
-**Answer:** pruning counts theta, so the negative binomial model
-contributes k + 1 parameters per node. It is a model attribute for extra
-parameters (docs/decisions.md, docs/model-interface.md). No R oracle exists;
-a unit test covers it.
+**Answer:** pruning counts coefficients only, as partykit does; theta counts
+in the log-likelihood df (`tree.loglik()`, `aic()`, `bic()`) through the
+model attribute `extra_df`. Task 5a first counted theta in pruning; the
+blind run of task 6j found the R oracle (`blind_36_negbin`, node 18), and
+task 6k changed it (docs/decisions.md).
 
 Q5. **Optional theta test.** Should there be an option to add the theta score
 as a tested column, to detect changes in overdispersion? The thesis does not

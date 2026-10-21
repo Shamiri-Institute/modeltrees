@@ -36,10 +36,10 @@ EXPECTED = [
     (
         "blind_36_negbin",
         "node sizes and coefficients",
-        "node 19: rows differ",
+        "node 86: theta_se:",
         (
-            "node 18 is pruned: the port counts theta in the pruning df "
-            "(docs/decisions.md), partykit does not"
+            "node 86's theta_se (theta 272, SE 3826, glm.nb alternation limit) "
+            "differs by 1.4e-8 relative: not identified beyond rounding"
         ),
         True,
     ),

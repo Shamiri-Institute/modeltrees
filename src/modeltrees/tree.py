@@ -34,7 +34,6 @@ from modeltrees.node_model import (
     FitResult,
     FitStatus,
     NodeModel,
-    extra_df,
     uses_batch_split,
 )
 from modeltrees.pruning import PruneRule, mob_prune_rule
@@ -294,9 +293,11 @@ def mob(
 
     rule = _prune_rule(control.prune, model)
     if rule is not None:
-        # The root's coefficient count (:647), plus the parameters a model
-        # estimates besides its coefficients, such as negative binomial theta.
-        k = len(root.fit.coefficients) + extra_df(model)
+        # The root's coefficient count (:646-647). Parameters a model
+        # estimates besides its coefficients (extra_df, such as negative
+        # binomial theta) are not counted, as partykit does not count them;
+        # they count only in the log-likelihood df.
+        k = len(root.fit.coefficients)
         # R's n is nrow(Z). Rows with zero weight are not counted, so that
         # zero weights act as deleted rows (docs/decisions.md); without zero
         # weights this is R's n.
@@ -594,8 +595,7 @@ def _prune(node: Node, rule: PruneRule, k: int, dfsplit: bool, n: float) -> None
     if not node.kids or not all(kid.terminal for kid in node.kids):
         return
     objfun = (node.fit.objfun, sum(kid.fit.objfun for kid in node.kids))
-    # k is the root's coefficient count, aliased ones included (:647), plus
-    # the model's extra_df.
+    # k is the root's coefficient count, aliased ones included (:647).
     df = (k, len(node.kids) * k + int(dfsplit))
     if rule(objfun, df, (node.nobs, n)):
         node.kids = []

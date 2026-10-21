@@ -119,9 +119,16 @@ docs/extensions-spec.md.
   single-class multinomial child, stays admissible with its objective, as in R,
   and makes the node terminal. A failed node fit makes the node terminal with a
   warning instead of raising.
-- Pruning df counts theta for negative binomial (k + 1 per node), through a
-  model attribute for extra parameters. No R oracle exists, so a unit test
-  covers it.
+- Pruning df counts coefficients only, as partykit's mob_prune does
+  (modelparty.R:646-647), also for negative binomial: theta is not added. The
+  blind run (task 6j) gave the oracle: R keeps the split of blind_36 node 18
+  under AIC pruning, by 0.86 with R's own objectives and df (3, 7), where k + 1
+  per node, df (4, 9), prunes it by 1.14. It is the convention partykit already
+  uses for the gaussian dispersion, which logLik counts and pruning does not.
+  The model attribute extra_df (1 for theta) stays and counts only in the
+  log-likelihood df of tree.loglik(), aic() and bic(), as logLik.negbin counts
+  theta. So aic() of a pruned negative binomial tree is not the quantity the
+  pruning compared.
 - Multinomial with a rank-deficient design: the fit counts as failed (so the
   candidate is inadmissible, or the node terminal). nnet would fit it and return
   arbitrary values for the aliased columns, so R has no oracle; a unit test

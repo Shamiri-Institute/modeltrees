@@ -175,7 +175,7 @@ that made it):
 | `predict/`                           | partykit's `predict` on new rows at split points, with absent levels and missing values                                                                                                                                                |
 
 Where R has no oracle (the safe logit and multinomial rules, failure handling,
-theta in the pruning df, frequency weights in `vcov`), unit tests check the
+frequency weights in `vcov`), unit tests check the
 behavior, some against statsmodels.
 
 Faster code paths must give the same results. The exact per-candidate code they

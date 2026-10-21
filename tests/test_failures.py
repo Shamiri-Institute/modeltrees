@@ -353,7 +353,9 @@ def test_no_estfun_candidates_stay_admissible() -> None:
 # Pruning df.
 
 
-def test_extra_df_counts_in_pruning() -> None:
+def test_extra_df_does_not_count_in_pruning() -> None:
+    """Pruning counts coefficients only, as partykit's mob_prune
+    (modelparty.R:646-647); extra_df counts in the log-likelihood df."""
     d = _data()
     assert extra_df(LmModel()) == 0
     assert extra_df(ToyModel(d, _ok, extra_df=1)) == 1
@@ -368,20 +370,19 @@ def test_extra_df_counts_in_pruning() -> None:
     for extra in (0, 1, 3):
         seen.clear()
         _grow(ToyModel(d, _ok, extra_df=extra), d, prune=rule)
-        k = 2 + extra
-        assert seen and all(df == (k, 2 * k + 1) for df in seen)
+        assert seen and all(df == (2, 5) for df in seen)
 
 
-def test_extra_df_changes_the_aic_decision() -> None:
+def test_extra_df_does_not_change_the_aic_decision() -> None:
     d = _data()
     kept = _grow(ToyModel(d, _ok), d, prune="aic")
     assert len(kept.nodes) > 1
-    # Find the gain of the root split in lmtree's AIC (the toy model has
-    # LmModel's prune rules): n log(rss) falls by more than the 2 (k + 1)
-    # added parameters, but not by enough for k + extra parameters per node.
+    # An extra_df large enough to prune the root split if it counted (the
+    # gain in lmtree's AIC, the toy model has LmModel's prune rules) leaves
+    # the tree unchanged.
     root, kids = kept.root.fit.objfun, sum(k.fit.objfun for k in kept.root.kids)
     gain = kept.root.nobs * (math.log(root) - math.log(kids))
     extra = math.ceil(gain / 2)
-    pruned = _grow(ToyModel(d, _ok, extra_df=extra), d, prune="aic")
-    assert len(pruned.nodes) == 1
-    assert pruned.root.stop_reason is StopReason.PRUNED
+    same = _grow(ToyModel(d, _ok, extra_df=extra), d, prune="aic")
+    assert len(same.nodes) == len(kept.nodes)
+    assert same.root.stop_reason is kept.root.stop_reason

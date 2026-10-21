@@ -21,7 +21,7 @@ Line numbers `negbin.R:N` refer to `reference/MASS/R/negbin.R` (MASS
 | `negbinfit` (`r/extensions/negbin.R`) | `models/negbin.py`: `NegBinModel` |
 | `safelogitfit` (`r/extensions/safelogit.R`) | `models/safelogit.py`: `SafeLogitModel`, `classify_separation` |
 | `multinomfit` (`r/extensions/multinom.R`, nnet's `multinom`) | `models/multinom.py`: `MultinomModel`, `multinom_newton`, `multinom_response` |
-| fit failures, `estfun = NULL`, theta in the pruning df | `node_model.FitStatus`, `failed_fit`, `extra_df`, `uses_batch_split`; `tree.StopReason.FIT_FAILED`, `NO_ESTFUN` (docs/model-interface.md, section 4.2) |
+| fit failures, `estfun = NULL`, theta in the log-likelihood df | `node_model.FitStatus`, `failed_fit`, `extra_df`, `uses_batch_split`; `tree.StopReason.FIT_FAILED`, `NO_ESTFUN` (docs/model-interface.md, section 4.2) |
 
 ## 2. Decisions on the failure protocol
 
@@ -46,12 +46,21 @@ Line numbers `negbin.R:N` refer to `reference/MASS/R/negbin.R` (MASS
    `fit_failed` rather than `minsize`. `no_estfun` comes after them, where
    partykit checks for `NULL` scores, so the fixtures' stop reasons are
    reproduced.
-6. **`extra_df` counts in pruning only.** The default `minsize` still uses
-   the coefficient count, as partykit and the thesis code do
-   (docs/extensions-spec.md, section 3). The tree fixtures' `loglik_df`,
-   which partykit computes from `logLik.negbin` (rank + 1 per leaf, plus
-   one per split), equals the pruning df with `extra_df = 1` on every
-   negative binomial tree, which is a partial R check of the convention.
+6. **`extra_df` counts in the log-likelihood df only.** Pruning counts the
+   coefficients only, as partykit's `mob_prune` does (modelparty.R:646-647),
+   and the default `minsize` uses the coefficient count, as partykit and
+   the thesis code do (docs/extensions-spec.md, section 3). `extra_df` (1
+   for theta) is what `NegBinModel.loglik` adds to the rank, so
+   `tree.loglik()`, `aic()` and `bic()` count theta as `logLik.negbin`
+   does: the tree fixtures' `loglik_df` (rank + 1 per leaf, plus one per
+   split) is checked on every negative binomial tree. The blind run (task
+   6j) decided the pruning convention against R: at `blind_36_negbin` node
+   18, R's own objectives with R's df (3, 7) keep the split by 0.86 AIC,
+   and with theta counted, (4, 9), it would be pruned by 1.14; R keeps it.
+   This is the convention partykit already follows for the gaussian
+   dispersion, which `logLik.lm` counts and pruning does not. So `aic()` of
+   a pruned negative binomial tree is not the quantity the pruning
+   compared. Task 5a had counted theta in pruning without an oracle.
 
 ## 3. Decisions on the negative binomial model
 

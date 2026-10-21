@@ -72,8 +72,11 @@ def failed_fit(coef_names: tuple[str, ...], reason: str, **extras: Any) -> FitRe
 def extra_df(model: object) -> int:
     """Parameters a model estimates per node beyond its coefficients.
 
-    They count in the pruning df, as theta does for the negative binomial
-    model. Read from the optional attribute ``extra_df`` (default 0).
+    They count in the model's log-likelihood df (``tree.loglik()``,
+    ``aic()``, ``bic()``), as ``logLik.negbin`` counts theta, but not in
+    the pruning df, which counts coefficients only, as partykit's
+    ``mob_prune`` does (modelparty.R:646-647). Read from the optional
+    attribute ``extra_df`` (default 0).
     """
     return int(getattr(model, "extra_df", 0))
 

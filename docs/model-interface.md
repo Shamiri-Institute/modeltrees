@@ -562,11 +562,12 @@ Details:
   `batch_split = False` (`node_model.uses_batch_split`).
 - Extra parameters: a model that estimates parameters besides its
   coefficients, which are not tested and have no score columns, declares
-  them in the attribute `extra_df` (default 0, `node_model.extra_df`). Pruning
-  then uses `k = len(root coefficients) + extra_df` per node, so `df =
-  (k, n_kids * k + dfsplit)`. The negative binomial model sets
-  `extra_df = 1` for theta (docs/decisions.md). `minsize` still counts the
-  coefficients only, as partykit does.
+  them in the attribute `extra_df` (default 0, `node_model.extra_df`). It
+  counts in the model's log-likelihood df (`loglik`), not in pruning:
+  pruning uses `k = len(root coefficients)` per node, so `df = (k, n_kids *
+  k + dfsplit)`, as partykit's `mob_prune` (modelparty.R:646-647). The
+  negative binomial model sets `extra_df = 1` for theta (docs/decisions.md).
+  `minsize` counts the coefficients only, as partykit does.
 
 ## 5. Open questions
 
