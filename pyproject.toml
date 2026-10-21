@@ -1,21 +1,70 @@
 [project]
 name = "modeltrees"
 version = "0.1.0"
-description = "Add your description here"
+description = "Model-based recursive partitioning (MOB) ported from R's partykit, with negative binomial, safe logit and multinomial node models"
+readme = "README.md"
 license = "GPL-3.0-only"
+license-files = ["LICENSE"]
 authors = [
   { name = "bnm", email = "55702585+bnmoch3@users.noreply.github.com" },
 ]
 requires-python = ">=3.13"
+keywords = [
+    "model-based recursive partitioning",
+    "MOB",
+    "partykit",
+    "decision trees",
+    "regression trees",
+    "subgroup analysis",
+    "parameter instability",
+    "generalized linear models",
+    "negative binomial",
+    "multinomial logit",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Typing :: Typed",
+]
 dependencies = [
     "narwhals>=2.0",
     "numpy>=2.5.4",
     "scipy>=1.18.1",
 ]
 
+[project.urls]
+
+
+
+
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/modeltrees"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src/modeltrees",
+    "/tests",
+    "/scripts/smoke_wheel.py",
+    "/README.md",
+    "/LICENSE",
+    "/THIRD_PARTY_NOTICES.md",
+    "/CHANGELOG.md",
+    "/CITATION.cff",
+]
+exclude = ["__pycache__", "*.pyc"]
 
 [dependency-groups]
 dev = [
