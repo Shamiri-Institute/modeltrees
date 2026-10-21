@@ -732,8 +732,10 @@ Task 6f, step 1: `modeltrees/_parallel.py`, `find_split(parallel=...)` and
 3. **Threshold.** `_parallel._THRESHOLD`, candidates (admissible ones,
    the fits actually made) times the node's rows (zero-weight rows
    included), strictly above. `_parallel.parallel_threshold(value)` is the
-   test hook, a context manager. Docs/performance.md has the chosen
-   value.
+   test hook, a context manager. Task 6f, step 3 set it to 5e5 instead of
+   the design's starting 2e6 (docs/performance.md, Step 5: twice the
+   break-even of a glm tree's first parallel search, which pays the worker
+   start-up; 2e6 left glm trees at n = 1000 serial).
 4. **Pool.** `SplitPool` in `tree.mob`, created only for `n_workers > 1`
    and `restart=True`; its `ProcessPoolExecutor` starts at the first
    parallel search, and `mob` shuts it down (`wait=True`,

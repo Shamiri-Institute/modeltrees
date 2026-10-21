@@ -36,7 +36,7 @@ BoolArray = NDArray[np.bool_]
 # A search runs in parallel only when its candidates times the node's rows
 # exceed this (docs/performance.md, "Parallel split search"). It changes
 # time, never results. Tests lower it with parallel_threshold().
-_THRESHOLD = 2e6
+_THRESHOLD = 5e5
 
 # Chunks per worker, for load balance.
 _CHUNKS_PER_WORKER = 4

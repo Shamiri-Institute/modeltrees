@@ -2,7 +2,8 @@
 
 Timings and profiles of the tree-growing loop: first the baseline, measured
 before any optimization, then the speedups (Step 1, per-fit overhead; Step 2,
-batch split objectives; Step 3, results and options for glm). Script:
+batch split objectives; Step 3, results and options for glm; Step 4,
+specialised family formulas; Step 5, parallel split search). Script:
 `scripts/bench_tree.py` (`uv run python scripts/bench_tree.py`). The rule
 for every speedup is that results do not change: the code it replaces stays
 as the reference path (`modeltrees.reference_path()`, docs/decisions.md) and
@@ -531,6 +532,80 @@ Median seconds from `bench_tree.py` (3 runs after a warm-up), glm:
 
 About 10 to 20 %, as estimated in Step 3. Every tree is unchanged.
 
+## Step 5: parallel split search (option 2)
+
+Option 2 of Step 3, implemented as specified in docs/api-design.md,
+section 6 (`modeltrees/_parallel.py`; decisions in docs/api-port.md,
+section 17). `bench_tree.py` takes `--n-jobs` and reports each worker
+count's speedup over the first and whether the tree equals it bit for bit
+(fitted nodes, coefficients and every split-search objective), plus
+`--threshold` to override the size threshold and a negative binomial
+model (`NegBinModel()`, counts with theta = 2 and log mean `eta / 2` on the
+same planted structure). All runs with `OPENBLAS_NUM_THREADS=1` in the
+parent, threshold 5e5, the same machine (12 cores), nothing else running.
+One warm-up, then 3 timed runs at n = 1000 and 5000 (1 run for negbin at
+5000 and for n = 20000).
+
+| model | n | serial s | 2 jobs s | 4 jobs s | 8 jobs s | speedup 2 / 4 / 8 |
+| --- | --- | --- | --- | --- | --- | --- |
+| lm | 1000 | 0.017 | 0.017 | 0.017 | 0.017 | 0.98 / 0.97 / 0.97 |
+| lm | 5000 | 0.034 | 0.036 | 0.036 | 0.037 | 0.96 / 0.96 / 0.94 |
+| lm | 20000 | 0.100 | 0.103 | 0.104 | 0.104 | 0.97 / 0.97 / 0.96 |
+| glm | 1000 | 1.635 | 1.107 | 0.759 | 0.736 | 1.48 / 2.15 / 2.22 |
+| glm | 5000 | 13.58 | 7.60 | 5.13 | 4.22 | 1.79 / 2.65 / 3.22 |
+| glm | 20000 | 127.7 | 79.2 | 51.5 | 42.1 | 1.61 / 2.48 / 3.04 |
+| negbin | 1000 | 12.67 | 8.55 | 6.50 | 6.15 | 1.48 / 1.95 / 2.06 |
+| negbin | 5000 | 110.7 | 60.4 | 38.8 | 31.4 | 1.83 / 2.85 / 3.53 |
+
+Times are medians (single runs where noted). Every parallel tree equals
+its serial tree. negbin at n = 20000 was not run (about half an hour
+serially).
+
+- lm is unchanged, as designed: its batch path refits a handful of
+  candidates and never uses the pool, so no process starts. The 2 to 6 %
+  differences are a millisecond or two, below what these runs resolve.
+- glm and negbin gain 1.5 to 1.8 times on 2 workers and 3 to 3.5 times on
+  8 at n = 5000, close to the prototype's 2.9 to 3.9 on the root search
+  alone. The gain is sublinear: the tree also has serial parts (node fits,
+  instability tests, searches below the threshold), the workers start in
+  about 0.27 s each, and memory bandwidth and turbo limit 8 processes. At
+  n = 20000 the gain is slightly lower than at 5000 (3.0 against 3.2 on 8
+  workers); the per-chunk payload grows with the node, but this was not
+  profiled further (the task excluded other optimization).
+- negbin at n = 1000 gains less than glm (2.1 against 2.2 on 8 workers,
+  1.95 against 2.15 on 4): its smaller nodes stay below the threshold,
+  which is set for glm, although a negbin fit costs about 8 times a glm
+  fit and those searches would pay off.
+
+**Threshold.** A search runs in parallel when its candidate fits times the
+node's rows exceed `_parallel._THRESHOLD`, chosen as **5e5**, down from
+the design's starting value of 2e6. Measurements (`--threshold`, and single
+binomial glm searches on n rows timed serially and with warm workers):
+
+- With warm workers a search breaks even at about 6e3 (100 rows):
+  speedups at 4 workers were 3.4 at 6e3 and 3.6 to 3.8 from 1.7e4 to 1e6;
+  at 21 candidates (1.3e3) it was 0.9. So the cost that matters is
+  starting the pool, which the first parallel search of every tree pays:
+  about 0.27 s for one worker and 0.2 to 0.5 s for 2 to 8 (whole trees at
+  n = 200 with every search parallel took 0.34 s on 2 and 0.61 s on 8
+  workers against 0.14 s serially).
+- The first search pays off when its serial time exceeds the start-up
+  divided by `1 - 1 / speedup`, about 0.6 s for glm on 2 to 8 workers,
+  that is about 2.5e5. 5e5 is twice that, so a tree never gets slower
+  through the threshold (glm is the cheapest model without a batch
+  scorer; safe logit costs the same and negbin and multinomial more).
+- With 2e6, every glm tree at n = 1000 (root search 9.6e5) stayed serial;
+  with 5e5 it runs 2.2 times faster on 4 workers. At n = 700, whose
+  largest search is 1.5e5, all thresholds from 2.5e5 to 1e6 left the tree
+  serial and unchanged, and making every search parallel (threshold 0)
+  made it no faster. At n = 200 to 500, threshold 0 was up to 4 times
+  slower (start-up), and 1e5 to 3e5 kept them serial.
+
+One threshold cannot be right for every model: negbin and multinomial
+would profit about 8 times lower. A per-model value (or one for a pool
+that is already running) would help small negbin trees; it is left as an
+option, not implemented.
+
 ## Reproducing
 
 ```
@@ -538,6 +613,8 @@ uv run python scripts/bench_tree.py                       # n = 1000, 5000, 3 ru
 uv run python scripts/bench_tree.py --full                # also n = 20000
 uv run python scripts/bench_tree.py --sizes 1000 --runs 5 --no-profile
 uv run python scripts/bench_tree.py --full --write-csv DIR
+OPENBLAS_NUM_THREADS=1 uv run python scripts/bench_tree.py --no-profile \
+    --models lm glm negbin --n-jobs 1 2 4 8         # Step 5
 Rscript scripts/bench_r.R DIR 3 1000 5000 20000           # partykit on the same data
 ```
 

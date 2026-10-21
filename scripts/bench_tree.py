@@ -1,12 +1,18 @@
-"""Time mob() with LmModel and GlmModel (binomial) on simulated data.
+"""Time mob() with LmModel, GlmModel (binomial) and NegBinModel on simulated
+data.
 
 Usage, from the repository root:
 
     uv run python scripts/bench_tree.py [--sizes 1000 5000] [--full] [--runs 3]
-        [--models lm glm] [--profile-top 12] [--no-profile] [--write-csv DIR]
+        [--models lm glm] [--n-jobs 1 2 4] [--threshold T] [--profile-top 12]
+        [--no-profile] [--write-csv DIR]
 
 The default sizes are n = 1000 and 5000; --full adds n = 20000, whose glm run
-takes minutes. --write-csv writes each simulated data set to
+takes minutes. --n-jobs times each cell with each worker count (parallel split
+search, docs/api-design.md section 6) and reports the speedup over the first;
+--threshold overrides the private size threshold for parallel searches. Set
+OPENBLAS_NUM_THREADS=1 for the parent process when comparing worker counts.
+--write-csv writes each simulated data set to
 DIR/bench_<n>.csv and exits, for scripts/bench_r.R to time partykit on the
 same data.
 
@@ -29,9 +35,11 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from modeltrees import _parallel
 from modeltrees.instability import VariableKind
 from modeltrees.models.glm import GlmModel
 from modeltrees.models.lm import LmModel
+from modeltrees.models.negbin import NegBinModel
 from modeltrees.tree import GrownTree, Variable, mob
 
 SEED = 20261101
@@ -46,6 +54,7 @@ class Data:
     z: dict[str, Variable]
     y_gauss: np.ndarray
     y_bin: np.ndarray
+    y_nb: np.ndarray
 
 
 def simulate(n: int, seed: int = SEED) -> Data:
@@ -62,6 +71,10 @@ def simulate(n: int, seed: int = SEED) -> Data:
     eta = b0 + b1 * xv
     y_gauss = eta + rng.standard_normal(n)
     y_bin = (rng.uniform(size=n) < 1 / (1 + np.exp(-eta))).astype(np.float64)
+    # Negative binomial counts, theta = 2, log mean eta / 2. Drawn after the
+    # other responses so that they are unchanged.
+    mu = np.exp(eta / 2)
+    y_nb = rng.negative_binomial(2.0, 2.0 / (2.0 + mu)).astype(np.float64)
     z = {
         "z1": Variable("z1", VariableKind.NUMERIC, z1),
         "z2": Variable("z2", VariableKind.NUMERIC, z2),
@@ -70,7 +83,7 @@ def simulate(n: int, seed: int = SEED) -> Data:
         "z5": Variable("z5", VariableKind.ORDERED, z5, ORDERED_LEVELS),
         "z6": Variable("z6", VariableKind.NOMINAL, z6, NOMINAL_LEVELS),
     }
-    return Data(n, np.column_stack([np.ones(n), xv]), z, y_gauss, y_bin)
+    return Data(n, np.column_stack([np.ones(n), xv]), z, y_gauss, y_bin, y_nb)
 
 
 def write_csv(d: Data, path: str) -> None:
@@ -78,6 +91,7 @@ def write_csv(d: Data, path: str) -> None:
     cols = {
         "y_gauss": d.y_gauss,
         "y_bin": d.y_bin,
+        "y_nb": d.y_nb,
         "x": d.x[:, 1],
         **{name: v.values for name, v in d.z.items()},
     }
@@ -93,15 +107,36 @@ def write_csv(d: Data, path: str) -> None:
         )
 
 
-def runner(name: str, d: Data) -> Callable[[], GrownTree]:
+def runner(name: str, d: Data, n_jobs: int = 1) -> Callable[[], GrownTree]:
     def run() -> GrownTree:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             if name == "lm":
-                return mob(LmModel(), d.y_gauss, d.x, d.z)
-            return mob(GlmModel("binomial"), d.y_bin, d.x, d.z)
+                return mob(LmModel(), d.y_gauss, d.x, d.z, n_jobs=n_jobs)
+            if name == "negbin":
+                return mob(NegBinModel(), d.y_nb, d.x, d.z, n_jobs=n_jobs)
+            return mob(GlmModel("binomial"), d.y_bin, d.x, d.z, n_jobs=n_jobs)
 
     return run
+
+
+def same_tree(a: GrownTree, b: GrownTree) -> bool:
+    """The same nodes, fits and split-search objectives, bit for bit."""
+    if not np.array_equal(a.fitted_node, b.fitted_node):
+        return False
+    for u, v in zip(a.nodes, b.nodes, strict=True):
+        if u.fit.coefficients.tobytes() != v.fit.coefficients.tobytes():
+            return False
+        su, sv = u.split_search, v.split_search
+        if (su is None) != (sv is None):
+            return False
+        if (
+            su is not None
+            and sv is not None
+            and su.objective.tobytes() != sv.objective.tobytes()
+        ):
+            return False
+    return True
 
 
 def time_runs(run: Callable[[], GrownTree], runs: int) -> tuple[list[float], GrownTree]:
@@ -139,7 +174,11 @@ def main() -> None:
     ap.add_argument("--profile-top", type=int, default=12)
     ap.add_argument("--no-profile", action="store_true")
     ap.add_argument("--write-csv", metavar="DIR")
+    ap.add_argument("--n-jobs", type=int, nargs="+", default=[1])
+    ap.add_argument("--threshold", type=float, default=None)
     args = ap.parse_args()
+    if args.threshold is not None:
+        _parallel._THRESHOLD = args.threshold
     sizes = list(args.sizes) + (
         [20000] if args.full and 20000 not in args.sizes else []
     )
@@ -151,22 +190,37 @@ def main() -> None:
             print(f"wrote {path}")
         return
 
-    print(f"numpy {np.__version__}, runs per cell {args.runs} (after one warm-up)\n")
-    print("model  n       nodes leaves depth  min s   median s  max s")
+    print(
+        f"numpy {np.__version__}, runs per cell {args.runs} (after one warm-up), "
+        f"threshold {_parallel._THRESHOLD:g}, "
+        f"OPENBLAS_NUM_THREADS={os.environ.get('OPENBLAS_NUM_THREADS')}\n"
+    )
+    print(
+        "model  n       jobs nodes leaves depth  min s    median s  max s    "
+        "speedup same"
+    )
     profiles = []
     for n in sizes:
         d = simulate(n)
         for name in args.models:
-            run = runner(name, d)
-            times, tree = time_runs(run, args.runs)
-            leaves = sum(nd.terminal for nd in tree.nodes)
-            depth = max(nd.depth for nd in tree.nodes)
-            print(
-                f"{name:<6} {n:<7} {len(tree.nodes):<5} {leaves:<6} {depth:<5} "
-                f"{min(times):<7.3f} {statistics.median(times):<9.3f} {max(times):.3f}"
-            )
-            if not args.no_profile:
-                profiles.append((name, n, profile(run, args.profile_top)))
+            base: tuple[float, GrownTree] | None = None
+            for n_jobs in args.n_jobs:
+                run = runner(name, d, n_jobs)
+                times, tree = time_runs(run, args.runs)
+                median = statistics.median(times)
+                if base is None:
+                    base = (median, tree)
+                leaves = sum(nd.terminal for nd in tree.nodes)
+                depth = max(nd.depth for nd in tree.nodes)
+                print(
+                    f"{name:<6} {n:<7} {n_jobs:<4} {len(tree.nodes):<5} {leaves:<6} "
+                    f"{depth:<5} {min(times):<8.3f} {median:<9.3f} "
+                    f"{max(times):<8.3f} {base[0] / median:<7.2f} "
+                    f"{same_tree(base[1], tree)}",
+                    flush=True,
+                )
+                if not args.no_profile and n_jobs == 1:
+                    profiles.append((name, n, profile(run, args.profile_top)))
     for name, n, text in profiles:
         print(f"\n=== profile: {name}, n = {n} ===\n{text}")
 
