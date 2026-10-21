@@ -578,3 +578,114 @@ Task 6e, steps 1 to 3: `FitResult.hessian` (design sections 5.2 and 5.3),
 9. **`LeafVcov`** joins `modeltrees.__all__` (section 10, item 1). It is
    defined in `modeltrees/_vcov.py` and has a `std_errors` property.
    `matrix` is read-only.
+
+## 16. `vcov` and `predict` against R
+
+Task 6e, step 4: `tests/test_vcov_fixtures.py` (tests/fixtures/vcovcl/,
+docs/sandwich-fixtures.md section 1) and `tests/test_predict_fixtures.py`
+(tests/fixtures/predict/, section 2).
+
+### 16.1 sandwich::vcovCL
+
+1. **Every leaf, every combination.** For each leaf of the seven vcovcl
+   fixtures, `vcov(leaf, cluster=None or False, type, cadjust)` is
+   compared with the eight recorded matrices (school clusters and
+   `cluster = NULL`, HC0 and HC1, `cadjust` TRUE and FALSE). lm, glm
+   binomial, glm poisson, negbin and the non-separated safe logit pass at
+   rtol 1e-8; the largest difference observed is 5e-15 relative to the
+   largest entry. G equals the fixture's `n_clusters`; R's `cluster =
+   NULL` has G = n, ours `n_clusters = None` with G = nobs (section 15.2,
+   item 4), the same for these unweighted trees.
+2. **Multinomial tolerance.** nnet's estimate is off the MLE by `-H^-1
+   g_R` (docs/extensions-port.md, section 7), so R's matrix is ours at the
+   moved coefficients. The tolerance is twice the change of our sandwich
+   (Hessian and scores at the moved coefficients, the same clusters and
+   adjustments) plus 1e-8 of the largest entry. Observed, relative to the
+   largest entry:
+
+   | leaf | ours vs R | tolerance | moved vs R |
+   | --- | --- | --- | --- |
+   | `sim_cluster_models_multinom_cluster`, node 2 | 3.9e-15 | 1.0e-8 | 6.7e-15 |
+   | `sim_cluster_models_multinom_cluster`, node 3 | 2.7e-8 | 6.3e-8 | 7.1e-15 |
+
+   The move explains R's matrix to rounding, so the difference is nnet's
+   convergence, not the sandwich.
+3. **G <= k** (`sim_cluster_few_lmtree_cluster`, node 3, G = 3, k = 4): R
+   returns the rank-deficient matrix without a warning; ours equals it at
+   rtol 1e-8 and emits `TooFewClustersWarning` naming the node. Two of its
+   eigenvalues are at rounding level, as R's.
+4. **G = 1, a documented divergence.** sandwich 3.1-3 stops ("non-
+   conformable arrays", `single_cluster` in the binomial fixture); ours
+   gives status "unavailable", NaN and a `TooFewClustersWarning`
+   (section 15.2, item 3).
+5. **A completely separated safe logit leaf** is "unavailable"; R has no
+   fixture for it (its `estfun` is NULL).
+
+### 16.2 Weights, without R
+
+1. **Frequency weights equal replicated rows.** sandwich's `meatCL` does
+   not divide the scores by the weights and counts rows, so a weighted R
+   fit is not an oracle (docs/sandwich-fixtures.md 1.5). Instead, on every
+   leaf of `sim_cluster_lmtree_cluster_weights`,
+   `sim_cluster_glmtree_binomial_cluster_weights`, `sim_negbin_weights`
+   and `sim_multinom_onesplit` (with the data's `w0`, which has zeros), a
+   one-node tree on the leaf's rows with integer weights equals one on the
+   rows repeated `w_i` times, with the same clusters and without clusters,
+   for HC0 and HC1, to 1e-10. So **the n of the HC1 factor `(n - 1) / (n -
+   k)` is the sum of the weights** (the leaf's `nobs`), and without
+   clusters G is too.
+   - glm.fit's starting values depend on the weights, so the two fits stop
+     at different iterates within epsilon and their working weights lag
+     by different amounts (1.6e-5 relative in the binomial sandwich at
+     epsilon 1e-8, 1e-8 at 1e-14). The test fits with epsilon 0 and 50
+     iterations, IRLS's fixed point.
+   - theta.ml's own tolerance lets the weighted and replicated negative
+     binomial fits differ in theta by up to 7e-8, which moves the
+     covariance (it is conditional on theta), and epsilon 0 makes theta.ml
+     fail on one leaf. The negative binomial check therefore holds theta
+     at the leaf's value: a `GlmModel` with `NegativeBinomial(theta)`
+     grown by `mob()`, whose scores and Hessian are `NegBinModel`'s at that
+     theta (`tests/test_hessians.py`).
+2. **Zero weights equal deleted rows** (an lm and a binomial one-node
+   tree), to 1e-12.
+
+### 16.3 statsmodels
+
+One-node trees with `cluster = "school"` on `sim_cluster` (lm `y_gauss`,
+binomial `y_bin`) and `sim_cluster_models` (poisson and negbin with the
+offset, safe logit `y_sl`, multinomial `y_mn`), against `OLS`, `GLM`,
+`Logit` and `MNLogit` with `cov_type="cluster"` (default correction: our
+HC1 with `cadjust`), `"HC0"` without clusters (our HC0 without `cadjust`)
+and the coarser cluster `school // 3` (11 instead of 30 clusters on
+`sim_cluster`, 13 instead of 36 on `sim_cluster_models`).
+
+1. **Tolerance.** statsmodels uses the exact scores and information at its
+   tight estimate; ours uses glm.fit's working weights from the start of
+   its last iteration (section 15.1, item 4). The tolerance is twice the
+   difference between our sandwich and the exact one at our estimate,
+   plus 1e-8 of the largest entry; lm and multinomial (exact Hessians)
+   get 1e-8 alone. Observed with the school clusters, relative to the
+   largest entry: lm 8e-16, binomial 2e-10, poisson 9e-7 (tolerance
+   1.9e-6), negbin 8e-9, safe logit 3e-6 (tolerance 6.1e-6), multinomial
+   1e-14.
+2. **The negative binomial bread differs.** For the log link, which is not
+   canonical for the negative binomial, statsmodels' robust covariance
+   uses the observed information as bread; R's `bread.glm` (and ours, as
+   design section 5.2 specifies) uses the expected one. The difference is
+   about 30 percent on `sim_cluster_models`. The test keeps our meat `H V
+   H` and swaps the bread for the observed information at our estimate
+   before comparing; it checks the scores, clusters and adjustments, and
+   R checks the bread (16.1).
+
+### 16.4 predict
+
+On the rows R routes deterministically, `predict(newdata)` equals R's
+`node` exactly and `response` and `link` at rtol 1e-8 (observed 1e-14),
+with R's NA (a missing regressor or offset) as NaN, for the three predict
+fixtures. lmtree's `"link"` has no R value (R stops, `failing_calls`) and
+equals `"response"`. On the rows R routes at random: a missing split
+variable on the path gives node 0 and NaN, and `-Inf` goes to the first
+kid of the split, as the most negative finite value does (section 11,
+item 4). Unseen levels raise `UnseenLevelError` both in a split variable
+(R stops too) and in a partitioning variable no split uses (R ignores it),
+and give node 0 with `unseen="null"`.
