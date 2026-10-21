@@ -49,6 +49,7 @@ include = [
   "/scripts/smoke_wheel.py",
   "/README.md",
   "/LICENSE",
+  "/LICENSES",
   "/THIRD_PARTY_NOTICES.md",
   "/CHANGELOG.md",
   "/CITATION.cff",

@@ -7,8 +7,9 @@ written in the upstream DESCRIPTION file (read from `reference/` and from the
 renv library of `r/renv.lock`), and the files here that derive from it. All
 ported code comes from upstreams licensed `GPL-2 | GPL-3` or GPL-2 or later.
 One fixture dataset, `SynthDiabetes`, comes from a package licensed `GPL-2`
-only; it is used only in the tests and is not in the wheel (docs/release.md
-records this as a question for the maintainer).
+only. It is a separate, independently licensed work used only as test input:
+it is in the repository and the sdist, with its own notice and the GPL-2 text
+in `LICENSES/GPL-2.0-only.txt`, and it is not in the wheel.
 
 No upstream source file is shipped in the wheel. The R scripts in `r/` call
 the packages below to generate the test fixtures; they do not copy their code.
@@ -111,7 +112,12 @@ the packages below to generate the test fixtures; they do not copy their code.
 - `tests/fixtures/data/synth_diabetes.csv` is `mlbench::SynthDiabetes`.
 - Authors: Friedrich Leisch, Evgenia Dimitriadou (authors), Kurt Hornik
   (maintainer), Matthias Templ (contributor).
-- License (DESCRIPTION): `GPL-2`.
+- License (DESCRIPTION): `GPL-2`. The text is in
+  `LICENSES/GPL-2.0-only.txt`, copied from R 4.6.1's `share/licenses/GPL-2`.
+- Distribution: a separate work used only as test input, in the repository
+  and the sdist and not in the wheel.
+  `tests/fixtures/data/NOTICE-synth_diabetes.md` states its origin and
+  license.
 - Its help page says the data were "created by Matthias Templ to mimic the
   data analyzed by Smith, Everhart, Dickson, Knowler, and Johannes (1988).
   Every value of the data is synthetic and no row corresponds to a real
