@@ -23,7 +23,7 @@ Line numbers `trusch.md:N` refer to `reference/trusch.md`. `MOB.R:N` and
 - Only negbinModel's code is reproduced: the StatModel object
   (trusch.md:1101-1122), its fit slot (trusch.md:1188-1205), the reweight method
   (trusch.md:1296-1298) and the other S3 methods (trusch.md:1323-1327). The body
-  of the underlying fitter `glm.nb_fit` is elided as `"<body>"`
+  of the underlying fitter `glm.nb_fit` is left out of the listing
   (trusch.md:1037). The text says it is "Venables and Ripley's code from glm.nb"
   adapted to take a design matrix (trusch.md:1029-1031).
 - The scores come from sandwich's `estfun.glm`, printed at trusch.md:1056-1066.
@@ -187,12 +187,12 @@ coefficients and objective barely depend on theta at that size.
 
 **What the thesis says.** safelogitModel is "binary logistic regression in
 presence of quasi-complete separation" (trusch.md:938-939). In the LORET
-application one terminal node holds people who never voted, where "we find
-(quasi-)complete separation" (trusch.md:2607). Its footnote says: "In this node
-the ML estimator does not exist. The algorithm has the positive effect of
-separating these observations from the rest, hence estimation in other nodes
-works well" (trusch.md:2651). Separation appears again at trusch.md:5209.
-Nothing else is said, so "safe" is defined below from these two requirements:
+application one terminal node holds people who never voted, and the thesis
+reports separation there (trusch.md:2607). A footnote explains that no ML
+estimate exists in that node, and that splitting those observations off lets the
+models in the remaining nodes be estimated without trouble (trusch.md:2651).
+Separation appears again at trusch.md:5209. Nothing else is said, so "safe" is
+defined below from these two requirements:
 
 - a separated subgroup can be split off from its parent;
 - a node whose ML estimator does not exist ends the recursion.

@@ -86,8 +86,10 @@ packages below to generate the test fixtures; they do not copy their code.
   thesis' description and code listing: beta-only scores from `estfun.glm`, and
   glm.nb as the fitter. It is reimplemented in `r/extensions/negbin.R` and
   `src/modeltrees/models/negbin.py`; the thesis text and code are not
-  reproduced, apart from a few short quotations in the docs, each attributed
-  with its line reference in the thesis.
+  reproduced, apart from two short quotations of 15 words or fewer in
+  `docs/extensions-spec.md` (one of them repeated in
+  `r/extensions/safelogit.R`), each attributed with its line reference in the
+  thesis. Other passages are paraphrased with their line references.
 - The safe logit and multinomial models (`models/safelogit.py`,
   `models/multinom.py`, `r/extensions/safelogit.R`, `r/extensions/multinom.R`)
   are this project's designs. The thesis names models with these purposes but
