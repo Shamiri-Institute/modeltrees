@@ -11,12 +11,14 @@ starts to match R must move to ``MATCHING``.
 """
 
 import copy
+import warnings
 from functools import cache
 from typing import Any
 
 import numpy as np
 import pytest
 from blind_compare import (
+    ALTERNATION_LIMIT,
     CASES,
     Divergence,
     _Case,
@@ -25,9 +27,11 @@ from blind_compare import (
     compare,
     compare_separated,
 )
+from grown_trees import model as fixture_model
 from slow import SLOW
 
 import modeltrees as mt
+from modeltrees.tree import Node, StopReason
 
 # (case, slow): cases that match R on every component.
 MATCHING = [
@@ -36,7 +40,8 @@ MATCHING = [
     ("blind_03_lm", False),
     ("blind_13_glm", True),
     # Weakly identified theta (glm.nb's alternation limit): theta at
-    # WEAK_THETA_RTOL, and the flag where the final thetas agree.
+    # WEAK_THETA_RTOL, or at ROUNDED_STOP_RTOL where only one side reached
+    # the limit.
     ("blind_29_negbin", True),
     # Pruning counts coefficients only (task 6k), then as blind_29.
     ("blind_36_negbin", True),
@@ -188,3 +193,81 @@ def test_perturbed_theta_of_an_identified_node_is_caught(key: str) -> None:
     case = _perturbed_case("blind_29_negbin", 3, change)
     with pytest.raises(_Differs, match=f"node 3: {key}:"):
         case.nodes(_grown("blind_29_negbin"))
+
+
+# blind_36 node 112: theta 176, SE 2513; the port reaches glm.nb's
+# alternation limit and R does not (docs/api-port.md, section 20).
+
+
+def _node_112() -> tuple[_Case, Node]:
+    """R's node 112 and the port's fit on its rows (the grown tree's fit,
+    bit for bit), with R's flag set to the opposite of the port's so that
+    the flags differ on any platform."""
+    case = _Case("blind_36_negbin")
+    case.f = copy.deepcopy(case.f)
+    e = case.node(112)
+    rows = np.array(e["rows"], dtype=np.intp)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        fit = fixture_model(case.f).fit(
+            case.y[rows],
+            case.x[rows] if case.x is not None else None,
+            start=None,
+            weights=case.w[rows],
+            offset=None if case.off is None else case.off[rows],
+            cluster=None,
+            caseweights=case.f["control"]["caseweights"],
+            estfun=True,
+            vcov=False,
+        )
+    flag = fit.extras["theta_warning"]
+    r_flag = None if flag == ALTERNATION_LIMIT else ALTERNATION_LIMIT
+    e["model_info"]["theta_warning"] = r_flag
+    node = Node(
+        id=112,
+        depth=e["depth"],
+        rows=rows,
+        nobs=e["nobs"],
+        fit=fit,
+        stop_reason=StopReason(e["stop_reason"]),
+    )
+    return case, node
+
+
+def test_unperturbed_node_with_differing_flags_matches() -> None:
+    case, node = _node_112()
+    case.fit(node, case.node(112), "node 112")
+
+
+@pytest.mark.parametrize("key", ["theta", "theta_irls", "theta_se"])
+def test_perturbed_theta_with_differing_flags_is_caught(key: str) -> None:
+    case, node = _node_112()
+    case.node(112)["model_info"][key] *= 1 + 1e-5
+    # The message carries both sides' theta, theta_irls, iter and flag.
+    with pytest.raises(
+        _Differs,
+        match=(
+            f"node 112: {key}:.*; port theta .*, theta_irls .*, iter 1, "
+            "theta_warning .*; R theta .*, theta_irls .*, iter 1, theta_warning"
+        ),
+    ):
+        case.fit(node, case.node(112), "node 112")
+
+
+@pytest.mark.parametrize(
+    ("what", "change"),
+    [
+        ("objective", lambda e: e.update(objfun=e["objfun"] * (1 + PERTURBATION))),
+        (
+            "coefficients",
+            lambda e: e["coefficients"].__setitem__(
+                1, e["coefficients"][1] * (1 + PERTURBATION)
+            ),
+        ),
+    ],
+)
+def test_perturbed_fit_with_differing_flags_is_caught(what: str, change: Any) -> None:
+    case, node = _node_112()
+    change(case.node(112))
+    with pytest.raises(_Differs, match=f"node 112: {what}:"):
+        case.fit(node, case.node(112), "node 112")

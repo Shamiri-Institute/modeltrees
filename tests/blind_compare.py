@@ -22,9 +22,9 @@ nowhere else:
 - negative binomial theta under a weak-identification warning (theta.ml's
   iteration limit or glm.nb's alternation limit, from R or the port):
   theta, theta_irls and theta_se at ``WEAK_THETA_RTOL`` (theta.ml's
-  iteration limit keeps the standing ``THETA_LOOSE_RTOL``), and the
-  alternation-limit flag need not agree when the final thetas agree to
-  ``SAME_THETA_RTOL``;
+  iteration limit keeps the standing ``THETA_LOOSE_RTOL``); the
+  alternation-limit flag need not agree, and when it differs the three
+  are compared at ``ROUNDED_STOP_RTOL`` instead;
 - completely separated safe logit leaves: the linear predictor on the
   leaf's rows at ``SEPARATED_RTOL`` and the fitted means at the usual
   tolerance, instead of each coefficient (the slopes are not identified),
@@ -36,6 +36,7 @@ nowhere else:
 
 import math
 import warnings
+from collections.abc import Mapping
 from functools import cache
 from typing import Any
 
@@ -74,9 +75,13 @@ ATOL = 1e-10
 WEAK_THETA_RTOL = 1e-6
 ALTERNATION_LIMIT = "alternation limit reached"
 WEAK_THETA = frozenset({NEAR_POISSON, ALTERNATION_LIMIT})
-# Final thetas this close make a differing alternation-limit flag a
-# stopping decision decided by rounding.
-SAME_THETA_RTOL = 1e-10
+# theta, theta_irls and theta_se when only one side reached glm.nb's
+# alternation limit, a stopping decision decided by rounding: twice the
+# largest deviation from R's value over 2,300 end points of blind_36 node
+# 112 refitted with its regressors perturbed by one ulp (9.3e-9, theta_se),
+# where theta moves by up to 1.4e-9 per alternation (docs/api-port.md,
+# section 20).
+ROUNDED_STOP_RTOL = 2e-8
 BLIND = FIXTURES / "blind_cases"
 CASES = sorted(p.stem for p in (BLIND / "trees").glob("*.json"))
 
@@ -433,25 +438,29 @@ class _Case:
 
     def theta(self, fit: FitResult, info: dict[str, Any], where: str) -> None:
         got_warning, r_warning = fit.extras["theta_warning"], info["theta_warning"]
-        if r_warning == NEAR_POISSON:
+        # Only one side reached the alternation limit.
+        stopped_by_rounding = got_warning != r_warning and ALTERNATION_LIMIT in (
+            got_warning,
+            r_warning,
+        )
+        if stopped_by_rounding:
+            rtol = ROUNDED_STOP_RTOL
+        elif r_warning == NEAR_POISSON:
             rtol = THETA_LOOSE_RTOL
         elif r_warning in WEAK_THETA or got_warning in WEAK_THETA:
             rtol = WEAK_THETA_RTOL
         else:
             rtol = RTOL
-        for key in ("theta", "theta_irls", "theta_se"):
-            _approx(fit.extras[key], info[key], rtol, ATOL, f"{where}: {key}")
-        theta, r_theta = fit.extras["theta"], info["theta"]
-        stopped_by_rounding = (
-            ALTERNATION_LIMIT in (got_warning, r_warning)
-            and r_theta is not None
-            and abs(theta - r_theta) <= SAME_THETA_RTOL * abs(r_theta)
-        )
-        if not stopped_by_rounding:
-            _check(
-                got_warning == r_warning,
-                f"{where}: theta_warning {got_warning!r} vs R {r_warning!r}",
-            )
+        try:
+            for key in ("theta", "theta_irls", "theta_se"):
+                _approx(fit.extras[key], info[key], rtol, ATOL, f"{where}: {key}")
+            if not stopped_by_rounding:
+                _check(
+                    got_warning == r_warning,
+                    f"{where}: theta_warning {got_warning!r} vs R {r_warning!r}",
+                )
+        except _Differs as d:
+            raise _Differs(f"{d.detail}; {_theta_state(fit.extras, info)}") from None
         for key in ("converged", "iter"):
             _check(
                 fit.extras[key] == info[key],
@@ -651,6 +660,19 @@ class _Case:
                 _check(
                     bool(np.all(np.abs(got.matrix - expected) <= tol)), f"{where}: vcov"
                 )
+
+
+def _theta_state(got: Mapping[str, Any], r: Mapping[str, Any]) -> str:
+    """theta, theta_irls, iter and the warning on both sides, for a theta
+    divergence."""
+
+    def side(d: Mapping[str, Any]) -> str:
+        return (
+            f"theta {d['theta']!r}, theta_irls {d['theta_irls']!r}, "
+            f"iter {d['iter']!r}, theta_warning {d['theta_warning']!r}"
+        )
+
+    return f"port {side(got)}; R {side(r)}"
 
 
 def _linear_predictor(
