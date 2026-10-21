@@ -74,5 +74,5 @@ addopts = ["-m", "not slow"]
 
 [tool.ruff]
 # The design documents hold signature sketches, not runnable code; ruff
-# formats Markdown code blocks, so they are left out (docs/release.md).
+# formats Markdown code blocks, so they are left out.
 extend-exclude = ["docs/*.md"]

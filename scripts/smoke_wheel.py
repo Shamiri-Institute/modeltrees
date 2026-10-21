@@ -1,4 +1,4 @@
-"""Smoke test for an installed wheel (docs/release.md).
+"""Smoke test for an installed wheel.
 
 Run it with the interpreter of a fresh virtual environment that has only
 the wheel and its runtime dependencies installed, from a directory outside

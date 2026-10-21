@@ -336,9 +336,9 @@ uv run mypy src tests scripts
 Tests marked `slow` take more than about 5 seconds each or as a
 parametrized group: growing the larger negative binomial and multinomial
 fixture trees, the parallel fixture trees and the benchmark tree. They are
-excluded by default through `addopts` in pyproject.toml. The default run
-took about 3 minutes and the full run about 8 when they were set up
-(docs/release.md).
+excluded by default through `addopts` in pyproject.toml. On a 12-core
+machine with single-threaded BLAS the default run takes about 3 minutes
+(168 s) and the full run about 8 (474 s).
 
 The fixtures are regenerated with R 4.6.1 and the renv environment in `r/`:
 
