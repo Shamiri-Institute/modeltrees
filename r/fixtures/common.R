@@ -53,6 +53,8 @@ column_schema <- function(df) {
       list(name = nm, type = "ordered", levels = levels(v))
     } else if (is.factor(v)) {
       list(name = nm, type = "factor", levels = levels(v))
+    } else if (is.logical(v)) {
+      list(name = nm, type = "logical")
     } else if (is.integer(v)) {
       list(name = nm, type = "integer")
     } else if (is.numeric(v)) {
@@ -64,21 +66,25 @@ column_schema <- function(df) {
 }
 
 # Write a dataset as CSV plus a JSON schema. Doubles use round-trip formatting,
-# factors are written as their labels. No row names, no quoting needed because
-# labels are plain identifiers (checked).
+# factors are written as their labels, logicals as TRUE and FALSE. No row
+# names, no quoting needed because labels are plain identifiers (checked).
+# Missing values are allowed only in datasets with allow_na = TRUE (the
+# formula fixtures) and are written as NA.
 write_dataset <- function(ds, data_dir) {
   df <- ds$data
-  stopifnot(!anyNA(df))
+  if (!isTRUE(ds$allow_na)) stopifnot(!anyNA(df))
   cols <- lapply(df, function(v) {
-    if (is.factor(v)) {
+    out <- if (is.factor(v)) {
       lab <- as.character(v)
-      stopifnot(all(grepl("^[A-Za-z0-9_.]+$", lab)))
+      stopifnot(all(grepl("^[A-Za-z0-9_.]+$", lab[!is.na(lab)])))
       lab
-    } else if (is.integer(v)) {
+    } else if (is.logical(v) || is.integer(v)) {
       as.character(v)
     } else {
       format_double(v)
     }
+    out[is.na(v)] <- "NA"
+    out
   })
   lines <- c(paste(names(df), collapse = ","), do.call(paste, c(cols, sep = ",")))
   dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)

@@ -426,7 +426,8 @@ tree_fixture <- function(spec, ds, instrumented) {
     stop("Instrumented mob_partynode changed the tree for ", spec$name)
   }
   tree <- inst$tree
-  stopifnot(nrow(tree$data) == nrow(ds$data))
+  # Only the formula fixtures have rows that na.omit drops.
+  stopifnot(nrow(tree$data) == nrow(ds$data) - length(attr(tree$data, "na.action")))
 
   nodes <- extract_nodes(tree, spec$control$alpha,
     if (is.null(spec$cluster)) NULL else ds$data[[spec$cluster]])

@@ -1,0 +1,50 @@
+{
+  "dataset": "sim_formula_factor",
+  "description": "Simulated data with a factor regressor f declared in the order d, b, a, c; every response has a planted split at z1 = 5 (z2 is noise): gaussian y_gauss and binary y_bin (factor stay, leave) on x and f, cell means y_cell on f, and y_mean (gaussian) and y_count (poisson) on the split alone.",
+  "source": "simulated",
+  "seed": 20261061,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 600,
+  "csv": "sim_formula_factor.csv",
+  "columns": [
+    {
+      "name": "x",
+      "type": "double"
+    },
+    {
+      "name": "f",
+      "type": "factor",
+      "levels": ["d", "b", "a", "c"]
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "z2",
+      "type": "double"
+    },
+    {
+      "name": "y_gauss",
+      "type": "double"
+    },
+    {
+      "name": "y_bin",
+      "type": "factor",
+      "levels": ["stay", "leave"]
+    },
+    {
+      "name": "y_cell",
+      "type": "double"
+    },
+    {
+      "name": "y_mean",
+      "type": "double"
+    },
+    {
+      "name": "y_count",
+      "type": "integer"
+    }
+  ],
+  "generator_code": "{\n    n <- 600L\n    lev <- c(\"d\", \"b\", \"a\", \"c\")\n    d <- data.frame(x = rnorm(n), f = factor(sample(lev, n, replace = TRUE), levels = lev), z1 = runif(n, \n        0, 10), z2 = rnorm(n))\n    left <- d$z1 <= 5\n    fl <- as.character(d$f)\n    eff_left <- c(d = 0, b = 1, a = -1, c = 0.5)[fl]\n    eff_right <- c(d = 0, b = -1, a = 1.5, c = -0.5)[fl]\n    e <- rnorm(n)\n    d$y_gauss <- unname(ifelse(left, 1 + 1.5 * d$x + eff_left, -0.5 + 0.5 * d$x + eff_right)) + e\n    eta <- unname(ifelse(left, -0.5 + d$x + eff_left, 0.5 - d$x + eff_right))\n    d$y_bin <- factor(ifelse(runif(n) < plogis(eta), \"leave\", \"stay\"), levels = c(\"stay\", \"leave\"))\n    d$y_cell <- unname(ifelse(left, c(d = 1, b = 2, a = 0, c = 3)[fl], c(d = -1, b = 0, a = 2, c = 1)[fl])) + \n        rnorm(n)\n    d$y_mean <- ifelse(left, 1, -1) + rnorm(n)\n    d$y_count <- rpois(n, exp(ifelse(left, 0.3, 1.2)))\n    d\n}"
+}

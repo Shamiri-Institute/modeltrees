@@ -1,0 +1,36 @@
+{
+  "dataset": "sim_formula_logical_numeric",
+  "description": "sim_formula_logical with the logical zb stored as the double 0/1. Same rows and other columns.",
+  "source": "simulated",
+  "seed": 20261062,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 500,
+  "csv": "sim_formula_logical_numeric.csv",
+  "columns": [
+    {
+      "name": "x",
+      "type": "double"
+    },
+    {
+      "name": "b",
+      "type": "logical"
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "zb",
+      "type": "double"
+    },
+    {
+      "name": "y_lreg",
+      "type": "double"
+    },
+    {
+      "name": "y_lsplit",
+      "type": "double"
+    }
+  ],
+  "generator_code": "sim_formula_logical with the logical column zb replaced by as.numeric(zb)"
+}

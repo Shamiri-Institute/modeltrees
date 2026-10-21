@@ -1,0 +1,38 @@
+{
+  "dataset": "sim_formula_na",
+  "description": "Simulated gaussian data with missing values (NA) in y, x, z1, zf and the weights w; the levels f = e and zf = q occur only in rows with a missing value. Planted split at z1 = 5, then on zf.",
+  "source": "simulated",
+  "seed": 20261064,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 500,
+  "csv": "sim_formula_na.csv",
+  "columns": [
+    {
+      "name": "x",
+      "type": "double"
+    },
+    {
+      "name": "f",
+      "type": "factor",
+      "levels": ["d", "b", "a", "c", "e"]
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "zf",
+      "type": "factor",
+      "levels": ["k", "j", "m", "q"]
+    },
+    {
+      "name": "w",
+      "type": "integer"
+    },
+    {
+      "name": "y",
+      "type": "double"
+    }
+  ],
+  "generator_code": "{\n    n <- 500L\n    d <- data.frame(x = rnorm(n), f = factor(sample(c(\"d\", \"b\", \"a\", \"c\"), n, replace = TRUE), levels = c(\"d\", \n        \"b\", \"a\", \"c\", \"e\")), z1 = runif(n, 0, 10), zf = factor(sample(c(\"k\", \"j\", \"m\"), n, replace = TRUE), \n        levels = c(\"k\", \"j\", \"m\", \"q\")), w = sample(1:3, n, replace = TRUE))\n    left <- d$z1 <= 5\n    km <- d$zf %in% c(\"k\", \"m\")\n    eff <- c(d = 0, b = 0.5, a = -0.5, c = 1)[as.character(d$f)]\n    d$y <- unname(ifelse(left, 1 + 2 * d$x, ifelse(km, -1 + 0.5 * d$x, 0.5 - d$x)) + eff) + rnorm(n)\n    holes <- matrix(sample(n, 40L), nrow = 8L)\n    d$y[holes[, 1L]] <- NA\n    d$x[holes[, 2L]] <- NA\n    d$z1[holes[, 3L]] <- NA\n    d$zf[holes[, 4L]] <- NA\n    d$w[holes[, 5L]] <- NA\n    d$z1[holes[1L, 1L]] <- NA\n    d$w[holes[1L, 2L]] <- NA\n    d$f[holes[1:3, 1L]] <- \"e\"\n    d$zf[holes[1:3, 2L]] <- \"q\"\n    d\n}"
+}

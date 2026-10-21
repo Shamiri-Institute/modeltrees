@@ -22,7 +22,7 @@ setwd(original_dir)
 for (f in sort(list.files(file.path(r_dir, "extensions"), pattern = "[.]R$", full.names = TRUE))) {
   source(f)
 }
-for (f in c("common.R", "datasets.R", "trees.R", "glm.R", "pvalues.R", "extensions.R", "sandwich.R", "predict.R")) {
+for (f in c("common.R", "datasets.R", "trees.R", "glm.R", "pvalues.R", "extensions.R", "sandwich.R", "predict.R", "formula.R")) {
   source(file.path(r_dir, "fixtures", f))
 }
 
@@ -144,6 +144,24 @@ for (case in all_glm_cases()) {
 pv <- pvalue_fixture()
 emit(pv, "pvalues.json")
 
+# Formula-feature trees on their own datasets, with predict() on new rows.
+# Generated last, so that the random state of everything above is unchanged.
+formula_ds <- formula_datasets()
+names(formula_ds) <- vapply(formula_ds, `[[`, "", "name")
+for (ds in formula_ds) {
+  write_dataset(ds, data_dir)
+  written <- c(written, file.path("data", paste0(ds$name, c(".csv", ".schema.json"))))
+}
+datasets <- c(datasets, formula_ds)
+formula_index <- list()
+for (spec in all_formula_tree_specs()) {
+  fx <- formula_tree_fixture(spec, formula_ds[[spec$dataset]], instrumented)
+  rel <- file.path("formula_trees", paste0(spec$name, ".json"))
+  emit(fx, rel)
+  formula_index[[length(formula_index) + 1L]] <- list(file = rel, fixture = fx)
+}
+check_formula_trees(formula_index)
+
 # ---------------------------------------------------------------------------
 # README
 
@@ -199,6 +217,9 @@ readme <- c(
   "  `model_info` object with the fit's extra outputs (for example `theta` for",
   "  `negbinfit`, `separation` for `safelogitfit`, `classes_present` for",
   "  `multinomfit`). See docs/extensions-spec.md for their meaning.",
+  "- The datasets of the formula fixtures may have `logical` columns (written",
+  "  `TRUE` and `FALSE`) and missing values (written `NA`); the other datasets",
+  "  have neither.",
   "",
   "## Data",
   "",
@@ -348,6 +369,46 @@ for (entry in predict_index) {
       sum(vapply(fx$cases, function(c) c$routing == "random", TRUE))))
 }
 readme <- c(readme, "",
+  "## Formula tree fixtures",
+  "",
+  "Generator: `r/fixtures/formula.R` (specs, datasets and the extra fields) and",
+  "`r/fixtures/trees.R` (growing and extraction). The tree fixture format, in",
+  "their own directory `formula_trees/` so that the suites globbing `trees/` and",
+  "`extension_trees/` keep their fixture counts, for the formula features of the",
+  "public layer: factor and logical regressors, a model without an intercept,",
+  "logical, ordered and five-level nominal partitioning variables, missing",
+  "values and one-part formulas. docs/formula-fixtures.md records the",
+  "decisions. Extra fields: `case` (the feature, numbered as in",
+  "docs/formula-fixtures.md), `r_outcome` (`ok` or `error`),",
+  "`expanded_formula` (R's two-part form), `na_action` (`removed_rows`, 0-based",
+  "indices into the data CSV of the rows the model frame's `na.omit` drops;",
+  "every other row index refers to the remaining rows), `model_frame` (columns,",
+  "classes, kept and dropped factor levels), `print` (partykit's print, one",
+  "line per entry) and `predict`: new rows that combine the regressors of one",
+  "training row with the partitioning variables of another and avoid one level",
+  "of each factor (the first of a regressor, the last of a partitioning",
+  "variable; a logical regressor is TRUE), with the data's declared levels,",
+  "and R's `predict(type = \"node\")` and `type = \"response\"` for them. A",
+  "fixture with `r_outcome` `error` has no tree: it records the call, R's",
+  "error and `oracle_fixture`, the fixture that stands in for it.",
+  "")
+for (entry in formula_index) {
+  fx <- entry$fixture
+  readme <- c(readme,
+    sprintf("### `%s`", entry$file), "",
+    fx$description, "",
+    if (fx$r_outcome == "error") {
+      sprintf("Data `%s`. R stops: `%s` in `%s`. Oracle: `%s`.", fx$data_csv,
+        fx$error$message, fx$error$call, fx$oracle_fixture)
+    } else {
+      sprintf("Data `%s`. %d inner and %d terminal nodes.%s", fx$data_csv,
+        fx$summary$n_inner, fx$summary$n_terminal,
+        if (length(fx$na_action$removed_rows)) sprintf(" %d of %d rows dropped by na.omit.",
+          length(fx$na_action$removed_rows), fx$na_action$n_input) else "")
+    }, "",
+    "```r", fx$r_call, "```", "")
+}
+readme <- c(readme,
   "## Node-level fit fixtures",
   "",
   "Generator: `r/fixtures/extensions.R`. One fit of an extension model on a",

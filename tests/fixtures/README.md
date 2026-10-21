@@ -44,6 +44,9 @@ Generated with R 4.6.1, partykit 1.3-0, strucchange 1.6-0, sandwich 3.1-3, jsonl
   `model_info` object with the fit's extra outputs (for example `theta` for
   `negbinfit`, `separation` for `safelogitfit`, `classes_present` for
   `multinomfit`). See docs/extensions-spec.md for their meaning.
+- The datasets of the formula fixtures may have `logical` columns (written
+  `TRUE` and `FALSE`) and missing values (written `NA`); the other datasets
+  have neither.
 
 ## Data
 
@@ -62,6 +65,11 @@ Generated with R 4.6.1, partykit 1.3-0, strucchange 1.6-0, sandwich 3.1-3, jsonl
 | `data/sim_multinom.csv` | 900 | 20261033 | Simulated three-class responses (lo, mid, hi): no instability, a planted split at z1 = 0.5, and a school-clustered version. Weights w0 in 0 to 3. |
 | `data/sim_multinom_noref.csv` | 600 | 20261034 | Simulated three-class responses (lo, mid, hi) where the reference class lo never occurs for z1 > 0.7. |
 | `data/sim_cluster_models.csv` | 830 | 20261041 | Simulated grouped data for the cluster-robust leaf covariances: 36 schools of 8 to 40 pupils with school-level random intercepts, a planted split at z1 = 5, and responses for poisson (y_pois, offset log(exposure)), negative binomial (y_nb), multinomial (y_mn) and safe logit without separation (y_sl). The column school holds the cluster id. |
+| `data/sim_formula_factor.csv` | 600 | 20261061 | Simulated data with a factor regressor f declared in the order d, b, a, c; every response has a planted split at z1 = 5 (z2 is noise): gaussian y_gauss and binary y_bin (factor stay, leave) on x and f, cell means y_cell on f, and y_mean (gaussian) and y_count (poisson) on the split alone. |
+| `data/sim_formula_logical.csv` | 500 | 20261062 | Simulated gaussian data with a logical regressor b and a logical partitioning variable zb: y_lreg has a planted split at z1 = 5 (zb is noise), y_lsplit a planted split on zb. |
+| `data/sim_formula_logical_numeric.csv` | 500 | 20261062 | sim_formula_logical with the logical zb stored as the double 0/1. Same rows and other columns. |
+| `data/sim_formula_ordered.csv` | 700 | 20261063 | Simulated gaussian data with an ordered partitioning variable zo declared low, mid, high, top and a nominal one zn with five levels declared v, r, t, p, s. Planted split zo <= mid, then zn in {r, p} for zo > mid. z1 is noise. |
+| `data/sim_formula_na.csv` | 500 | 20261064 | Simulated gaussian data with missing values (NA) in y, x, z1, zf and the weights w; the levels f = e and zf = q occur only in rows with a missing value. Planted split at z1 = 5, then on zf. |
 
 The glm.fit fixtures each have their own `data/glm_<case>.csv`, listed with
 the fixture below.
@@ -646,6 +654,139 @@ and `unseen_level_calls` record calls R stops on, with the message.
 - `predict/sim_gaussian_lmtree_weights.json`: predict() of trees/sim_gaussian_lmtree_weights.json on new rows built from training rows: break values, absent levels, missing values on and off the path, a missing regressor. 93 rows, 20 routed at random.
 - `predict/sim_binomial_glmtree_multisplit.json`: predict() of trees/sim_binomial_glmtree_multisplit.json on new rows built from training rows: break values, absent levels, missing values on and off the path, a missing regressor. 15 rows, 3 routed at random.
 - `predict/sim_poisson_glmtree_multisplit.json`: predict() of trees/sim_poisson_glmtree_multisplit.json on new rows built from training rows: break values, absent levels, missing values on and off the path, a missing regressor and a missing offset. 20 rows, 3 routed at random.
+
+## Formula tree fixtures
+
+Generator: `r/fixtures/formula.R` (specs, datasets and the extra fields) and
+`r/fixtures/trees.R` (growing and extraction). The tree fixture format, in
+their own directory `formula_trees/` so that the suites globbing `trees/` and
+`extension_trees/` keep their fixture counts, for the formula features of the
+public layer: factor and logical regressors, a model without an intercept,
+logical, ordered and five-level nominal partitioning variables, missing
+values and one-part formulas. docs/formula-fixtures.md records the
+decisions. Extra fields: `case` (the feature, numbered as in
+docs/formula-fixtures.md), `r_outcome` (`ok` or `error`),
+`expanded_formula` (R's two-part form), `na_action` (`removed_rows`, 0-based
+indices into the data CSV of the rows the model frame's `na.omit` drops;
+every other row index refers to the remaining rows), `model_frame` (columns,
+classes, kept and dropped factor levels), `print` (partykit's print, one
+line per entry) and `predict`: new rows that combine the regressors of one
+training row with the partitioning variables of another and avoid one level
+of each factor (the first of a regressor, the last of a partitioning
+variable; a logical regressor is TRUE), with the data's declared levels,
+and R's `predict(type = "node")` and `type = "response"` for them. A
+fixture with `r_outcome` `error` has no tree: it records the call, R's
+error and `oracle_fixture`, the fixture that stands in for it.
+
+### `formula_trees/sim_formula_factor_lmtree_factor.json`
+
+A factor regressor f declared d, b, a, c (not alphabetical): treatment coding against d, coefficients (Intercept), x, fb, fa, fc.
+
+Data `data/sim_formula_factor.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::lmtree(formula = y_gauss ~ x + f | z1 + z2, data = sim_formula_factor, alpha = 0.05, bonferroni = TRUE, minsize = NULL, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `formula_trees/sim_formula_factor_glmtree_binomial_factor.json`
+
+glmtree binomial with the factor regressor f and a factor response declared stay, leave (stay is the failure).
+
+Data `data/sim_formula_factor.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::glmtree(formula = y_bin ~ x + f | z1 + z2, data = sim_formula_factor, family = binomial(link = "logit"), epsilon = 1e-08, maxit = 25, alpha = 0.05, bonferroni = TRUE, minsize = NULL, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `formula_trees/sim_formula_factor_lmtree_noint.json`
+
+No intercept: the factor regressor gets an indicator per level, fd, fb, fa, fc.
+
+Data `data/sim_formula_factor.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::lmtree(formula = y_cell ~ 0 + f | z1 + z2, data = sim_formula_factor, alpha = 0.05, bonferroni = TRUE, minsize = NULL, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `formula_trees/sim_formula_logical_lmtree_logical.json`
+
+A logical regressor b with an intercept (one column bTRUE) and a logical partitioning variable zb, which the instability tests treat as numeric and no split selects.
+
+Data `data/sim_formula_logical.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::lmtree(formula = y_lreg ~ x + b | z1 + zb, data = sim_formula_logical, alpha = 0.05, bonferroni = TRUE, minsize = NULL, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `formula_trees/sim_formula_logical_lmtree_logical_noint.json`
+
+The logical regressor b without an intercept: columns bFALSE, bTRUE and x. The same fits as sim_formula_logical_lmtree_logical, reparametrized.
+
+Data `data/sim_formula_logical.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::lmtree(formula = y_lreg ~ 0 + b + x | z1 + zb, data = sim_formula_logical, alpha = 0.05, bonferroni = TRUE, minsize = NULL, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `formula_trees/sim_formula_logical_lmtree_logical_split.json`
+
+A planted split on the logical partitioning variable zb. partykit 1.3-0 stops: its split search treats a logical as categorical and kidids_split then requires an integer variable. No tree; the oracle for Python is sim_formula_logical_numeric_lmtree_split.
+
+Data `data/sim_formula_logical.csv`. R stops: `variable 2 is not integer` in `kidids_split(sp, data = z)`. Oracle: `formula_trees/sim_formula_logical_numeric_lmtree_split.json`.
+
+```r
+partykit::lmtree(formula = y_lsplit ~ x | z1 + zb, data = sim_formula_logical, alpha = 0.05, bonferroni = TRUE, minsize = NULL, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `formula_trees/sim_formula_logical_numeric_lmtree_split.json`
+
+sim_formula_logical_lmtree_logical_split with zb stored as the double 0/1: the split zb <= 0 that R grows for the numeric variable.
+
+Data `data/sim_formula_logical_numeric.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::lmtree(formula = y_lsplit ~ x | z1 + zb, data = sim_formula_logical_numeric, alpha = 0.05, bonferroni = TRUE, minsize = NULL, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `formula_trees/sim_formula_ordered_lmtree.json`
+
+An ordered partitioning variable zo declared low, mid, high, top and a nominal zn with five levels declared v, r, t, p, s: splits zo <= mid and zn in {r, p}.
+
+Data `data/sim_formula_ordered.csv`. 2 inner and 3 terminal nodes.
+
+```r
+partykit::lmtree(formula = y ~ x | zo + zn + z1, data = sim_formula_ordered, alpha = 0.05, bonferroni = TRUE, minsize = NULL, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `formula_trees/sim_formula_na_lmtree_weights.json`
+
+Missing values in y, x, z1, zf and the weights: model.frame's na.omit drops the rows (na_action), and the levels f = e and zf = q, present only in dropped rows, are dropped from the model frame.
+
+Data `data/sim_formula_na.csv`. 10 inner and 11 terminal nodes. 40 of 500 rows dropped by na.omit.
+
+```r
+partykit::lmtree(formula = y ~ x + f | z1 + zf, data = sim_formula_na, weights = w, alpha = 0.05, bonferroni = TRUE, minsize = NULL, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `formula_trees/sim_formula_factor_lmtree_onepart.json`
+
+A one-part formula: lmtree expands y_mean ~ z1 + z2 to y_mean ~ 1 | z1 + z2, an intercept-only model.
+
+Data `data/sim_formula_factor.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::lmtree(formula = y_mean ~ z1 + z2, data = sim_formula_factor, alpha = 0.05, bonferroni = TRUE, minsize = NULL, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
+
+### `formula_trees/sim_formula_factor_glmtree_poisson_onepart.json`
+
+A one-part formula for glmtree poisson: y_count ~ 1 | z1 + z2.
+
+Data `data/sim_formula_factor.csv`. 1 inner and 2 terminal nodes.
+
+```r
+partykit::glmtree(formula = y_count ~ z1 + z2, data = sim_formula_factor, family = poisson(link = "log"), epsilon = 1e-08, maxit = 25, alpha = 0.05, bonferroni = TRUE, minsize = NULL, maxdepth = Inf, mtry = Inf, trim = 0.1, breakties = FALSE, parm = NULL, dfsplit = TRUE, prune = NULL, restart = TRUE, verbose = FALSE, caseweights = TRUE, ytype = "vector", xtype = "matrix", terminal = c("estfun", "object"), inner = c("estfun", "object"), model = TRUE, numsplit = "left", catsplit = "binary", vcov = "opg", ordinal = "chisq", nrep = 10000, applyfun = NULL, cores = NULL)
+```
 
 ## Node-level fit fixtures
 

@@ -1,0 +1,36 @@
+{
+  "dataset": "sim_formula_logical",
+  "description": "Simulated gaussian data with a logical regressor b and a logical partitioning variable zb: y_lreg has a planted split at z1 = 5 (zb is noise), y_lsplit a planted split on zb.",
+  "source": "simulated",
+  "seed": 20261062,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 500,
+  "csv": "sim_formula_logical.csv",
+  "columns": [
+    {
+      "name": "x",
+      "type": "double"
+    },
+    {
+      "name": "b",
+      "type": "logical"
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "zb",
+      "type": "logical"
+    },
+    {
+      "name": "y_lreg",
+      "type": "double"
+    },
+    {
+      "name": "y_lsplit",
+      "type": "double"
+    }
+  ],
+  "generator_code": "{\n    n <- 500L\n    d <- data.frame(x = rnorm(n), b = runif(n) < 0.4, z1 = runif(n, 0, 10), zb = runif(n) < 0.5)\n    e <- rnorm(n)\n    d$y_lreg <- ifelse(d$z1 <= 5, 1 + 2 * d$x + 1 * d$b, -1 + 0.5 * d$x - 1 * d$b) + e\n    d$y_lsplit <- ifelse(d$zb, 1 + 2 * d$x, -1 - d$x) + e\n    d\n}"
+}

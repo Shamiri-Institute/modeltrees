@@ -27,6 +27,7 @@ docs/decisions.md win, and the porting record should be corrected.
 | [extensions-port.md](extensions-port.md) | How the extension models were ported and how they compare with R, with the tolerances derived from measurements. |
 | [api-port.md](api-port.md) | Deviations from api-design.md and the choices the design left open, recorded as the API was implemented. |
 | [sandwich-fixtures.md](sandwich-fixtures.md) | Decisions taken while generating the `vcovCL`, `predict` and reference-absent fixtures. |
+| [formula-fixtures.md](formula-fixtures.md) | The formula-feature fixtures (factor and logical regressors, no intercept, logical, ordered and nominal partitioning variables, missing values, one-part formulas): what R did with each, and how the public layer compares. |
 
 ## Working notes
 

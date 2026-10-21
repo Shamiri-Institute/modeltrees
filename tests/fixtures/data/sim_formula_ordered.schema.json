@@ -1,0 +1,34 @@
+{
+  "dataset": "sim_formula_ordered",
+  "description": "Simulated gaussian data with an ordered partitioning variable zo declared low, mid, high, top and a nominal one zn with five levels declared v, r, t, p, s. Planted split zo <= mid, then zn in {r, p} for zo > mid. z1 is noise.",
+  "source": "simulated",
+  "seed": 20261063,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 700,
+  "csv": "sim_formula_ordered.csv",
+  "columns": [
+    {
+      "name": "x",
+      "type": "double"
+    },
+    {
+      "name": "zo",
+      "type": "ordered",
+      "levels": ["low", "mid", "high", "top"]
+    },
+    {
+      "name": "zn",
+      "type": "factor",
+      "levels": ["v", "r", "t", "p", "s"]
+    },
+    {
+      "name": "z1",
+      "type": "double"
+    },
+    {
+      "name": "y",
+      "type": "double"
+    }
+  ],
+  "generator_code": "{\n    n <- 700L\n    lo <- c(\"low\", \"mid\", \"high\", \"top\")\n    ln <- c(\"v\", \"r\", \"t\", \"p\", \"s\")\n    d <- data.frame(x = rnorm(n), zo = factor(sample(lo, n, replace = TRUE), levels = lo, ordered = TRUE), \n        zn = factor(sample(ln, n, replace = TRUE), levels = ln), z1 = runif(n))\n    low <- as.integer(d$zo) <= 2L\n    rp <- d$zn %in% c(\"r\", \"p\")\n    b0 <- ifelse(low, 1, ifelse(rp, -1, 0.5))\n    b1 <- ifelse(low, 1.5, ifelse(rp, -1, 0.5))\n    d$y <- b0 + b1 * d$x + rnorm(n)\n    d\n}"
+}
