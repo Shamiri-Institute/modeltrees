@@ -53,6 +53,7 @@ for (spec in tree_specs) {
   emit(fx, rel)
   tree_index[[length(tree_index) + 1L]] <- list(file = rel, fixture = fx)
 }
+check_sim_diabetes_like(tree_index)
 
 # Extension trees (mob() with the r/extensions/ fit functions).
 ext_tree_index <- list()
@@ -155,9 +156,9 @@ readme <- c(
   "edit by hand: this README is also generated. R is needed only to",
   "regenerate; the Python tests read these files directly.",
   "",
-  sprintf("Generated with R %s, partykit %s, strucchange %s, sandwich %s, mlbench %s, jsonlite %s, MASS %s, nnet %s.",
+  sprintf("Generated with R %s, partykit %s, strucchange %s, sandwich %s, jsonlite %s, MASS %s, nnet %s.",
     fixture_versions()$R, fixture_versions()$partykit, fixture_versions()$strucchange,
-    fixture_versions()$sandwich, fixture_versions()$mlbench, fixture_versions()$jsonlite,
+    fixture_versions()$sandwich, fixture_versions()$jsonlite,
     utils::packageDescription("MASS")$Version, utils::packageDescription("nnet")$Version),
   "",
   "## Conventions",

@@ -34,13 +34,13 @@ all_tree_specs <- function() {
   zg <- "z1 + z2 + z3 + z4 + z5"
   zb <- "z1 + z2 + z3 + z4"
   zc <- "zs + zt + z1 + z2 + z3"
-  sd <- "diabetes ~ glucose | pressure + triceps + insulin + mass + age"
+  sd <- "diabetes ~ glucose + mass | pregnant + pressure + triceps + insulin + pedigree + age"
   list(
-    tree_spec("synth_diabetes_glmtree_binomial", "synth_diabetes", "glmtree", sd,
-      "The mob vignette's glmtree example with default control settings.",
+    tree_spec("sim_diabetes_like_glmtree_binomial", "sim_diabetes_like", "glmtree", sd,
+      "Default control settings. Finds the two planted splits, on age and pedigree (checked by the generator).",
       "several", family = "binomial(link = \"logit\")"),
-    tree_spec("synth_diabetes_glmtree_binomial_bic", "synth_diabetes", "glmtree", sd,
-      "The vignette's post-pruning strategy: large alpha, maxdepth 4, BIC pruning.",
+    tree_spec("sim_diabetes_like_glmtree_binomial_bic", "sim_diabetes_like", "glmtree", sd,
+      "Post-pruning: large alpha, maxdepth 4, BIC pruning. Pair with the AIC fixture: the criterion changes the pruned tree.",
       "several", family = "binomial(link = \"logit\")",
       control = list(minsize = 50L, maxdepth = 4L, alpha = 0.9, prune = "BIC")),
     tree_spec("sim_gaussian_lmtree_nosplit", "sim_gaussian", "lmtree",
@@ -86,11 +86,11 @@ all_tree_specs <- function() {
       paste("y_one ~ x |", zg),
       "trim = 50: an absolute trimming count (trim > 1) instead of a proportion.",
       "one", control = list(minsize = 30L, trim = 50)),
-    tree_spec("synth_diabetes_glmtree_binomial_aic", "synth_diabetes", "glmtree", sd,
+    tree_spec("sim_diabetes_like_glmtree_binomial_aic", "sim_diabetes_like", "glmtree", sd,
       "AIC post-pruning with the default dfsplit = TRUE. Pair with the dfsplit = FALSE fixture: the setting changes the pruned tree.",
       "several", family = "binomial(link = \"logit\")",
       control = list(minsize = 50L, maxdepth = 4L, alpha = 0.9, prune = "AIC")),
-    tree_spec("synth_diabetes_glmtree_binomial_aic_nodfsplit", "synth_diabetes", "glmtree", sd,
+    tree_spec("sim_diabetes_like_glmtree_binomial_aic_nodfsplit", "sim_diabetes_like", "glmtree", sd,
       "AIC post-pruning with dfsplit = FALSE: split parameters are not counted in the pruning df, so a node that dfsplit = TRUE prunes survives.",
       "several", family = "binomial(link = \"logit\")",
       control = list(minsize = 50L, maxdepth = 4L, alpha = 0.9, prune = "AIC", dfsplit = FALSE)),
@@ -508,4 +508,28 @@ tree_fixture <- function(spec, ds, instrumented) {
     fx$removed_rows <- arr(ds$removed_rows)
   }
   fx
+}
+
+# The sim_diabetes_like trees must show what the data were simulated for: the
+# default tree splits on the planted variables age and pedigree only, BIC and
+# AIC pruning give different trees, and so does AIC pruning with and without
+# dfsplit. Stops generation otherwise.
+check_sim_diabetes_like <- function(tree_index) {
+  fx <- lapply(tree_index, `[[`, "fixture")
+  names(fx) <- vapply(fx, `[[`, "", "fixture")
+  get <- function(suffix) fx[[paste0("sim_diabetes_like_glmtree_binomial", suffix)]]
+  inner <- Filter(function(nd) !isTRUE(nd$terminal), get("")$nodes)
+  vars <- vapply(inner, function(nd) nd$split$variable, "")
+  if (!identical(sort(vars), c("age", "pedigree"))) {
+    stop("sim_diabetes_like: the default tree splits on ", paste(vars, collapse = ", "),
+      ", not on the planted age and pedigree")
+  }
+  leaves <- function(suffix) get(suffix)$summary$n_terminal
+  if (leaves("_bic") == leaves("_aic")) {
+    stop("sim_diabetes_like: BIC and AIC pruning give trees of the same size")
+  }
+  if (leaves("_aic") == leaves("_aic_nodfsplit")) {
+    stop("sim_diabetes_like: AIC pruning with and without dfsplit give trees of the same size")
+  }
+  invisible(TRUE)
 }

@@ -1,0 +1,49 @@
+{
+  "dataset": "sim_diabetes_like",
+  "description": "Simulated binary outcome diabetes (neg, pos) with eight numeric covariates on different scales, some skewed and some zero-inflated: a logistic regression on glucose and mass whose coefficients change at age = 35 and, for age > 35, at pedigree = 0.5. pregnant, pressure, triceps and insulin are noise.",
+  "source": "simulated",
+  "seed": 20261052,
+  "rng_kind": ["Mersenne-Twister", "Inversion", "Rejection"],
+  "n": 768,
+  "csv": "sim_diabetes_like.csv",
+  "columns": [
+    {
+      "name": "pregnant",
+      "type": "double"
+    },
+    {
+      "name": "glucose",
+      "type": "double"
+    },
+    {
+      "name": "pressure",
+      "type": "double"
+    },
+    {
+      "name": "triceps",
+      "type": "double"
+    },
+    {
+      "name": "insulin",
+      "type": "double"
+    },
+    {
+      "name": "mass",
+      "type": "double"
+    },
+    {
+      "name": "pedigree",
+      "type": "double"
+    },
+    {
+      "name": "age",
+      "type": "double"
+    },
+    {
+      "name": "diabetes",
+      "type": "factor",
+      "levels": ["neg", "pos"]
+    }
+  ],
+  "generator_code": "{\n    n <- 768L\n    age <- 21 + round(stats::rgamma(n, shape = 1.4, scale = 9))\n    pregnant <- as.numeric(stats::rnbinom(n, size = 1.5, mu = 3.8))\n    glucose <- round(pmax(45, stats::rnorm(n, 121, 31)))\n    pressure <- round(pmax(30, stats::rnorm(n, 72, 12)))\n    pressure[runif(n) < 0.045] <- 0\n    triceps <- round(pmax(7, stats::rnorm(n, 29, 10)))\n    triceps[runif(n) < 0.3] <- 0\n    insulin <- round(stats::rlnorm(n, log(120), 0.6))\n    insulin[runif(n) < 0.49] <- 0\n    mass <- round(pmax(18, stats::rnorm(n, 32.5, 7)), 1)\n    pedigree <- round(stats::rlnorm(n, log(0.38), 0.6), 3)\n    left <- age <= 35\n    low <- pedigree <= 0.5\n    b0 <- ifelse(left, -1.4, ifelse(low, -0.2, 0.9))\n    b1 <- ifelse(left, 1.6, ifelse(low, 0.6, 1.1))\n    b2 <- ifelse(left, 0.3, ifelse(low, 1, -0.2))\n    eta <- b0 + b1 * (glucose - 120)/30 + b2 * (mass - 32)/7\n    diabetes <- factor(ifelse(runif(n) < stats::plogis(eta), \"pos\", \"neg\"), levels = c(\"neg\", \"pos\"))\n    data.frame(pregnant = pregnant, glucose = glucose, pressure = pressure, triceps = triceps, insulin = insulin, \n        mass = mass, pedigree = pedigree, age = age, diabetes = diabetes)\n}"
+}

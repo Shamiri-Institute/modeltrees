@@ -4,7 +4,7 @@ FIXTURE_RNG_KIND <- c("Mersenne-Twister", "Inversion", "Rejection")
 
 # Package versions recorded in every fixture.
 fixture_versions <- function() {
-  pkgs <- c("partykit", "strucchange", "sandwich", "Formula", "mlbench", "jsonlite")
+  pkgs <- c("partykit", "strucchange", "sandwich", "Formula", "jsonlite")
   c(
     list(R = paste(R.version$major, R.version$minor, sep = ".")),
     stats::setNames(lapply(pkgs, function(p) utils::packageDescription(p)$Version), pkgs)

@@ -62,14 +62,13 @@ renv uses its normal shared cache at:
 ~/.cache/R/renv
 ```
 
-The project uses explicit snapshots. `DESCRIPTION` declares the seven direct
+The project uses explicit snapshots. `DESCRIPTION` declares the six direct
 dependencies so that `renv::status()` recognizes all of them as intentional:
 
 - `partykit`
 - `strucchange`
 - `sandwich`
 - `MASS`
-- `mlbench`
 - `nnet`
 - `jsonlite`
 
@@ -146,8 +145,16 @@ environment. Its dependencies modeltools, coin and vcd were installed into the
 renv library during the attempt. They are not in `renv.lock` and nothing uses
 them.
 
-`mlbench` provides `SynthDiabetes`, the data set used by the partykit 1.3-0
-mob vignette. mlbench 2.1-11 no longer ships `PimaIndiansDiabetes`.
+`scan_sim_diabetes_like.R` is the seed scan behind the simulated
+`sim_diabetes_like` data (`fixtures/datasets.R`). It grows the four
+`sim_diabetes_like_*` trees for a range of seeds and lists the seeds whose
+default tree finds the two planted splits and whose BIC, AIC and AIC without
+dfsplit pruned trees differ; the first one is `SIM_DIABETES_LIKE_SEED`.
+`generate_all.R` checks the same properties on the generated fixtures:
+
+```bash
+Rscript r/scan_sim_diabetes_like.R 20261051 20
+```
 
 ## Restore on a clean machine or in CI
 

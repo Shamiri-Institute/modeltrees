@@ -13,10 +13,42 @@ make_dataset <- function(name, description, source, seed, builder) {
   )
 }
 
-build_synth_diabetes <- function() {
-  env <- new.env()
-  utils::data("SynthDiabetes", package = "mlbench", envir = env)
-  env$SynthDiabetes
+# Chosen by r/scan_sim_diabetes_like.R: the first seed from 20261051 on whose
+# trees show the planted splits and differ between BIC and AIC pruning and
+# between AIC pruning with and without dfsplit.
+SIM_DIABETES_LIKE_SEED <- 20261052L
+
+# A simulated binary outcome with the shape of a small clinical screening
+# table: 768 rows, eight numeric covariates on different scales, some skewed
+# and some zero-inflated. diabetes (factor neg, pos) follows a logistic
+# regression on glucose and mass whose intercept and slopes change at two
+# planted splits, age <= 35 and, for age > 35, pedigree <= 0.5. pregnant,
+# pressure, triceps and insulin are noise. Values are rounded, so the
+# covariates have ties.
+build_sim_diabetes_like <- function() {
+  n <- 768L
+  age <- 21 + round(stats::rgamma(n, shape = 1.4, scale = 9))
+  pregnant <- as.numeric(stats::rnbinom(n, size = 1.5, mu = 3.8))
+  glucose <- round(pmax(45, stats::rnorm(n, 121, 31)))
+  pressure <- round(pmax(30, stats::rnorm(n, 72, 12)))
+  pressure[runif(n) < 0.045] <- 0
+  triceps <- round(pmax(7, stats::rnorm(n, 29, 10)))
+  triceps[runif(n) < 0.3] <- 0
+  insulin <- round(stats::rlnorm(n, log(120), 0.6))
+  insulin[runif(n) < 0.49] <- 0
+  mass <- round(pmax(18, stats::rnorm(n, 32.5, 7)), 1)
+  pedigree <- round(stats::rlnorm(n, log(0.38), 0.6), 3)
+  left <- age <= 35
+  low <- pedigree <= 0.5
+  b0 <- ifelse(left, -1.4, ifelse(low, -0.2, 0.9))
+  b1 <- ifelse(left, 1.6, ifelse(low, 0.6, 1.1))
+  b2 <- ifelse(left, 0.3, ifelse(low, 1.0, -0.2))
+  eta <- b0 + b1 * (glucose - 120) / 30 + b2 * (mass - 32) / 7
+  diabetes <- factor(ifelse(runif(n) < stats::plogis(eta), "pos", "neg"),
+    levels = c("neg", "pos"))
+  data.frame(pregnant = pregnant, glucose = glucose, pressure = pressure,
+    triceps = triceps, insulin = insulin, mass = mass, pedigree = pedigree,
+    age = age, diabetes = diabetes)
 }
 
 # Gaussian responses with planted structure in x's coefficients.
@@ -176,9 +208,9 @@ all_datasets <- function() {
     "Simulated gaussian data with no, one and several planted splits.",
     "simulated", 20261001L, build_sim_gaussian)
   list(
-    make_dataset("synth_diabetes",
-      "mlbench::SynthDiabetes, used by the partykit 1.3-0 mob vignette in place of PimaIndiansDiabetes.",
-      "mlbench", NULL, build_synth_diabetes),
+    make_dataset("sim_diabetes_like",
+      "Simulated binary outcome diabetes (neg, pos) with eight numeric covariates on different scales, some skewed and some zero-inflated: a logistic regression on glucose and mass whose coefficients change at age = 35 and, for age > 35, at pedigree = 0.5. pregnant, pressure, triceps and insulin are noise.",
+      "simulated", SIM_DIABETES_LIKE_SEED, build_sim_diabetes_like),
     sim_gaussian,
     drop_zero_weight_rows(sim_gaussian, "sim_gaussian_nonzero_w0",
       "sim_gaussian without the rows where w0 is zero. Same columns, row order otherwise unchanged.",
