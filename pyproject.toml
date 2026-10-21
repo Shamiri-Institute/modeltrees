@@ -40,12 +40,6 @@ dependencies = [
     "scipy>=1.18.1",
 ]
 
-[project.urls]
-
-
-
-
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
