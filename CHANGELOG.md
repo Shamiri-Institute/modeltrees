@@ -5,7 +5,7 @@ All notable changes are listed here. Versions follow 0.x semantics: names in
 (docs/api-design.md, section 8.4). A change that alters a grown tree gets an
 entry in docs/decisions.md.
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-10-22)
 
 First release.
 
