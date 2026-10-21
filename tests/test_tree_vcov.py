@@ -320,6 +320,49 @@ def test_too_few_clusters_warns_and_names_the_node() -> None:
         tree.vcov(3, cluster=False)
 
 
+@pytest.mark.parametrize("weights", ["unit", "equal", "unequal"])
+@pytest.mark.parametrize(("n_clusters", "warns"), [(2, True), (3, True), (4, False)])
+def test_too_few_clusters_warns_under_any_weights(
+    weights: str, n_clusters: int, warns: bool
+) -> None:
+    """vcov warns at G <= k under unit, equal and unequal case weights: its
+    meat sums the scores, whose cluster sums add up to zero at the estimate
+    whatever the weights (the instability tests' guard differs,
+    docs/decisions.md)."""
+    rng = np.random.default_rng(30 + n_clusters)
+    n = 90
+    w = {
+        "unit": np.ones(n),
+        "equal": np.full(n, 2.0),
+        "unequal": rng.integers(1, 5, n).astype(np.float64),
+    }[weights]
+    df = pl.DataFrame(
+        {
+            "y": rng.standard_normal(n),
+            "x1": rng.standard_normal(n),
+            "x2": rng.standard_normal(n),
+            "z": rng.uniform(size=n),
+            "w": w,
+            "school": np.arange(n) % n_clusters,
+        }
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", mt.ModelTreesWarning)
+        tree = mt.lmtree(
+            "y ~ x1 + x2 | z", df, weights="w", cluster="school", maxdepth=1
+        )
+    if warns:
+        with pytest.warns(
+            mt.TooFewClustersWarning, match=f"node 1 has {n_clusters} clusters for 3"
+        ):
+            got = tree.vcov(1)[1]
+    else:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", mt.TooFewClustersWarning)
+            got = tree.vcov(1)[1]
+    assert got.status == "ok" and got.n_clusters == n_clusters
+
+
 def test_quasi_separation_warns_and_names_the_coefficient() -> None:
     # node_fits/safelogit_quasi as a one-node tree: every d4 = 1 row has
     # y = 0, so the d4 coefficient diverges. The scaled Hessian is well

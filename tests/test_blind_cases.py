@@ -2,38 +2,27 @@
 differ, in tests/fixtures/blind_cases/ (README.md there has the analysis).
 
 Each test compares the case with R in the order of CLAUDE.md
-(tests/blind_compare.py) and is marked xfail with its first diverging
-component. The test fails outright if the case diverges anywhere else
-first, and xfail is strict, so a case that starts to match R must have its
-mark removed.
+(tests/blind_compare.py). The cases the port now matches (``MATCHING``) are
+standing tests that must pass on every component. The others are marked
+xfail with their first diverging component; such a test fails outright if
+the case diverges anywhere else first, and xfail is strict, so a case that
+starts to match R must move to ``MATCHING``.
 """
 
 import pytest
 from blind_compare import CASES, Divergence, compare
 from slow import SLOW
 
+# (case, slow): cases that match R on every component.
+MATCHING = [
+    # Nodes with as many clusters as coefficients under unequal case
+    # weights, which the instability tests run as partykit does (task 6k).
+    ("blind_03_lm", False),
+    ("blind_13_glm", True),
+]
+
 # (case, first diverging component, start of the difference, reason, slow)
 EXPECTED = [
-    (
-        "blind_03_lm",
-        "node sizes and coefficients",
-        "node 21: rows differ",
-        (
-            "node 20 has as many clusters as coefficients (3) with case weights: "
-            "partykit tests it, the port stops at G <= k"
-        ),
-        False,
-    ),
-    (
-        "blind_13_glm",
-        "node sizes and coefficients",
-        "node 14: rows differ",
-        (
-            "node 13 has as many clusters as coefficients (2) with case weights: "
-            "partykit tests it, the port stops at G <= k"
-        ),
-        True,
-    ),
     (
         "blind_29_negbin",
         "node sizes and coefficients",
@@ -78,7 +67,18 @@ EXPECTED = [
 
 
 def test_every_blind_case_is_listed() -> None:
-    assert sorted(e[0] for e in EXPECTED) == CASES
+    assert sorted([m[0] for m in MATCHING] + [e[0] for e in EXPECTED]) == CASES
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param(name, id=name, marks=[SLOW] if slow else [])
+        for name, slow in MATCHING
+    ],
+)
+def test_blind_case_matches(name: str) -> None:
+    compare(name)
 
 
 @pytest.mark.parametrize(

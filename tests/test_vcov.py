@@ -182,6 +182,38 @@ def test_too_few_clusters_is_flagged() -> None:
     assert not four.too_few_clusters
 
 
+WEIGHT_CASES = {
+    "unit": lambda rng, n: np.ones(n),
+    "equal": lambda rng, n: np.full(n, 3.0),
+    "unequal": lambda rng, n: rng.integers(1, 5, n).astype(np.float64),
+}
+
+
+@pytest.mark.parametrize("caseweights", [True, False])
+@pytest.mark.parametrize("weights", list(WEIGHT_CASES))
+@pytest.mark.parametrize(("n_clusters", "too_few"), [(2, True), (3, True), (4, False)])
+def test_too_few_clusters_under_any_weights(
+    weights: str, caseweights: bool, n_clusters: int, too_few: bool
+) -> None:
+    """Unlike the instability tests (which sum estfun / sqrt(w) and run at
+    G = k under unequal case weights), the meat sums estfun itself, whose
+    cluster sums add up to the summed scores, zero at the estimate. So G = k
+    is short of rank under every weighting, and the flag is G <= k."""
+    rng = np.random.default_rng(20 + n_clusters)
+    n, k = 60, 3
+    h, _, _, _ = _data(9, n=n, k=k)
+    w = WEIGHT_CASES[weights](rng, n)
+    u = rng.standard_normal((n, k))
+    u -= (w @ u) / w.sum()
+    ef = w[:, None] * u
+    cl = np.arange(n) % n_clusters
+    got = sandwich(h, ef, weights=w, cluster=cl, caseweights=caseweights)
+    assert got.status == "ok" and got.too_few_clusters is too_few
+    lam = np.linalg.eigvalsh(got.matrix)
+    rank = int(np.sum(lam > 1e-12 * lam[-1]))
+    assert rank == min(k, n_clusters - 1)
+
+
 @pytest.mark.parametrize("cadjust", [True, False])
 def test_a_single_cluster_gives_nan(cadjust: bool) -> None:
     h, ef, w, _ = _data(8)

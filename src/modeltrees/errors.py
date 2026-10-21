@@ -43,10 +43,14 @@ class NodeFitFailedWarning(ModelTreesWarning):
 
 
 class TooFewClustersWarning(ModelTreesWarning):
-    """A node has at most as many clusters as parameters.
+    """A node has too few clusters for its parameters.
 
     In the instability tests it is emitted before ``TooFewClustersError``,
-    so the stop is not silent.
+    so the stop is not silent: with fewer clusters than parameters, or
+    exactly as many when the cluster sums of the scaled scores sum to zero
+    (no case weights, or equal ones). In ``vcov`` it is emitted for at most
+    as many clusters as parameters, where the meat's cluster sums always
+    sum to zero.
     """
 
 

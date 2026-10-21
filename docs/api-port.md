@@ -862,3 +862,33 @@ polars tree bit for bit.
 4. **Printed splits** equal the lines of partykit's print, apart from the
    documented braces of a nominal split (section 9, item 2) and the
    Boolean conditions of item 2.
+
+## 19. Fixes from the blind run
+
+Task 6k fixes what the blind differential run of task 6j found
+(tests/fixtures/blind_cases/README.md).
+
+1. **Clusters with case weights at G = k.** The instability tests stop at
+   `n_clusters < k` always and at `n_clusters == k` only when the cluster
+   sums of the scaled scores are constrained to sum to zero, that is with
+   `caseweights=False` or when every positive weight in the node is equal
+   (docs/decisions.md; docs/instability-tests.md, section 4, item 14). With
+   unequal case weights and G = k the tests run, as in partykit.
+2. **The `vcov` warning keeps G <= k, a deliberate reading of "the same
+   rule".** The rule is "warn at G = k when the cluster sums are
+   constrained to sum to zero". `sandwich()` sums `estfun` itself within
+   clusters (not `estfun / sqrt(w)`, sandwich's `meatCL` with frequency
+   weights, section 16.2), and those sums add up to the summed scores, zero
+   at the estimate under any weights. So the constraint always holds there
+   and G = k is short of rank under unit, equal and unequal weights alike:
+   on the leaves' own scores at `blind_03_lm` node 20 and `blind_13_glm`
+   node 13 the vcov meat has smallest/largest eigenvalue -3e-17 and -1e-19
+   (rank G - 1), where the instability meat has 8.9e-4 and 3.7e-3.
+   `too_few_clusters` therefore stays `G <= k`, and
+   `test_too_few_clusters_under_any_weights` (tests/test_vcov.py) and
+   `test_too_few_clusters_warns_under_any_weights` (tests/test_tree_vcov.py)
+   check the flag, the warning and the rank under each weighting, with and
+   without `caseweights`.
+3. **Standing tests.** `blind_03_lm` and `blind_13_glm` left the xfail set
+   of `tests/test_blind_cases.py`: they are in `MATCHING` and must match R
+   on every component.

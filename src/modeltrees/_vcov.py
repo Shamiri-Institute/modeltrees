@@ -45,7 +45,7 @@ class Sandwich:
     reason: str | None
     condition: float  # of the Hessian scaled by its diagonal; NaN without one
     n_clusters: float  # G: clusters with positive weight (rows, or nobs, without)
-    too_few_clusters: bool  # G <= k: the meat has rank below k
+    too_few_clusters: bool  # G <= k: the meat has rank at most G - 1 < k
 
 
 def sandwich(
@@ -71,7 +71,12 @@ def sandwich(
     scores the status is "unavailable". So it is with a single cluster
     (G = 1): the summed scores are zero at the estimate, so the meat is
     empty, and ``G / (G - 1)`` is undefined; sandwich 3.1-3 stops there.
-    ``too_few_clusters`` is set when ``G <= k``; the caller warns.
+    ``too_few_clusters`` is set when ``G <= k``; the caller warns. The
+    instability tests run at ``G = k`` under unequal case weights, because
+    they sum ``estfun / sqrt(w)`` within clusters; the meat here sums
+    ``estfun`` itself, whose cluster sums add up to the total score, zero at
+    the estimate, whatever the weights. So the meat has rank at most
+    ``G - 1`` and ``G = k`` is short of rank under any weights.
     """
     if type not in ("HC0", "HC1"):
         raise ValueError(f"type must be 'HC0' or 'HC1', not {type!r}")
@@ -113,6 +118,9 @@ def sandwich(
         np.add.at(summed, codes, ef)
         meat = summed.T @ summed
         g = float(summed.shape[0])
+    # The cluster sums of estfun add up to the summed scores, zero at the
+    # estimate under any weights, so the meat has rank at most G - 1: the
+    # zero-sum condition of the instability tests' guard always holds here.
     too_few = g <= k
 
     condition, factor = _factor(h)

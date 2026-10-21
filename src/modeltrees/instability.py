@@ -45,14 +45,17 @@ class InstabilityTestError(Exception):
 
 
 class TooFewClustersError(InstabilityTestError):
-    """A node has at most as many clusters as parameters.
+    """A node has too few clusters for its parameters.
 
-    With fewer clusters the covariance is singular, partykit's chol() fails
-    and its try() makes the node terminal without a message. With exactly as
-    many, fitted scores make the cluster sums sum to zero, so the covariance
-    has rank at most k - 1 and whether chol() fails depends on rounding. The
-    port makes such nodes terminal either way (docs/decisions.md). The caller
-    handles this error like any InstabilityTestError.
+    With fewer clusters than parameters the covariance is singular,
+    partykit's chol() fails and its try() makes the node terminal without a
+    message. With exactly as many, the cluster sums of the scaled scores sum
+    to zero when the scaling is constant (unit or equal case weights, or
+    ``caseweights = False``), so the covariance has rank at most k - 1 and
+    whether chol() fails depends on rounding; the port makes such nodes
+    terminal (docs/decisions.md). With unequal case weights the sums are not
+    constrained and the tests run, as in partykit. The caller handles this
+    error like any InstabilityTestError.
     """
 
 
@@ -150,8 +153,10 @@ def decorrelated_process(
     weight does not count.
 
     With ``cluster`` the scaled scores are summed within clusters before the
-    cross product (:240-245). At most as many clusters as parameters warns
-    with TooFewClustersWarning and raises TooFewClustersError.
+    cross product (:240-245). Fewer clusters than parameters, or exactly as
+    many when the cluster sums are constrained to sum to zero (see
+    TooFewClustersError), warns with TooFewClustersWarning and raises
+    TooFewClustersError.
 
     With ``caseweights = False`` the weights are part of the scores, so
     ``nobs`` is the number of rows and the meat does not divide them out
@@ -181,9 +186,14 @@ def decorrelated_process(
         )
         n_clusters = int(codes.max()) + 1 if codes.shape[0] else 0
         k = scaled.shape[1]
-        # partykit fails at exactly k clusters only when chol() does, which
-        # depends on rounding; the port stops at <= k by decision.
-        if n_clusters <= k:
+        # Fitted scores sum to zero, so the cluster sums of scores / sqrt(w)
+        # do too when sqrt(w) is constant over the node; at exactly k
+        # clusters the meat then has rank k - 1 and partykit fails only when
+        # chol() does, which depends on rounding, so the port stops there by
+        # decision. With unequal weights the sums are unconstrained and the
+        # meat is regular at k clusters, so the tests run as in partykit.
+        constrained = not caseweights or bool(np.all(w == w[:1]))
+        if n_clusters < k or (n_clusters == k and constrained):
             message = (
                 f"{n_clusters} clusters for {k} parameters: the covariance "
                 "estimate is singular, so the instability tests cannot run "
@@ -348,7 +358,7 @@ def fluctuation_tests(
 
     Raises InstabilityTestError where partykit's tests raise an error, which
     mob_grow catches to make the node terminal (modelparty.R:550, :569-573).
-    A node with at most as many clusters as parameters raises
+    A node with too few clusters for its parameters raises
     TooFewClustersError, a subclass, after a TooFewClustersWarning.
     """
     stats = fluctuation_statistics(

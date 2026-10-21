@@ -648,7 +648,7 @@ class ModelTree:
         number above 1 / eps) or "unavailable" (the fit failed or has no
         scores, as a completely separated safe logit or a multinomial leaf
         without the reference class, or a single cluster). With ``G <= k``
-        clusters the meat has rank below k and a
+        clusters the meat has rank below k, under any case weights, and a
         :class:`TooFewClustersWarning` names the node. Negative binomial
         covariances are conditional on theta, as ``vcov(glm.nb)``.
 

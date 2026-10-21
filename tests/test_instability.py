@@ -624,6 +624,136 @@ def test_exactly_as_many_clusters_as_parameters_raises(k: int) -> None:
         fluctuation_tests(estfun, z, np.ones(n), minsize=10, cluster=np.arange(n) % k)
 
 
+def _weighted_scores(rng: np.random.Generator, w: np.ndarray, k: int) -> np.ndarray:
+    """Scores with the weights inside, w_i u_i, that sum to zero."""
+    u = rng.standard_normal((w.shape[0], k))
+    u -= (w @ u) / w.sum()
+    return w[:, None] * u
+
+
+@pytest.mark.parametrize("k", [1, 2, 4])
+def test_exactly_as_many_clusters_with_equal_weights_raises(k: int) -> None:
+    """Equal non-unit case weights scale every score by the same sqrt(w), so
+    the cluster sums still sum to zero and the meat has rank k - 1."""
+    rng = np.random.default_rng(15)
+    n = 120
+    w = np.full(n, 3.0)
+    estfun = _weighted_scores(rng, w, k)
+    z = [PartitioningVariable("z", VariableKind.NUMERIC, rng.uniform(size=n))]
+    with (
+        pytest.warns(TooFewClustersWarning, match=f"{k} clusters for {k} parameters"),
+        pytest.raises(TooFewClustersError),
+    ):
+        fluctuation_tests(estfun, z, w, minsize=10, cluster=np.arange(n) % k)
+
+
+@pytest.mark.parametrize("k", [1, 2, 4])
+def test_exactly_as_many_clusters_without_caseweights_raises(k: int) -> None:
+    """With caseweights = False the meat does not divide by the weights, so
+    unequal weights leave the cluster sums constrained."""
+    rng = np.random.default_rng(16)
+    n = 120
+    w = rng.integers(1, 5, n).astype(np.float64)
+    estfun = _weighted_scores(rng, w, k)
+    z = [PartitioningVariable("z", VariableKind.NUMERIC, rng.uniform(size=n))]
+    with (
+        pytest.warns(TooFewClustersWarning, match=f"{k} clusters for {k} parameters"),
+        pytest.raises(TooFewClustersError),
+    ):
+        fluctuation_tests(
+            estfun, z, w, minsize=10, cluster=np.arange(n) % k, caseweights=False
+        )
+
+
+@pytest.mark.parametrize("n_clusters", [1, 2, 3])
+def test_fewer_clusters_than_parameters_with_unequal_weights_raises(
+    n_clusters: int,
+) -> None:
+    rng = np.random.default_rng(17 + n_clusters)
+    n, k = 120, 4
+    w = rng.integers(1, 5, n).astype(np.float64)
+    estfun = _weighted_scores(rng, w, k)
+    z = [PartitioningVariable("z", VariableKind.NUMERIC, rng.uniform(size=n))]
+    with (
+        pytest.warns(TooFewClustersWarning, match=f"{n_clusters} clusters for 4"),
+        pytest.raises(TooFewClustersError),
+    ):
+        fluctuation_tests(estfun, z, w, minsize=10, cluster=np.arange(n) % n_clusters)
+
+
+@pytest.mark.parametrize("k", [1, 2, 4])
+def test_exactly_as_many_clusters_with_unequal_weights_runs(k: int) -> None:
+    """partykit sums estfun / sqrt(w) within clusters (modelparty.R:244);
+    with unequal weights those sums are not constrained, so the meat is
+    regular at k clusters and the tests run."""
+    rng = np.random.default_rng(18)
+    n = 120
+    w = rng.integers(1, 5, n).astype(np.float64)
+    estfun = _weighted_scores(rng, w, k)
+    z = [PartitioningVariable("z", VariableKind.NUMERIC, rng.uniform(size=n))]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        result = fluctuation_tests(estfun, z, w, minsize=10, cluster=np.arange(n) % k)
+    assert np.all(np.isfinite(result.statistic))
+
+
+def _blind_tree(name: str) -> dict[str, Any]:
+    tree: dict[str, Any] = dict(load_json(f"blind_cases/trees/{name}.json"))
+    tree["data_csv"] = f"blind_cases/{tree['data_csv']}"
+    return tree
+
+
+@pytest.mark.parametrize(
+    ("name", "node_id", "k"), [("blind_03_lm", 20, 3), ("blind_13_glm", 13, 2)]
+)
+def test_as_many_clusters_as_parameters_with_case_weights_matches_r(
+    name: str, node_id: int, k: int
+) -> None:
+    """The blind run's nodes with G = k clusters and unequal case weights:
+    partykit tests them, and the port matches its statistics and p-values
+    (tests/fixtures/blind_cases/README.md)."""
+    tree = _blind_tree(name)
+    node = next(n for n in tree["nodes"] if n["id"] == node_id)
+    test = node["test"]
+    estfun, z, weights = _node_inputs(tree, node)
+    cluster = _node_cluster(tree, node)
+    assert cluster is not None
+    positive = weights > 0
+    assert len(np.unique(cluster[positive])) == k == test["k"]
+    assert len(np.unique(weights[positive])) > 1
+    control = tree["control"]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        result = fluctuation_tests(
+            estfun,
+            z,
+            weights,
+            minsize=tree["root_minsize"],
+            trim=control["trim"],
+            bonferroni=control["bonferroni"],
+            cluster=cluster,
+            caseweights=control["caseweights"],
+        )
+    np.testing.assert_allclose(
+        result.statistic, test["statistic"], rtol=RTOL, atol=ATOL
+    )
+    np.testing.assert_allclose(
+        result.log_p_value,
+        nan_array(test["log_p_value_raw"]),
+        rtol=RTOL,
+        atol=ATOL,
+        equal_nan=True,
+    )
+    np.testing.assert_allclose(
+        result.p_value_adjusted,
+        nan_array(test["p_value_adjusted"]),
+        rtol=1e-8,
+        atol=0,
+        equal_nan=True,
+    )
+    assert result.best == test["best"]
+
+
 def test_one_more_cluster_than_parameters_runs() -> None:
     rng = np.random.default_rng(14)
     n, k = 120, 4

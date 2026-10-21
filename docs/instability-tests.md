@@ -257,13 +257,15 @@ can be added without changing existing calls.
       would make `tapply` see more ids than rows. There is no R oracle for
       this (R fails), so the tests check equivalence with the deleted-rows
       data, whose cluster result matches the R fixture.
-    - *Case weights with clusters.* The port follows `:244` literally, but no
-      fixture combines `weights` and `cluster`, so that combination is
-      checked against the formula only (singleton clusters equal no clusters,
-      zero weights equal deleted rows), not against R.
-    - *At most as many clusters as parameters.* As decided in
-      docs/decisions.md, `decorrelated_process` emits `TooFewClustersWarning`
-      and raises `TooFewClustersError`, a subclass of `InstabilityTestError`,
+    - *Case weights with clusters.* The port follows `:244` literally. The
+      fixtures `sim_cluster_lmtree_cluster_weights` and
+      `sim_cluster_glmtree_binomial_cluster_weights`, and the blind cases
+      `blind_03_lm` and `blind_13_glm`, check the combination against R.
+    - *Too few clusters.* As decided in docs/decisions.md,
+      `decorrelated_process` emits `TooFewClustersWarning` and raises
+      `TooFewClustersError`, a subclass of `InstabilityTestError`, for fewer
+      clusters than parameters, and for exactly as many when the cluster sums
+      are constrained (next items),
       so the tree code that treats `InstabilityTestError` as partykit's
       `try()` failure makes the node terminal. The count is of clusters among
       positive-weight rows and `k` is the number of columns of the node's
@@ -275,22 +277,46 @@ can be added without changing existing calls.
       at `J12 %*% t(process)` (`:252`): `tapply` over one cluster makes
       `apply` return a vector, so the meat is 1 by 1. The outcome is the
       same, the node is terminal.
-    - *Exactly as many clusters as parameters: the port diverges from
-      partykit, by decision.* Fitted scores sum to zero over a node, so the
-      cluster sums sum to zero too and with `k` clusters the meat has rank at
-      most `k - 1`. Whether partykit's `chol()` then fails depends on
-      rounding: in a quick R run (lmtree, y on random x, 2 to 4 clusters, 8
-      seeds each) `try()` caught a failure in 12 of 24 fits and the other 12
-      returned p-values from a numerically singular meat. The port does not
-      leave this to rounding: `n_clusters <= k` raises `TooFewClustersError`,
-      so such a node is always terminal. Where R happens to get p-values
-      there, the port stops instead; those p-values come from a singular
-      meat and are not meaningful. This includes one cluster and one
-      parameter, which R runs on a 1 by 1 meat of rounding noise. No R
-      fixture has a node with exactly `k` clusters.
-      `test_exactly_as_many_clusters_as_parameters_raises` covers
+    - *Exactly as many clusters as parameters, constant scaling: the port
+      diverges from partykit, by decision.* Fitted scores (weights inside)
+      sum to zero over a node. The meat sums `process / sqrt(weights)`
+      within clusters, so when `sqrt(weights)` is constant over the node's
+      positive-weight rows (unit or equal case weights) or the meat does not
+      divide by it (`caseweights = FALSE`), the cluster sums sum to zero too
+      and with `k` clusters the meat has rank at most `k - 1`. Whether
+      partykit's `chol()` then fails depends on rounding: in a quick R run
+      (lmtree, y on random x, 2 to 4 clusters, 8 seeds each) `try()` caught
+      a failure in 12 of 24 fits and the other 12 returned p-values from a
+      numerically singular meat. The port does not leave this to rounding:
+      `n_clusters == k` raises `TooFewClustersError` there, so such a node
+      is always terminal. Where R happens to get p-values there, the port
+      stops instead; those p-values come from a singular meat and are not
+      meaningful. This includes one cluster and one parameter, which R runs
+      on a 1 by 1 meat of rounding noise.
+      `test_exactly_as_many_clusters_as_parameters_raises` (unit weights),
+      `test_exactly_as_many_clusters_with_equal_weights_raises` and
+      `test_exactly_as_many_clusters_without_caseweights_raises` cover
       `k = 1, 2, 4`, and `test_one_more_cluster_than_parameters_runs` the
       first count that is tested.
+    - *Exactly as many clusters as parameters, unequal case weights: as
+      partykit.* Dividing the scores by unequal `sqrt(weights)` breaks the
+      zero sum: the cluster sums are unconstrained, the meat has rank `G` and
+      is regular at `G = k`, and the tests run (a failing Cholesky is still
+      an `InstabilityTestError`). The blind run (task 6j) found two such
+      nodes, where the earlier `n_clusters <= k` guard stopped while R
+      split: `blind_03_lm` node 20 (`G = k = 3`) and `blind_13_glm` node 13
+      (`G = k = 2`). On R's own scores the meat's smallest/largest
+      eigenvalue is 8.9e-4 and 3.7e-3, far from rounding, and the port's
+      statistics and log p-values equal R's to all 17 digits (9957.818866179252
+      and 6584.768483180042; 1902.6518537080092 and 737.5969983956378).
+      `test_as_many_clusters_as_parameters_with_case_weights_matches_r`
+      checks both nodes against R,
+      `test_exactly_as_many_clusters_with_unequal_weights_runs` random
+      scores for `k = 1, 2, 4`, and
+      `test_fewer_clusters_than_parameters_with_unequal_weights_raises` that
+      `G < k` still stops. The cluster-robust `vcov` keeps `G <= k` for its
+      warning: it sums the scores themselves, whose cluster sums add up to
+      zero under any weights (docs/api-port.md, section 19).
     - *Fixtures.* `sim_cluster` (30 schools of 8 to 40 pupils, random intercept
       sd 1.5, school-level `zs` and `zt`) gives four trees: lmtree and binomial
       glmtree, each with and without `cluster`. Without it, `zs` and `zt`
