@@ -59,6 +59,25 @@ def classify_separation(
     return ("quasi" if n_boundary > 0 else "none"), n_boundary
 
 
+def diverging_coefficient(
+    hessian: FloatArray, x: FloatArray | None, weights: FloatArray
+) -> int:
+    """The index, among the estimated coefficients, of the one that diverges
+    under quasi-separation.
+
+    It is the coefficient with the least information per unit of its
+    regressor, ``H_jj / sum_i w_i x_ij^2``, the weighted mean working weight
+    over its regressor's mass. That is invariant to the regressor's scale and
+    near zero when the regressor lives on rows fitted at the boundary. ``x``
+    holds the estimated columns only (None for the intercept).
+    """
+    xx = np.ones((weights.shape[0], 1)) if x is None else x
+    mass = weights @ (xx * xx)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = np.where(mass > 0, np.diag(hessian) / mass, np.inf)
+    return int(np.argmin(ratio))
+
+
 def _unique(messages: Sequence[str]) -> tuple[str, ...]:
     """R's ``unique()``: first occurrences, in order."""
     return tuple(dict.fromkeys(messages))

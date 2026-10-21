@@ -581,6 +581,18 @@ Task 6e, steps 1 to 3: `FitResult.hessian` (design sections 5.2 and 5.3),
 9. **`LeafVcov`** joins `modeltrees.__all__` (section 10, item 1). It is
    defined in `modeltrees/_vcov.py` and has a `std_errors` property.
    `matrix` is read-only.
+10. **Quasi-separation** (task 6f, step 0). When a safe logit fit's
+    `extras["separation"]` is "quasi", `vcov()` emits a `ModelTreesWarning`
+    "node N is quasi-separated: coefficient 'T' diverges, so its variance
+    is not reliable" and puts the same text in `LeafVcov.reason` (after
+    the sandwich's own reason, if any, with "; "). The status is not
+    changed (item 6 of 15.1). The diverging coefficient is the estimated
+    one with the least information per unit of its regressor, `H_jj /
+    sum_i w_i x_ij^2`, a weighted mean working weight that does not depend
+    on the regressor's scale (`models.safelogit.diverging_coefficient`).
+    On `node_fits/safelogit_quasi` it is `d4` (ratio 2.8e-8 against 0.17
+    and 0.12). The report names only the smallest; several diverging
+    coefficients would show one of them.
 
 ## 16. `vcov` and `predict` against R
 

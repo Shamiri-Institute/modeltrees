@@ -12,6 +12,7 @@ import numpy as np
 import polars as pl
 import pytest
 from fixture_frames import polars_frame
+from fixtures_io import load_json
 from grown_trees import ALL_TREES, fixture, grow, model, tree_inputs
 from test_api_fixtures import public
 from tree_fixtures import cluster, variables
@@ -19,7 +20,7 @@ from tree_fixtures import cluster, variables
 import modeltrees as mt
 from modeltrees._api import ModelTree
 from modeltrees._vcov import sandwich
-from modeltrees.models import LmModel
+from modeltrees.models import LmModel, SafeLogitModel
 from modeltrees.node_model import FitResult
 
 LM = ("trees", "sim_cluster_lmtree_cluster")
@@ -316,3 +317,41 @@ def test_too_few_clusters_warns_and_names_the_node() -> None:
         warnings.simplefilter("error", mt.TooFewClustersWarning)
         tree.vcov(2)
         tree.vcov(3, cluster=False)
+
+
+def test_quasi_separation_warns_and_names_the_coefficient() -> None:
+    # node_fits/safelogit_quasi as a one-node tree: every d4 = 1 row has
+    # y = 0, so the d4 coefficient diverges. The scaled Hessian is well
+    # conditioned, so the status stays "ok" (docs/api-port.md, section 15).
+    f = load_json("node_fits/safelogit_quasi.json")
+    y = np.array(f["y"], np.float64)
+    tree = mt.mob(
+        SafeLogitModel(coef_names=f["x_names"], **f["fit_args"]),
+        y,
+        np.array(f["x"], np.float64),
+        {"z": ("numeric", np.zeros_like(y))},
+        weights=np.array(f["weights"], np.float64),
+    )
+    assert tree.leaves == (1,) and tree.node(1).extras["separation"] == "quasi"
+    expected = "node 1 is quasi-separated: coefficient 'd4' diverges"
+    with pytest.warns(mt.ModelTreesWarning, match=expected) as caught:
+        got = tree.vcov()[1]
+    assert len(caught) == 1
+    assert got.status == "ok" and got.reason == str(caught[0].message)
+    np.testing.assert_allclose(tree.node(1).coefficients["d4"], -18.567, rtol=1e-4)
+
+
+def test_no_quasi_warning_without_separation() -> None:
+    f = load_json("node_fits/safelogit_none.json")
+    y = np.array(f["y"], np.float64)
+    tree = mt.mob(
+        SafeLogitModel(coef_names=f["x_names"], **f["fit_args"]),
+        y,
+        np.array(f["x"], np.float64),
+        {"z": ("numeric", np.zeros_like(y))},
+        weights=np.array(f["weights"], np.float64),
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", mt.ModelTreesWarning)
+        got = tree.vcov()[1]
+    assert got.status == "ok" and got.reason is None

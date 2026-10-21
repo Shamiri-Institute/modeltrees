@@ -59,7 +59,7 @@ from modeltrees.models.glm import GlmModel
 from modeltrees.models.lm import LmModel
 from modeltrees.models.multinom import MultinomModel
 from modeltrees.models.negbin import NegBinModel
-from modeltrees.models.safelogit import SafeLogitModel
+from modeltrees.models.safelogit import SafeLogitModel, diverging_coefficient
 from modeltrees.node_model import FitStatus, NodeModel
 from modeltrees.pruning import PruneRule
 from modeltrees.split_search import Split
@@ -779,6 +779,27 @@ class ModelTree:
                 TooFewClustersWarning,
                 stacklevel=stacklevel + 1,
             )
+        if (
+            fit.status is FitStatus.OK
+            and fit.extras.get("separation") == "quasi"
+            and fit.hessian is not None
+        ):
+            estimated = ~np.isnan(got)
+            j = diverging_coefficient(
+                fit.hessian,
+                None if self._x is None else self._x[rows][:, estimated],
+                weights,
+            )
+            term = [n for n, e in zip(fit.coef_names, estimated, strict=True) if e][j]
+            # Quasi-separation need not make the scaled Hessian ill
+            # conditioned, so the status can stay "ok" (docs/api-port.md,
+            # section 15.1, item 6); the reason says which term diverges.
+            quasi = (
+                f"node {node_id} is quasi-separated: coefficient {term!r} "
+                "diverges, so its variance is not reliable"
+            )
+            _warnings.warn(quasi, ModelTreesWarning, stacklevel=stacklevel + 1)
+            reason = quasi if reason is None else f"{reason}; {quasi}"
         return LeafVcov(
             node=node_id,
             names=fit.coef_names,
