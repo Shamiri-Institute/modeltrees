@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }}, Python ${{ matrix.python-version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.13", "3.14"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install the package and the dev group
+        run: uv sync --locked
+      - name: ruff check
+        run: uv run ruff check
+      - name: ruff format --check
+        run: uv run ruff format --check
+      - name: mypy
+        run: uv run mypy src tests scripts
+      - name: pytest, default run (slow tests excluded)
+        run: uv run pytest
+      # With the default run above, this completes the full run on ubuntu.
+      - name: pytest, slow tests
+        if: matrix.os == 'ubuntu-latest'
+        run: uv run pytest -m slow

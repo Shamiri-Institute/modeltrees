@@ -75,3 +75,8 @@ markers = [
     "slow: takes more than about 5 seconds (tree growth for the larger negative binomial and multinomial fixtures, parallel fixture trees, benchmarks); excluded by default, run with -m slow or -m \"\"",
 ]
 addopts = ["-m", "not slow"]
+
+[tool.ruff]
+# The design documents hold signature sketches, not runnable code; ruff
+# formats Markdown code blocks, so they are left out (docs/release.md).
+extend-exclude = ["docs/*.md"]
