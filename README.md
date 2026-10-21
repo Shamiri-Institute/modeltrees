@@ -308,6 +308,8 @@ If you use modeltrees, please cite the method and the software (CITATION.cff):
 
 ## License
 
+Copyright (C) 2026 BNM
+
 GPL-3.0-only (LICENSE). The ported R code is licensed GPL-2 or GPL-3 by its
 authors; THIRD_PARTY_NOTICES.md lists every upstream with its license.
 

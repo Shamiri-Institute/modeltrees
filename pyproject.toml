@@ -35,6 +35,11 @@ classifiers = [
 ]
 dependencies = ["narwhals>=2.0", "numpy>=2.5.4", "scipy>=1.18.1"]
 
+[project.urls]
+Homepage = "https://github.com/Shamiri-Institute/modeltrees"
+Repository = "https://github.com/Shamiri-Institute/modeltrees"
+Issues = "https://github.com/Shamiri-Institute/modeltrees/issues"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
